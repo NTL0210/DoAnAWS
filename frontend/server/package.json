@@ -1,0 +1,13 @@
+{
+  "name": "voice-signaling-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Socket.IO signaling server for WebRTC voice chat",
+  "scripts": {
+    "start": "node signaling.js"
+  },
+  "dependencies": {
+    "socket.io": "^4.7.5",
+    "uuid": "^9.0.0"
+  }
+}

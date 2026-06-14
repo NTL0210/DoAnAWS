@@ -1,0 +1,23 @@
+{
+  "name": "ai-meeting-workforce-platform",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace frontend",
+    "dev:frontend": "npm run dev --workspace frontend",
+    "dev:backend": "npm run dev --workspace backend",
+    "dev:voice": "npm run dev:voice --workspace backend",
+    "dev:voice:stop": "npm run dev:voice:stop --workspace backend",
+    "build": "npm run build --workspace frontend && npm run build --workspace backend",
+    "build:frontend": "npm run build --workspace frontend",
+    "build:backend": "npm run build --workspace backend",
+    "start:frontend": "npm run start --workspace frontend",
+    "start:backend": "npm run start --workspace backend",
+    "lint": "npm run lint --workspace frontend && npm run lint --workspace backend",
+    "test:backend": "npm test --workspace backend"
+  }
+}

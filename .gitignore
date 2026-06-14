@@ -1,0 +1,45 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Next.js
+.next/
+out/
+build/
+dist/
+.cache/
+tmp/
+coverage/
+*.tmp
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# Misc
+.DS_Store
+Thumbs.db
+*.log
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw*
+
+# AWS
+.aws-sam/
+.aws-sam-build/
+cdk.out/

@@ -1,0 +1,10 @@
+DTLN noise suppression worklet
+
+Source: https://github.com/DataDog/dtln-rs-demo
+Bundled file: dist/audio-worklet.js
+
+The demo project is Apache-2.0 licensed. The underlying dtln-rs project is MIT licensed:
+https://github.com/DataDog/dtln-rs
+
+This asset is loaded lazily by the browser AudioWorklet pipeline when AI noise
+suppression is enabled.
