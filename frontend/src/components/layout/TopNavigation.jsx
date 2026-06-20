@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import { FiPlus, FiSettings, FiUserPlus } from 'react-icons/fi';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import InvitationMenu from '@/components/layout/top-navigation/InvitationMenu';
@@ -6,8 +7,10 @@ import InviteMembersModal from '@/components/layout/top-navigation/InviteMembers
 import NotificationMenu from '@/components/layout/top-navigation/NotificationMenu';
 import PageTitle from '@/components/layout/top-navigation/PageTitle';
 import ProfileMenu from '@/components/layout/top-navigation/ProfileMenu';
+import { AnimatedThemeToggler } from '@/components/ui/animated-theme-toggler';
 
 export default function TopNavigation() {
+  const router = useRouter();
   const {
     currentUser,
     activeWorkspace,
@@ -53,7 +56,7 @@ export default function TopNavigation() {
     event.preventDefault();
     if (!inviteEmail.trim()) return;
     sendInvitation(activeWorkspace?.id, inviteEmail.trim(), inviteRole);
-    setInviteSuccess(`Đã gửi lời mời đến ${inviteEmail}`);
+    setInviteSuccess(`Invitation sent to ${inviteEmail}.`);
     setInviteEmail('');
     setTimeout(() => setInviteSuccess(''), 3000);
   };
@@ -103,9 +106,15 @@ export default function TopNavigation() {
           declineInvitation={declineInvitation}
         />
 
-        <button className="top-nav-btn" title="Settings">
+        <button
+          onClick={() => router.push('/profile')}
+          className="top-nav-btn"
+          title="Settings"
+        >
           <FiSettings className="h-4 w-4" />
         </button>
+
+        <AnimatedThemeToggler className="theme-toggler-button" variant="circle" duration={400} />
 
         <ProfileMenu
           dropdownRef={profileRef}

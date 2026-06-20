@@ -11,18 +11,19 @@ import { withValidation } from '../middleware/withValidation';
 async function handler(req, res) {
   try {
     if (req.method === 'GET') {
-      const { Users } = require('../../../src/repositories');
-      const usersRepo = new Users();
-      const users = await usersRepo.findAll();
+      const { getAllUsers } = require('../../../src/services/userService');
+      const users = await getAllUsers();
 
       const safeUsers = users.map((u) => ({
         id: u.id,
         name: u.name,
         email: u.email,
-        role: u.role,
-        departmentId: u.departmentId,
-        avatar: u.avatar,
-        status: u.status,
+        role: u.role || 'EMPLOYEE',
+        departmentId: u.departmentId || null,
+        avatar: u.avatar || null,
+        phone: u.phone || '',
+        avatarHistory: u.avatarHistory || [],
+        createdAt: u.createdAt || null,
       }));
 
       return res.status(200).json({
@@ -33,12 +34,13 @@ async function handler(req, res) {
 
     if (req.method === 'POST') {
       const { registerUser } = require('../../../src/services/userService');
-      const result = await registerUser(req.body);
+      const { name, email, password } = req.body || {};
+      const user = await registerUser(name, email, password);
 
       return res.status(201).json({
         success: true,
         message: 'User created successfully',
-        data: { user: result.user },
+        data: { user },
       });
     }
 

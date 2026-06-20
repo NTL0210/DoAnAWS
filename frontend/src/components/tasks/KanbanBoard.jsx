@@ -40,7 +40,10 @@ export default function KanbanBoard() {
 
   // Filter tasks to current workspace
   const tasks = useMemo(() => {
-    return workspaceTasks.filter((t) => !t.deletedAt && (t.departmentId === activeWorkspace?.id || !t.departmentId));
+    return workspaceTasks.filter((task) => {
+      const workspaceId = task.workspaceId || task.departmentId;
+      return !task.deletedAt && workspaceId === activeWorkspace?.id;
+    });
   }, [workspaceTasks, activeWorkspace?.id]);
 
   const columns = useMemo(() => {
@@ -130,14 +133,14 @@ export default function KanbanBoard() {
   };
 
   return (
-    <div className="flex h-full flex-col bg-slate-50 text-slate-900">
+    <div className="flex h-full flex-col bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
       {/* ─── Board Header ─── */}
-      <div className="flex items-center justify-between border-b border-slate-200/80 bg-white px-6 py-4">
+      <div className="flex items-center justify-between border-b border-slate-200/80 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-900/80">
         <div>
-          <h1 className="text-lg font-bold text-slate-900">
+          <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">
             📋 Task Board
           </h1>
-          <div className="text-xs text-slate-500 mt-1">
+          <div className="text-xs text-slate-500 mt-1 dark:text-slate-400">
             {completedTasks}/{totalTasks} tasks completed
             {totalTasks > 0 && (
               <span className="ml-2">
@@ -163,16 +166,16 @@ export default function KanbanBoard() {
           onClick={() => setShowCreateTask(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-[#fbfcfe] p-6 shadow-xl"
+            className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-[#fbfcfe] p-6 shadow-xl dark:border-slate-700 dark:bg-slate-900"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-bold text-slate-900 mb-4">Create Task</h2>
+            <h2 className="text-lg font-bold text-slate-900 mb-4 dark:text-slate-100">Create Task</h2>
             <form onSubmit={handleCreateTask} className="space-y-4">
               <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Title</label>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Title</label>
                 <input
                   type="text"
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   placeholder="Task title"
                   value={newTask.title}
                   onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
@@ -181,9 +184,9 @@ export default function KanbanBoard() {
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Description</label>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Description</label>
                 <textarea
-                  className="w-full min-h-[80px] resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+                  className="w-full min-h-[80px] resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   placeholder="Task description (optional)"
                   value={newTask.description}
                   onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
@@ -191,9 +194,9 @@ export default function KanbanBoard() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Priority</label>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Priority</label>
                   <select
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500"
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     value={newTask.priority}
                     onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
                   >
@@ -204,10 +207,10 @@ export default function KanbanBoard() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Deadline</label>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Deadline</label>
                   <input
                     type="date"
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500"
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     value={newTask.deadline}
                     onChange={(e) => setNewTask({ ...newTask, deadline: e.target.value })}
                   />
@@ -215,9 +218,9 @@ export default function KanbanBoard() {
               </div>
               {canAssign && (
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Assignee</label>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Assignee</label>
                   <select
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500"
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     value={newTask.assigneeId}
                     onChange={(e) => setNewTask({ ...newTask, assigneeId: e.target.value })}
                   >
@@ -237,7 +240,7 @@ export default function KanbanBoard() {
                 <button
                   type="button"
                   onClick={() => setShowCreateTask(false)}
-                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
                 >
                   Cancel
                 </button>
@@ -255,7 +258,7 @@ export default function KanbanBoard() {
       )}
 
       {/* ─── Kanban Columns ─── */}
-      <div className="flex-1 overflow-x-auto bg-slate-50 p-6">
+      <div className="flex-1 overflow-x-auto bg-slate-50 p-6 dark:bg-slate-900">
         <div className="flex gap-5 h-full min-h-[400px]">
           {columns.map((col) => (
             <div key={col.id} className="min-w-[280px] max-w-[320px] flex-1 flex flex-col">
@@ -265,10 +268,10 @@ export default function KanbanBoard() {
                   className="h-3 w-3 rounded-full"
                   style={{ backgroundColor: col.color }}
                 />
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
                   {col.title}
                 </span>
-                <span className="ml-auto rounded-full bg-slate-200/80 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                <span className="ml-auto rounded-full bg-slate-200/80 px-2 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-400">
                   {col.tasks.length}
                 </span>
               </div>
@@ -284,17 +287,17 @@ export default function KanbanBoard() {
                   return (
                     <div
                       key={task.id}
-                      className={`rounded-xl border bg-white p-4 transition hover:shadow-md ${getPriorityBg(task.priority)}`}
+                      className={`rounded-xl border bg-white p-4 transition hover:shadow-md dark:bg-slate-900/80 ${getPriorityBg(task.priority)}`}
                     >
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className={`text-[10px] font-bold uppercase tracking-wider ${getPriorityColor(task.priority)}`}>
                         {task.priority}
                       </span>
                       {task.generatedFromAI ? (
-                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black text-blue-700">AI Generated</span>
+                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">AI Generated</span>
                       ) : null}
                       {getDeadlineWarning(task.deadline) ? (
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black ${getDeadlineWarning(task.deadline).tone === 'red' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black ${getDeadlineWarning(task.deadline).tone === 'red' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`}>
                           <FiAlertTriangle className="h-3 w-3" />
                           {getDeadlineWarning(task.deadline).label}
                         </span>
@@ -303,30 +306,30 @@ export default function KanbanBoard() {
                         <button
                           type="button"
                           onClick={() => deleteWorkspaceTask(task.id)}
-                          className="ml-auto rounded-lg p-1.5 text-slate-300 transition hover:bg-red-50 hover:text-red-500"
+                          className="ml-auto rounded-lg p-1.5 text-slate-300 transition hover:bg-red-50 hover:text-red-500 dark:text-slate-500 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                           title="Move task to Trash"
                         >
                           <FiTrash2 className="h-3.5 w-3.5" />
                         </button>
                       ) : null}
                     </div>
-                    <h3 className="text-sm font-bold text-slate-900 mb-1 leading-snug">
+                    <h3 className="text-sm font-bold text-slate-900 mb-1 leading-snug dark:text-slate-100">
                       {task.title}
                     </h3>
                     {task.description && (
-                      <p className="text-xs text-slate-500 line-clamp-2 mb-3 leading-relaxed">
+                      <p className="text-xs text-slate-500 line-clamp-2 mb-3 leading-relaxed dark:text-slate-400">
                         {task.description}
                       </p>
                     )}
                     {task.sourceMeetingId && (
-                      <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] font-bold text-blue-700">
+                      <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] font-bold text-blue-700 dark:border-blue-900/30 dark:bg-blue-900/20 dark:text-blue-300">
                         Source meeting: {evidence.sourceMeetingTitle || 'Linked meeting'}
                         {evidence.sourceTimestamp ? <span className="ml-1 text-blue-500">At {evidence.sourceTimestamp}</span> : null}
                       </div>
                     )}
                     {task.generatedFromAI && (task.sourceQuote || task.transcriptExcerpt || task.reason || task.sourceMeetingId) ? (
-                      <details className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
-                        <summary className="flex cursor-pointer items-center gap-1 font-black text-slate-700">
+                      <details className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
+                        <summary className="flex cursor-pointer items-center gap-1 font-black text-slate-700 dark:text-slate-300">
                           <FiInfo className="h-3 w-3" /> Source Evidence
                         </summary>
                         {evidence.reason ? (
@@ -354,7 +357,7 @@ export default function KanbanBoard() {
                         {canMovePrev(col.id) && (
                           <button
                             onClick={() => moveWorkspaceTask(task.id, getPrevStatus(col.id))}
-                            className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition"
+                            className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
                           >
                             ← {getPrevStatusLabel(col.id)}
                           </button>
@@ -376,13 +379,13 @@ export default function KanbanBoard() {
                   <button
                     type="button"
                     onClick={() => setVisibleByColumn((prev) => ({ ...prev, [col.id]: (prev[col.id] || 50) + 50 }))}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 transition hover:bg-slate-50"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
                   >
                     Show 50 more
                   </button>
                 )}
                 {col.tasks.length === 0 && (
-                  <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-white py-10 text-xs font-semibold italic text-slate-500">
+                  <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-white py-10 text-xs font-semibold italic text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
                     {col.id === 'TODO' ? 'Drop new tasks here' : 'No tasks'}
                   </div>
                 )}

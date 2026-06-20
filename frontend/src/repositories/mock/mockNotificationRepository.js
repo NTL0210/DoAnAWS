@@ -23,6 +23,11 @@ export async function findByUser(userId) {
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
+export async function findById(id) {
+  await delay();
+  return getStore().find((n) => n.id === id) || null;
+}
+
 export async function findUnreadByUser(userId) {
   await delay();
   return getStore().filter((n) => n.userId === userId && !n.isRead);
@@ -67,4 +72,4 @@ export async function markAllAsRead(userId) {
   });
 }
 
-export default { findByUser, findUnreadByUser, create, markAsRead, markAllAsRead };
+export default { findByUser, findById, findUnreadByUser, create, markAsRead, markAllAsRead };

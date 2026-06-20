@@ -26,10 +26,12 @@ async function handler(req, res) {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role,
-      departmentId: user.departmentId,
-      avatar: user.avatar,
-      status: user.status,
+      role: user.role || 'EMPLOYEE',
+      departmentId: user.departmentId || null,
+      avatar: user.avatar || null,
+      phone: user.phone || '',
+      avatarHistory: user.avatarHistory || [],
+      createdAt: user.createdAt || null,
     };
 
     return res.status(200).json({

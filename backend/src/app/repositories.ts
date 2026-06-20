@@ -5,10 +5,13 @@ import type { MeetingRepository } from "../modules/meetings/meeting.repository.j
 import { DynamoTaskRepository } from "../modules/tasks/task.repository.dynamodb.js";
 import { MockTaskRepository } from "../modules/tasks/task.repository.mock.js";
 import type { TaskRepository } from "../modules/tasks/task.repository.js";
+import { MockUserRepository } from "../modules/users/user.repository.mock.js";
+import type { UserRepository } from "../modules/users/user.repository.js";
 
 export interface Repositories {
   meetings: MeetingRepository;
   tasks: TaskRepository;
+  users: UserRepository;
 }
 
 export function buildRepositories(
@@ -17,11 +20,13 @@ export function buildRepositories(
   if (provider === "dynamodb") {
     return {
       meetings: new DynamoMeetingRepository(),
-      tasks: new DynamoTaskRepository()
+      tasks: new DynamoTaskRepository(),
+      users: new MockUserRepository()
     };
   }
   return {
     meetings: new MockMeetingRepository(),
-    tasks: new MockTaskRepository()
+    tasks: new MockTaskRepository(),
+    users: new MockUserRepository()
   };
 }

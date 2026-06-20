@@ -1,3 +1,4 @@
+import { notificationRepo } from '../../../src/repositories';
 import { withAuth } from '../middleware/withAuth';
 
 /**
@@ -9,22 +10,19 @@ import { withAuth } from '../middleware/withAuth';
 
 async function handler(req, res) {
   try {
-    const { Notifications } = require('../../../src/repositories');
-    const notificationsRepo = new Notifications();
-
     if (req.method === 'GET') {
-      const notifications = await notificationsRepo.findByUserId(req.user.userId);
-      const unreadCount = await notificationsRepo.getUnreadCount(req.user.userId);
+      const notifications = await notificationRepo.findByUser(req.user.userId);
+      const unread = await notificationRepo.findUnreadByUser(req.user.userId);
 
       return res.status(200).json({
         success: true,
-        data: { notifications, unreadCount },
+        data: { notifications, unreadCount: unread.length },
       });
     }
 
     if (req.method === 'PATCH') {
       if (req.query?.action === 'readAll') {
-        await notificationsRepo.markAllAsRead(req.user.userId);
+        await notificationRepo.markAllAsRead(req.user.userId);
 
         return res.status(200).json({
           success: true,

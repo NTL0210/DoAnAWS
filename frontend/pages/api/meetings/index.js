@@ -14,22 +14,19 @@ import { withValidation } from '../middleware/withValidation';
 async function handler(req, res) {
   try {
     if (req.method === 'GET') {
-      const { Meetings } = require('../../../src/repositories');
-      const meetingsRepo = new Meetings();
+      const { meetingRepo, taskRepo } = require('../../../src/repositories');
 
       let results;
 
       if (req.user.role === 'ADMIN') {
-        results = await meetingsRepo.findAll();
+        results = await meetingRepo.findAll();
       } else if (req.user.role === 'MANAGER') {
-        results = await meetingsRepo.findByDepartment(req.user.departmentId);
+        results = await meetingRepo.findByDepartment(req.user.departmentId);
       } else {
         // Employee: find meetings related to their tasks
-        const { Tasks } = require('../../../src/repositories');
-        const tasksRepo = new Tasks();
-        const myTasks = await tasksRepo.findByAssignee(req.user.userId);
+        const myTasks = await taskRepo.findByAssignee(req.user.userId);
         const meetingIds = [...new Set(myTasks.map((t) => t.meetingId).filter(Boolean))];
-        const allMeetings = await meetingsRepo.findAll();
+        const allMeetings = await meetingRepo.findAll();
         results = allMeetings.filter((m) => meetingIds.includes(m.id));
       }
 
@@ -41,8 +38,7 @@ async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      const { Meetings } = require('../../../src/repositories');
-      const meetingsRepo = new Meetings();
+      const { meetingRepo } = require('../../../src/repositories');
 
       if (req.user.role === 'EMPLOYEE') {
         return res.status(403).json({
@@ -59,7 +55,7 @@ async function handler(req, res) {
         status: 'UPLOADED',
       };
 
-      const created = await meetingsRepo.create(meetingData);
+      const created = await meetingRepo.create(meetingData);
 
       return res.status(201).json({
         success: true,

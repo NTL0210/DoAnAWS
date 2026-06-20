@@ -6,8 +6,8 @@
  */
 
 // ─── File size limits ───────────────────────────────────────────────
-/** Maximum audio file size allowed for AI processing (400 MB) */
-export const MAX_AI_AUDIO_SIZE_BYTES = 400 * 1024 * 1024;
+/** Maximum audio file size allowed for AI processing (500 MB) */
+export const MAX_AI_AUDIO_SIZE_BYTES = 500 * 1024 * 1024;
 
 /** Warning threshold for large audio files (350 MB) */
 export const WARNING_AI_AUDIO_SIZE_BYTES = 350 * 1024 * 1024;

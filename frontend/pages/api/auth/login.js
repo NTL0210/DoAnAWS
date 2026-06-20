@@ -1,6 +1,27 @@
 import { loginUser } from '../../../src/services/userService';
 
 /**
+ * Generate a simple encoded token for mock/dev authentication.
+ * Matches the decoding logic in withAuth middleware:
+ *   token.split('.')[1] → base64 → JSON.parse → { sub, role, email }
+ *
+ * In production, replace with Amazon Cognito JWT.
+ */
+function generateMockToken(user) {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64');
+  const payload = Buffer.from(JSON.stringify({
+    sub: user.id,
+    userId: user.id,
+    role: user.role || 'EMPLOYEE',
+    email: user.email,
+    departmentId: user.departmentId || null,
+    workspaceId: null,
+  })).toString('base64');
+  const signature = 'mock-signature-do-not-verify';
+  return `${header}.${payload}.${signature}`;
+}
+
+/**
  * POST /api/auth/login
  *
  * Authenticates a user by email and password.
@@ -30,9 +51,9 @@ export default async function handler(req, res) {
       });
     }
 
-    const result = await loginUser(email, password);
+    const user = await loginUser(email, password);
 
-    if (!result) {
+    if (!user) {
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password',
@@ -40,13 +61,12 @@ export default async function handler(req, res) {
       });
     }
 
+    const token = generateMockToken(user);
+
     return res.status(200).json({
       success: true,
       message: 'Login successful',
-      data: {
-        token: result.token,
-        user: result.user,
-      },
+      data: { token, user },
     });
   } catch (err) {
     console.error('[auth/login] Error:', err.message);

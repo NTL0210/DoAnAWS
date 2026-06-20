@@ -23,19 +23,22 @@ export default function WorkspacePage() {
       name: currentUser.name,
       email: currentUser.email,
       avatar: currentUser.avatar,
+      role: currentUser.role,
+      departmentId: currentUser.departmentId,
+      createdAt: currentUser.createdAt,
     };
   }, [currentUser]);
 
   if (loading || !user) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#eef3f8] p-6">
-        <div className="workspace-frame flex h-[calc(100dvh-7.5rem)] w-full max-w-7xl overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl shadow-slate-300/40">
-          <aside className="workspace-sidebar-surface hidden w-[270px] flex-shrink-0 border-r p-3 md:block">
-            <SkeletonRow className="bg-white/60" />
+      <div className="flex h-screen items-center justify-center bg-background dark:bg-slate-950 p-6">
+        <div className="workspace-frame flex h-[calc(100dvh-7.5rem)] w-full max-w-7xl overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-2xl shadow-slate-300/40 dark:shadow-slate-950/60">
+          <aside className="workspace-sidebar-surface hidden w-[270px] flex-shrink-0 border-r dark:border-slate-800 p-3 md:block">
+            <SkeletonRow className="bg-white/60 dark:bg-slate-800/60" />
             <div className="mt-5 space-y-2">
-              <SkeletonRow className="bg-white/40" />
-              <SkeletonRow className="bg-white/40" />
-              <SkeletonRow className="bg-white/40" />
+              <SkeletonRow className="bg-white/40 dark:bg-slate-800/40" />
+              <SkeletonRow className="bg-white/40 dark:bg-slate-800/40" />
+              <SkeletonRow className="bg-white/40 dark:bg-slate-800/40" />
             </div>
           </aside>
           <main className="flex min-w-0 flex-1 flex-col gap-4 p-5">

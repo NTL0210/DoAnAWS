@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { FiTerminal, FiX } from 'react-icons/fi';
+import { VOICE_AUDIO_CONFIG } from '@/config/voiceAudioConfig';
 
 const DEBUG = process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_ENABLE_VOICE_DEBUG === 'true';
 
@@ -113,7 +114,7 @@ export default function VoiceDebugPanel({
     ['Deafen', String(deafen)],
     ['PTT active', String(pttActive)],
     ['Selected mic', settings.selectedMicId || settings.inputDeviceId || 'default'],
-    ['Noise mode', settings.noiseSuppressionMode || 'future-krisp'],
+    ['Noise mode', settings.noiseSuppressionMode || VOICE_AUDIO_CONFIG.noiseSuppressionMode],
     ['Browser noise suppression', String(Boolean(settings.noiseSuppression))],
     ['Echo cancellation', String(Boolean(settings.echoCancellation))],
     ['Auto gain control', String(Boolean(settings.autoGainControl))],
@@ -198,8 +199,8 @@ export default function VoiceDebugPanel({
       </button>
 
       {open ? (
-        <div className="absolute bottom-12 right-0 w-96 rounded-xl border border-slate-200 bg-white p-4 shadow-2xl">
-          <h3 className="text-xs font-black uppercase tracking-wide text-slate-500">Voice Debug</h3>
+        <div className="absolute bottom-12 right-0 w-96 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-2xl">
+          <h3 className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">Voice Debug</h3>
 
           {warnings.length > 0 ? (
             <div className="mt-3 space-y-1">
@@ -214,8 +215,8 @@ export default function VoiceDebugPanel({
           <table className="mt-3 w-full text-[10px] font-semibold">
             <tbody>
               {rows.map(([label, value]) => (
-                <tr key={label} className="border-b border-slate-100">
-                  <td className="py-1 text-slate-400">{label}</td>
+                <tr key={label} className="border-b border-slate-100 dark:border-slate-800">
+                  <td className="py-1 text-slate-400 dark:text-slate-500">{label}</td>
                   <td className="max-w-[220px] truncate py-1 text-right font-black">{value}</td>
                 </tr>
               ))}
@@ -223,11 +224,11 @@ export default function VoiceDebugPanel({
           </table>
           {peerEntries.length > 0 ? (
             <div className="mt-3">
-              <h4 className="text-[10px] font-black uppercase tracking-wide text-slate-400">Peers</h4>
+              <h4 className="text-[10px] font-black uppercase tracking-wide text-slate-400 dark:text-slate-500">Peers</h4>
               <div className="mt-1 max-h-40 space-y-1 overflow-y-auto">
                 {peerEntries.map(([peerUserId, peer]) => (
-                  <div key={peerUserId} className="rounded-lg bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-500">
-                    <div className="truncate font-black text-slate-700">{peerUserId}</div>
+                  <div key={peerUserId} className="rounded-lg bg-slate-50 dark:bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                    <div className="truncate font-black text-slate-700 dark:text-slate-200">{peerUserId}</div>
                     <div>connection: {peer.connectionState || '-'} | ice: {peer.iceState || '-'} | signaling: {peer.signalingState || '-'}</div>
                     {/* ── ICE candidate type ────────────────────────── */}
                     <div className={`mt-0.5 font-bold ${
@@ -243,14 +244,14 @@ export default function VoiceDebugPanel({
                       </span>
                     </div>
                     {peer.candidateInfo?.remoteCandidate ? (
-                      <div className="text-slate-400">
+                      <div className="text-slate-400 dark:text-slate-500">
                         remote: {peer.candidateInfo.remoteCandidate.ip}:{peer.candidateInfo.remoteCandidate.port}
                         &nbsp;({peer.candidateInfo.remoteCandidate.type})
                       </div>
                     ) : null}
                     {/* ── RTT / stats ──────────────────────────────── */}
                     {peer.candidateInfo?.currentRoundTripTime != null ? (
-                      <div className={peer.candidateInfo.currentRoundTripTime > 0.3 ? 'text-rose-500' : 'text-slate-500'}>
+                      <div className={peer.candidateInfo.currentRoundTripTime > 0.3 ? 'text-rose-500' : 'text-slate-500 dark:text-slate-400'}>
                         rtt: {Math.round(peer.candidateInfo.currentRoundTripTime * 1000)}ms
                         {peer.candidateInfo.availableOutgoingBitrate ? ` | bitrate: ${(peer.candidateInfo.availableOutgoingBitrate / 1000).toFixed(0)}kbps` : ''}
                         &nbsp;| rx: {peer.candidateInfo.bytesReceived ?? 0}B | tx: {peer.candidateInfo.bytesSent ?? 0}B
@@ -272,12 +273,12 @@ export default function VoiceDebugPanel({
           ) : null}
           {recordingRows.length > 0 ? (
             <div className="mt-3">
-              <h4 className="text-[10px] font-black uppercase tracking-wide text-slate-400">Recording</h4>
+              <h4 className="text-[10px] font-black uppercase tracking-wide text-slate-400 dark:text-slate-500">Recording</h4>
               <table className="mt-1 w-full text-[10px] font-semibold">
                 <tbody>
                   {recordingRows.map(([label, value]) => (
-                    <tr key={label} className="border-b border-slate-100">
-                      <td className="py-1 text-slate-400">{label}</td>
+                    <tr key={label} className="border-b border-slate-100 dark:border-slate-800">
+                      <td className="py-1 text-slate-400 dark:text-slate-500">{label}</td>
                       <td className="max-w-[220px] truncate py-1 text-right font-black">{value}</td>
                     </tr>
                   ))}

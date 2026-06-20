@@ -22,16 +22,16 @@ export default function VoiceSettingsModal({ settings, onChange, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl">
+      <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-slate-900 p-5 shadow-2xl">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h3 className="text-base font-black text-slate-900">Voice Quality Settings</h3>
-            <p className="mt-1 text-xs font-semibold text-slate-400">Configure noise suppression, sensitivity, and more.</p>
+            <h3 className="text-base font-black text-slate-900 dark:text-slate-100">Voice Quality Settings</h3>
+            <p className="mt-1 text-xs font-semibold text-slate-400 dark:text-slate-500">Configure noise suppression, sensitivity, and more.</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-lg p-2 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-200"
           >
             <FiX className="h-4 w-4" />
           </button>
@@ -39,9 +39,9 @@ export default function VoiceSettingsModal({ settings, onChange, onClose }) {
 
         <div className="mt-5 grid gap-5">
           {/* ─── Noise Suppression ───────────────────────── */}
-          <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700">
+          <label className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-200">
             <span className="flex items-center gap-2">
-              <FiVolume2 className="h-4 w-4 text-slate-400" />
+              <FiVolume2 className="h-4 w-4 text-slate-400 dark:text-slate-500" />
               Noise Suppression
             </span>
             <ToggleSwitch
@@ -51,9 +51,9 @@ export default function VoiceSettingsModal({ settings, onChange, onClose }) {
           </label>
 
           {/* ─── Echo Cancellation ───────────────────────── */}
-          <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700">
+          <label className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-200">
             <span className="flex items-center gap-2">
-              <FiRadio className="h-4 w-4 text-slate-400" />
+              <FiRadio className="h-4 w-4 text-slate-400 dark:text-slate-500" />
               Echo Cancellation
             </span>
             <ToggleSwitch
@@ -63,9 +63,9 @@ export default function VoiceSettingsModal({ settings, onChange, onClose }) {
           </label>
 
           {/* ─── Auto Gain Control ───────────────────────── */}
-          <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700">
+          <label className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-200">
             <span className="flex items-center gap-2">
-              <FiZap className="h-4 w-4 text-slate-400" />
+              <FiZap className="h-4 w-4 text-slate-400 dark:text-slate-500" />
               Auto Gain Control
             </span>
             <ToggleSwitch
@@ -75,40 +75,40 @@ export default function VoiceSettingsModal({ settings, onChange, onClose }) {
           </label>
 
           {/* ─── Input Sensitivity ───────────────────────── */}
-          <div className="rounded-xl border border-slate-200 px-4 py-3">
+          <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3">
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-2 text-sm font-bold text-slate-700">
-                <FiMic className="h-4 w-4 text-slate-400" />
+                <FiMic className="h-4 w-4 text-slate-400 dark:text-slate-500" />
                 Input Sensitivity
               </span>
-              <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-black text-slate-600">
+              <span className="rounded-lg bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-xs font-black text-slate-600 dark:text-slate-300">
                 {localSettings.inputSensitivity}
               </span>
             </div>
             <div className="mt-3 flex items-center gap-3">
-              <span className="text-[11px] font-semibold text-slate-400">Low</span>
+              <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">Low</span>
               <input
                 type="range"
                 min="1"
                 max="80"
                 value={localSettings.inputSensitivity}
                 onChange={handleSensitivity}
-                className="h-1.5 w-full flex-1 cursor-pointer appearance-none rounded-full bg-slate-200 accent-emerald-500
+                className="h-1.5 w-full flex-1 cursor-pointer appearance-none rounded-full bg-slate-200 dark:bg-slate-700 accent-emerald-500
                   [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none
                   [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-emerald-500
                   [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:shadow-emerald-500/30"
               />
-              <span className="text-[11px] font-semibold text-slate-400">High</span>
+              <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500">High</span>
             </div>
-            <p className="mt-2 text-[11px] leading-5 text-slate-400">
+            <p className="mt-2 text-[11px] leading-5 text-slate-400 dark:text-slate-500">
               Lower threshold = more sensitive (detects quieter sounds). Higher threshold = needs louder input to activate.
             </p>
           </div>
 
           {/* ─── Push to Talk ────────────────────────────── */}
-          <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700">
+          <label className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-200">
             <span className="flex items-center gap-2">
-              <FiHeadphones className="h-4 w-4 text-slate-400" />
+              <FiHeadphones className="h-4 w-4 text-slate-400 dark:text-slate-500" />
               Push to Talk
               <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-600">Hold Space</span>
             </span>
@@ -118,7 +118,7 @@ export default function VoiceSettingsModal({ settings, onChange, onClose }) {
             />
           </label>
           {localSettings.pushToTalk && (
-            <p className="-mt-3 text-[11px] leading-5 text-slate-400">
+            <p className="-mt-3 text-[11px] leading-5 text-slate-400 dark:text-slate-500">
               When enabled, hold the Space key to speak. Mic is muted by default.
             </p>
           )}
@@ -128,7 +128,7 @@ export default function VoiceSettingsModal({ settings, onChange, onClose }) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-black text-slate-600 hover:bg-slate-50"
+            className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 text-xs font-black text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             Cancel
           </button>

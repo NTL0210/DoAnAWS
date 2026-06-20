@@ -1,14 +1,11 @@
 'use client';
 
 import { VOICE_AUDIO_CONFIG } from '@/config/voiceAudioConfig';
+import { clamp } from '@/utils/audio/audioHelpers';
 
 const DTLN_WORKLET_URL = '/audio-worklets/dtln-noise-suppression-worklet.js';
 const DTLN_SAMPLE_RATE = 16000;
 const DEBUG = process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_ENABLE_VOICE_DEBUG === 'true';
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, Number(value)));
-}
 
 function createAudioContext() {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;

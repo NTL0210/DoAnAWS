@@ -16,8 +16,7 @@ import { withValidation } from '../middleware/withValidation';
 
 async function handler(req, res) {
   try {
-    const { Tasks } = require('../../../src/repositories');
-    const tasksRepo = new Tasks();
+    const { taskRepo } = require('../../../src/repositories');
 
     if (req.method === 'GET') {
       const { status, priority, assigneeId, departmentId, meetingId } = req.query;
@@ -28,23 +27,24 @@ async function handler(req, res) {
       if (req.user.role === 'ADMIN') {
         // Admin can access everything
         if (departmentId) {
-          results = await tasksRepo.findByDepartment(departmentId);
+          results = await taskRepo.findByDepartment(departmentId);
         } else if (assigneeId) {
-          results = await tasksRepo.findByAssignee(assigneeId);
+          results = await taskRepo.findByAssignee(assigneeId);
         } else if (meetingId) {
-          results = await tasksRepo.findByMeeting(meetingId);
+          results = await taskRepo.findByMeeting(meetingId);
         } else if (status) {
-          results = await tasksRepo.findByStatus(status);
+          const all = await taskRepo.findAll();
+          results = all.filter((t) => t.status === status);
         } else {
-          const all = await tasksRepo.findAll();
+          const all = await taskRepo.findAll();
           results = all;
         }
       } else if (req.user.role === 'MANAGER') {
         // Manager sees department tasks
-        results = await tasksRepo.findByDepartment(req.user.departmentId);
+        results = await taskRepo.findByDepartment(req.user.departmentId);
       } else {
         // Employee sees own tasks
-        results = await tasksRepo.findByAssignee(req.user.userId);
+        results = await taskRepo.findByAssignee(req.user.userId);
       }
 
       // Apply remaining filters client-side (or extend repo for complex queries)
@@ -69,7 +69,7 @@ async function handler(req, res) {
         departmentId: req.body.departmentId || req.user.departmentId,
       };
 
-      const created = await tasksRepo.create(taskData);
+      const created = await taskRepo.create(taskData);
 
       return res.status(201).json({
         success: true,

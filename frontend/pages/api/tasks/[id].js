@@ -9,10 +9,9 @@ import { withValidation } from '../middleware/withValidation';
 
 async function handler(req, res) {
   try {
-    const { Tasks } = require('../../../src/repositories');
-    const tasksRepo = new Tasks();
+    const { taskRepo } = require('../../../src/repositories');
 
-    const task = await tasksRepo.findById(req.query.id);
+    const task = await taskRepo.findById(req.query.id);
 
     if (!task) {
       return res.status(404).json({
@@ -48,7 +47,7 @@ async function handler(req, res) {
             updates[field] = req.body[field];
           }
         }
-        const updated = await tasksRepo.update(req.query.id, updates);
+        const updated = await taskRepo.update(req.query.id, updates);
 
         return res.status(200).json({
           success: true,
@@ -58,7 +57,7 @@ async function handler(req, res) {
       }
 
       // Manager/Admin: full update
-      const updated = await tasksRepo.update(req.query.id, req.body);
+      const updated = await taskRepo.update(req.query.id, req.body);
 
       return res.status(200).json({
         success: true,
@@ -76,7 +75,7 @@ async function handler(req, res) {
         });
       }
 
-      await tasksRepo.delete_(req.query.id);
+      await taskRepo.delete_(req.query.id);
 
       return res.status(200).json({
         success: true,

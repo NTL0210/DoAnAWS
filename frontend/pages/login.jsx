@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useWorkspace } from '@/context/WorkspaceContext';
-import { FiArrowLeft, FiArrowRight, FiCheckCircle, FiLock, FiMail, FiUser, FiUsers } from 'react-icons/fi';
+import { AnimatedThemeToggler } from '@/components/ui/animated-theme-toggler';
+import { FiArrowLeft, FiArrowRight, FiCheckCircle, FiClock, FiLock, FiMail, FiUser, FiUsers } from 'react-icons/fi';
+
+const REMEMBERED_ACCOUNTS_KEY = 'meetingAppRememberedAccounts';
 
 /**
  * Login page — Original 3D/2.5D animated design
@@ -16,6 +19,8 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
+  const [rememberedAccounts, setRememberedAccounts] = useState([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,6 +31,39 @@ export default function Login() {
       router.push(getDashboardPath(currentUser));
     }
   }, [currentUser, router]);
+
+  useEffect(() => {
+    try {
+      const remembered = JSON.parse(localStorage.getItem(REMEMBERED_ACCOUNTS_KEY) || '[]');
+      setRememberedAccounts(Array.isArray(remembered) ? remembered.slice(0, 4) : []);
+    } catch {
+      setRememberedAccounts([]);
+    }
+  }, []);
+
+  const rememberAccount = (user) => {
+    if (!rememberMe || !user?.email) return;
+    const account = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      avatar: user.avatar || null,
+      lastLoginAt: new Date().toISOString(),
+    };
+    const next = [
+      account,
+      ...rememberedAccounts.filter((item) => item.email !== account.email),
+    ].slice(0, 4);
+    setRememberedAccounts(next);
+    localStorage.setItem(REMEMBERED_ACCOUNTS_KEY, JSON.stringify(next));
+  };
+
+  const forgetAccount = (targetEmail) => {
+    const next = rememberedAccounts.filter((item) => item.email !== targetEmail);
+    setRememberedAccounts(next);
+    localStorage.setItem(REMEMBERED_ACCOUNTS_KEY, JSON.stringify(next));
+    if (email === targetEmail) setEmail('');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -41,14 +79,15 @@ export default function Login() {
         if (password !== confirmPassword) {
           throw new Error('Passwords do not match');
         }
-        if (password.length < 6) {
-          throw new Error('Password must be at least 6 characters');
+        if (password.length < 8) {
+          throw new Error('Password must be at least 8 characters');
         }
 
         const user = await register(name, email, password);
         await setUser(user);
+        rememberAccount(user);
         setSuccess('Account created. Redirecting to your workspace...');
-        router.push(getDashboardPath(user));
+        router.push('/workspace');
         return;
       }
 
@@ -58,6 +97,7 @@ export default function Login() {
 
       const user = await login(email, password);
       await setUser(user);
+      rememberAccount(user);
       router.push(getDashboardPath(user));
     } catch (err) {
       setError(err.message);
@@ -74,6 +114,7 @@ export default function Login() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
+      <AnimatedThemeToggler className="theme-toggler-button fixed right-5 top-5 z-30 border border-white/10 bg-slate-900/70 shadow-xl shadow-black/20" />
       <div className="grid min-h-screen lg:grid-cols-[1.08fr_0.92fr]">
         {/* ─── LEFT: 3D/2.5D Animated Scene ─── */}
         <section className="relative hidden overflow-hidden bg-slate-950 px-12 py-10 lg:flex lg:flex-col lg:justify-between">
@@ -166,7 +207,7 @@ export default function Login() {
                   label="Password"
                   icon={FiLock}
                   type="password"
-                  autoComplete="current-password"
+                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                   required
                   placeholder="Enter your password"
                   value={password}
@@ -191,6 +232,8 @@ export default function Login() {
                   <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                     <input
                       type="checkbox"
+                      checked={rememberMe}
+                      onChange={(event) => setRememberMe(event.target.checked)}
                       className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
                     />
                     Remember me
@@ -219,29 +262,51 @@ export default function Login() {
                 </button>
               </form>
 
-              {/* Demo Accounts */}
-              <div className="my-6 flex items-center gap-3">
-                <div className="flex-1 border-t border-slate-200 dark:border-slate-700" />
-                <span className="text-xs text-slate-400">demo accounts</span>
-                <div className="flex-1 border-t border-slate-200 dark:border-slate-700" />
-              </div>
+              {mode === 'login' && rememberedAccounts.length > 0 && (
+                <>
+                  <div className="my-6 flex items-center gap-3">
+                    <div className="flex-1 border-t border-slate-200 dark:border-slate-700" />
+                    <span className="text-xs text-slate-400">quick sign in</span>
+                    <div className="flex-1 border-t border-slate-200 dark:border-slate-700" />
+                  </div>
 
-              <div className="grid grid-cols-3 gap-2">
-                {demoAccounts.map((acc) => (
-                  <button
-                    key={acc.email}
-                    type="button"
-                    onClick={() => {
-                      setEmail(acc.email);
-                      setPassword('123456');
-                    }}
-                    className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-center text-xs transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
-                  >
-                    <div className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{acc.name}</div>
-                    <div className="mt-1 text-[10px] text-slate-400">{acc.role}</div>
-                  </button>
-                ))}
-              </div>
+                  <div className="grid gap-2">
+                    {rememberedAccounts.map((account) => (
+                      <div
+                        key={account.email}
+                        className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-2 text-left text-xs dark:border-slate-700 dark:bg-slate-800"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEmail(account.email);
+                            setPassword('');
+                          }}
+                          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                        >
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-600 text-sm font-bold text-white">
+                            {(account.name || account.email).slice(0, 1).toUpperCase()}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate font-bold text-slate-700 dark:text-slate-200">{account.name || account.email}</span>
+                            <span className="mt-0.5 flex items-center gap-1 truncate text-[10px] text-slate-400">
+                              <FiClock className="h-3 w-3 shrink-0" />
+                              Recently used
+                            </span>
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => forgetAccount(account.email)}
+                          className="rounded-md px-2 py-1 text-[10px] font-bold text-slate-400 hover:bg-white hover:text-red-500 dark:hover:bg-slate-700"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
 
               <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
                 {mode === 'login' ? 'No account yet?' : 'Already have an account?'}{' '}
@@ -329,15 +394,7 @@ function Input({ id, label, icon: Icon, ...props }) {
   );
 }
 
-const demoAccounts = [
-  { name: 'Alex J.', email: 'alex@company.com', role: 'Owner' },
-  { name: 'Sarah C.', email: 'sarah@company.com', role: 'Manager' },
-  { name: 'John D.', email: 'john@company.com', role: 'Employee' },
-];
-
 function getDashboardPath(user) {
   if (!user?.role) return '/workspace';
-  if (user?.role === 'EMPLOYEE') return '/employee/dashboard';
-  if (user?.role === 'MANAGER') return '/manager/dashboard';
-  return '/admin/dashboard';
+  return '/dashboard';
 }

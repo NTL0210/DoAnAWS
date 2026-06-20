@@ -1,23 +1,23 @@
 'use client';
 
 import { VOICE_AUDIO_CONFIG } from '@/config/voiceAudioConfig';
+import { clamp } from '@/utils/audio/audioHelpers';
 
 const DEBUG = process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_ENABLE_VOICE_DEBUG === 'true';
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, Number(value)));
-}
 
 function mergeOptions(options = {}) {
   return {
     enabled: options.enabled ?? options.noiseSuppressionMode !== 'off',
     highpassEnabled: options.highpassEnabled ?? VOICE_AUDIO_CONFIG.highpassEnabled,
     highpassFrequency: options.highpassFrequency ?? VOICE_AUDIO_CONFIG.highpassFrequency,
+    lowpassEnabled: options.lowpassEnabled ?? VOICE_AUDIO_CONFIG.lowpassEnabled,
+    lowpassFrequency: options.lowpassFrequency ?? VOICE_AUDIO_CONFIG.lowpassFrequency,
     noiseGateEnabled: options.noiseGateEnabled ?? VOICE_AUDIO_CONFIG.noiseGateEnabled,
     noiseGateThreshold: options.noiseGateThreshold ?? VOICE_AUDIO_CONFIG.noiseGateThreshold,
     noiseGateReduction: options.noiseGateReduction ?? VOICE_AUDIO_CONFIG.noiseGateReduction,
     noiseGateAttackMs: options.noiseGateAttackMs ?? VOICE_AUDIO_CONFIG.noiseGateAttackMs,
     noiseGateReleaseMs: options.noiseGateReleaseMs ?? VOICE_AUDIO_CONFIG.noiseGateReleaseMs,
+    noiseGateHoldMs: options.noiseGateHoldMs ?? VOICE_AUDIO_CONFIG.noiseGateHoldMs,
     gainEnabled: options.gainEnabled ?? VOICE_AUDIO_CONFIG.gainEnabled,
     micGain: options.micGain ?? VOICE_AUDIO_CONFIG.micGain,
     compressorEnabled: options.compressorEnabled ?? VOICE_AUDIO_CONFIG.compressorEnabled,
@@ -72,6 +72,9 @@ function startGateMonitor(audioContext, analyser, gateGain, options) {
   let rafId = 0;
   let latestRawLevel = 0;
   let latestProcessedLevel = 0;
+  let holdFrames = 0;
+  let currentTarget = 1;
+  const holdFramesMax = Math.round((options.noiseGateHoldMs || 100) / (1000 / 60)); /* ~60fps */
 
   const tick = () => {
     analyser.getByteTimeDomainData(data);
@@ -84,15 +87,25 @@ function startGateMonitor(audioContext, analyser, gateGain, options) {
       sumSquares += sample * sample;
     }
     const rms = Math.sqrt(sumSquares / data.length);
-    const target = rms < options.noiseGateThreshold
-      ? clamp(options.noiseGateReduction, 0.15, 0.85)
-      : 1;
-    const timeConstant = target < gateGain.gain.value
+
+    // Hysteresis: once below threshold, hold for N frames before gating
+    if (rms < options.noiseGateThreshold) {
+      if (holdFrames < holdFramesMax) {
+        holdFrames++;
+      } else {
+        currentTarget = clamp(options.noiseGateReduction, 0.15, 0.85);
+      }
+    } else {
+      holdFrames = 0;
+      currentTarget = 1;
+    }
+
+    const timeConstant = currentTarget < gateGain.gain.value
       ? options.noiseGateAttackMs / 1000
       : options.noiseGateReleaseMs / 1000;
-    gateGain.gain.setTargetAtTime(target, audioContext.currentTime, Math.max(0.001, timeConstant));
+    gateGain.gain.setTargetAtTime(currentTarget, audioContext.currentTime, Math.max(0.001, timeConstant));
     latestRawLevel = rms;
-    latestProcessedLevel = rms * target;
+    latestProcessedLevel = rms * currentTarget;
     rafId = window.requestAnimationFrame(tick);
   };
 
@@ -132,6 +145,17 @@ export async function createVoiceProcessedStream(rawStream, options = {}) {
       current.connect(highpass);
       current = highpass;
       nodes.highpass = highpass;
+    }
+
+    // Lowpass filter — cuts high-frequency noise (hiss, fan noise, etc.)
+    if (settings.lowpassEnabled) {
+      const lowpass = audioContext.createBiquadFilter();
+      lowpass.type = 'lowpass';
+      lowpass.frequency.value = settings.lowpassFrequency;
+      lowpass.Q.value = 0.707;
+      current.connect(lowpass);
+      current = lowpass;
+      nodes.lowpass = lowpass;
     }
 
     const analyser = audioContext.createAnalyser();
@@ -175,8 +199,10 @@ export async function createVoiceProcessedStream(rawStream, options = {}) {
       console.info('[Voice] Web Audio noise suppression enabled', {
         sampleRate: audioContext.sampleRate,
         highpassFrequency: settings.highpassFrequency,
+        lowpassFrequency: settings.lowpassFrequency,
         noiseGateThreshold: settings.noiseGateThreshold,
         noiseGateReduction: settings.noiseGateReduction,
+        noiseGateHoldMs: settings.noiseGateHoldMs,
         micGain: settings.micGain,
       });
     }

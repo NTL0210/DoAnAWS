@@ -1,3 +1,4 @@
+import { notificationRepo } from '../../../src/repositories';
 import { withAuth } from '../middleware/withAuth';
 
 /**
@@ -17,10 +18,7 @@ async function handler(req, res) {
       });
     }
 
-    const { Notifications } = require('../../../src/repositories');
-    const notificationsRepo = new Notifications();
-
-    const notification = await notificationsRepo.findById(req.query.id);
+    const notification = await notificationRepo.findById(req.query.id);
 
     if (!notification) {
       return res.status(404).json({
@@ -39,7 +37,7 @@ async function handler(req, res) {
       });
     }
 
-    const updated = await notificationsRepo.markAsRead(req.query.id);
+    const updated = await notificationRepo.markAsRead(req.query.id);
 
     return res.status(200).json({
       success: true,

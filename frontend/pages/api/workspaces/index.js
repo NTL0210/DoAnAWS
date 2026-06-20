@@ -54,6 +54,12 @@ const schema = {
   body: {
     name: { required: true, type: 'string', minLength: 1 },
     slug: { required: false, type: 'string' },
+    description: { required: false, type: 'string' },
+    workspaceType: { required: false, type: 'string' },
+    visibility: { required: false, type: 'string' },
+    iconColor: { required: false, type: 'string' },
+    createDefaultTextChannel: { required: false, type: 'boolean' },
+    createDefaultVoiceChannel: { required: false, type: 'boolean' },
   },
 };
 

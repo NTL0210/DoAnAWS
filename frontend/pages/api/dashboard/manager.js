@@ -9,18 +9,14 @@ import { withAuth } from '../middleware/withAuth';
 
 async function handler(req, res) {
   try {
-    const { Users, Tasks, Meetings } = require('../../../src/repositories');
-
-    const usersRepo = new Users();
-    const tasksRepo = new Tasks();
-    const meetingsRepo = new Meetings();
+    const { userRepo, taskRepo, meetingRepo } = require('../../../src/repositories');
 
     const deptId = req.user.departmentId;
 
     const [users, tasks, meetings] = await Promise.all([
-      usersRepo.findAll(),
-      tasksRepo.findAll(),
-      meetingsRepo.findAll(),
+      userRepo.findAll(),
+      taskRepo.findAll(),
+      meetingRepo.findAll(),
     ]);
 
     const teamMembers = users.filter((u) => u.departmentId === deptId && u.role !== 'MANAGER');

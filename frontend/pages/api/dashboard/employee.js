@@ -9,10 +9,9 @@ import { withAuth } from '../middleware/withAuth';
 
 async function handler(req, res) {
   try {
-    const { Tasks } = require('../../../src/repositories');
-    const tasksRepo = new Tasks();
+    const { taskRepo } = require('../../../src/repositories');
 
-    const myTasks = await tasksRepo.findByAssignee(req.user.userId);
+    const myTasks = await taskRepo.findByAssignee(req.user.userId);
 
     const pending = myTasks.filter((t) => t.status === 'PENDING').length;
     const inProgress = myTasks.filter((t) => t.status === 'IN_PROGRESS').length;

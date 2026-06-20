@@ -164,7 +164,7 @@ export default function ChannelSidebar() {
         {!voiceCollapsed && (
           <div className="mb-2">
             {voiceChannels.map((ch) => {
-              const channelParticipants = voiceParticipants[ch.id] || [];
+              const channelParticipants = Object.values(voiceParticipants[ch.id] || {});
               return (
                 <div key={ch.id} className="mb-0.5">
                   <button

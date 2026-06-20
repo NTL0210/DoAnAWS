@@ -59,23 +59,23 @@ export default function CreateWorkspaceModal({ isModal = false, onClose }) {
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mx-auto w-full max-w-xl">
       {created ? (
         <div className="py-8 text-center">
-          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
-            <FiCheck className="h-8 w-8 text-emerald-600" />
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+            <FiCheck className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <h1 className="text-2xl font-black text-slate-900">Workspace created</h1>
-          <p className="mt-2 text-sm text-slate-500">Switching you into the new clean workspace.</p>
+          <h1 className="text-2xl font-black text-slate-900 dark:text-slate-100">Workspace created</h1>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Switching you into the new clean workspace.</p>
         </div>
       ) : (
         <form onSubmit={handleCreate}>
           <div className="mb-6 flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-black text-slate-900">Create Workspace</h1>
-              <p className="mt-2 text-sm leading-6 text-slate-500">
+              <h1 className="text-2xl font-black text-slate-900 dark:text-slate-100">Create Workspace</h1>
+              <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
                 Hi {currentUser?.name?.split(' ')[0] || 'there'}, this creates a clean workspace where you are the Owner.
               </p>
             </div>
             {isModal ? (
-              <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+              <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-300">
                 <FiX className="h-4 w-4" />
               </button>
             ) : null}
@@ -83,11 +83,11 @@ export default function CreateWorkspaceModal({ isModal = false, onClose }) {
 
           <div className="grid gap-4">
             <label className="block">
-              <span className="mb-2 block text-xs font-black uppercase tracking-wide text-slate-500">Workspace name</span>
+              <span className="mb-2 block text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">Workspace name</span>
               <input
                 value={form.name}
                 onChange={(event) => update('name', event.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-50"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-800 dark:focus:ring-blue-900/30"
                 placeholder="Acme Team"
                 autoFocus
                 maxLength={50}
@@ -95,11 +95,11 @@ export default function CreateWorkspaceModal({ isModal = false, onClose }) {
             </label>
 
             <label className="block">
-              <span className="mb-2 block text-xs font-black uppercase tracking-wide text-slate-500">Description</span>
+              <span className="mb-2 block text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">Description</span>
               <textarea
                 value={form.description}
                 onChange={(event) => update('description', event.target.value)}
-                className="min-h-20 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900 outline-none focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-50"
+                className="min-h-20 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900 outline-none focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-800 dark:focus:ring-blue-900/30"
                 placeholder="Optional"
               />
             </label>
@@ -121,25 +121,25 @@ export default function CreateWorkspaceModal({ isModal = false, onClose }) {
               ]} />
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-black uppercase tracking-wide text-slate-500">Defaults</p>
-              <label className="mt-3 flex items-center justify-between gap-4 text-sm font-bold text-slate-600">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+              <p className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">Defaults</p>
+              <label className="mt-3 flex items-center justify-between gap-4 text-sm font-bold text-slate-600 dark:text-slate-300">
                 Create default text channel
                 <input type="checkbox" checked={form.createDefaultTextChannel} onChange={(event) => update('createDefaultTextChannel', event.target.checked)} />
               </label>
-              <label className="mt-3 flex items-center justify-between gap-4 text-sm font-bold text-slate-600">
+              <label className="mt-3 flex items-center justify-between gap-4 text-sm font-bold text-slate-600 dark:text-slate-300">
                 Create default voice channel
                 <input type="checkbox" checked={form.createDefaultVoiceChannel} onChange={(event) => update('createDefaultVoiceChannel', event.target.checked)} />
               </label>
             </div>
           </div>
 
-          {error ? <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">{error}</div> : null}
+          {error ? <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 dark:border-rose-900/30 dark:bg-rose-900/20 dark:text-rose-300">{error}</div> : null}
 
           <button
             type="submit"
             disabled={isCreating || !form.name.trim()}
-            className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-black text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+            className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-black text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
           >
             {isCreating ? <FiLoader className="h-4 w-4 animate-spin" /> : <FiPlus className="h-4 w-4" />}
             {isCreating ? 'Creating...' : 'Create Workspace'}
@@ -153,7 +153,7 @@ export default function CreateWorkspaceModal({ isModal = false, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+      <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900" onClick={(event) => event.stopPropagation()}>
         {content}
       </div>
     </div>
@@ -163,11 +163,11 @@ export default function CreateWorkspaceModal({ isModal = false, onClose }) {
 function SelectField({ label, value, onChange, options }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-xs font-black uppercase tracking-wide text-slate-500">{label}</span>
+      <span className="mb-2 block text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-700 outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-50"
+        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-700 outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:focus:ring-blue-900/30"
       >
         {options.map(([optionValue, labelText]) => (
           <option key={optionValue} value={optionValue}>{labelText}</option>

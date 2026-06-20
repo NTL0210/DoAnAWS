@@ -23,7 +23,7 @@ export default function WorkspaceTasksView() {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <p className="text-slate-500">You do not have permission to view tasks.</p>
+          <p className="text-slate-500 dark:text-slate-400">You do not have permission to view tasks.</p>
         </div>
       </div>
     );

@@ -9,16 +9,12 @@ import { withAuth } from '../middleware/withAuth';
 
 async function handler(req, res) {
   try {
-    const { Users, Tasks, Meetings } = require('../../../src/repositories');
-
-    const usersRepo = new Users();
-    const tasksRepo = new Tasks();
-    const meetingsRepo = new Meetings();
+    const { userRepo, taskRepo, meetingRepo } = require('../../../src/repositories');
 
     const [users, tasks, meetings] = await Promise.all([
-      usersRepo.findAll(),
-      tasksRepo.findAll(),
-      meetingsRepo.findAll(),
+      userRepo.findAll(),
+      taskRepo.findAll(),
+      meetingRepo.findAll(),
     ]);
 
     const activeUsers = users.filter((u) => u.status === 'ACTIVE').length;

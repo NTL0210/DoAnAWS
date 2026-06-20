@@ -1,18 +1,30 @@
 /**
  * MockTaskRepository — in-memory mock implementation
  *
- * Uses seed data from @/data/seed/tasks
+ * Uses seed data from @/data/seed/tasks.
+ * NOTE: In mock/dev mode, data lives ONLY in memory (not localStorage).
+ * When migrating to AWS, swap this repo for a DynamoDB-backed implementation
+ * with ElastiCache (Redis) fronting for sub-3s latency.
  */
 
 import { mockTasks } from '@/data/seed/tasks';
 
-const DELAY_MS = 30;
+const DELAY_MS = 20;
+const STORAGE_KEY = 'meetingAppMockTasks';
 const delay = (ms = DELAY_MS) => new Promise((r) => setTimeout(r, ms));
 
 let store = null;
 
+function clearLegacyPersistedStore() {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* best-effort */ }
+}
+
 function getStore() {
-  if (!store) store = [...mockTasks];
+  if (!store) {
+    clearLegacyPersistedStore();
+    store = [...mockTasks];
+  }
   return store;
 }
 
@@ -21,9 +33,19 @@ export async function findById(id) {
   return getStore().find((t) => t.id === id) || null;
 }
 
+export async function findAll() {
+  await delay();
+  return getStore().map((t) => ({ ...t }));
+}
+
 export async function findByWorkspace(workspaceId) {
   await delay();
   return getStore().filter((t) => t.workspaceId === workspaceId || t.departmentId === workspaceId || !t.departmentId);
+}
+
+export async function findByDepartment(departmentId) {
+  await delay();
+  return getStore().filter((t) => t.departmentId === departmentId || t.workspaceId === departmentId);
 }
 
 export async function findByAssignee(assigneeId) {
@@ -80,19 +102,19 @@ export async function create(data) {
 
 export async function update(id, data) {
   await delay();
-  const store = getStore();
-  const idx = store.findIndex((t) => t.id === id);
+  const s = getStore();
+  const idx = s.findIndex((t) => t.id === id);
   if (idx === -1) return null;
   const now = new Date().toISOString();
-  store[idx] = { ...store[idx], ...data, updatedAt: now };
-  return { ...store[idx] };
+  s[idx] = { ...s[idx], ...data, updatedAt: now };
+  return { ...s[idx] };
 }
 
 export async function delete_(id) {
   await delay();
-  const store = getStore();
-  const idx = store.findIndex((t) => t.id === id);
-  if (idx !== -1) store.splice(idx, 1);
+  const s = getStore();
+  const idx = s.findIndex((t) => t.id === id);
+  if (idx !== -1) s.splice(idx, 1);
 }
 
-export default { findById, findByWorkspace, findByAssignee, findByMeeting, findByStatus, findOverdue, create, update, delete_ };
+export default { findById, findAll, findByWorkspace, findByDepartment, findByAssignee, findByMeeting, findByStatus, findOverdue, create, update, delete_ };

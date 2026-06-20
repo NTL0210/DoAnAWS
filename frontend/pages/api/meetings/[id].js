@@ -9,10 +9,9 @@ import { withAuth } from '../middleware/withAuth';
 
 async function handler(req, res) {
   try {
-    const { Meetings } = require('../../../src/repositories');
-    const meetingsRepo = new Meetings();
+    const { meetingRepo } = require('../../../src/repositories');
 
-    const meeting = await meetingsRepo.findById(req.query.id);
+    const meeting = await meetingRepo.findById(req.query.id);
 
     if (!meeting) {
       return res.status(404).json({
@@ -40,7 +39,7 @@ async function handler(req, res) {
       }
 
       // Update status to PROCESSING
-      await meetingsRepo.update(req.query.id, { status: 'PROCESSING' });
+      await meetingRepo.update(req.query.id, { status: 'PROCESSING' });
 
       // TODO: Trigger actual AI processing via async job/queue.
       // For MVP, the frontend calls legacy mockAI directly.

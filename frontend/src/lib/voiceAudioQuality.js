@@ -144,7 +144,7 @@ function createHighpassFilter(audioContext) {
   return filter;
 }
 
-export function createProcessedLocalRecordingStream({ localStream, makeupGain = VOICE_AUDIO_CONFIG.localMicMakeupGain } = {}) {
+export function createProcessedLocalRecordingStream({ localStream, makeupGain = VOICE_AUDIO_CONFIG.recordingLocalGain } = {}) {
   if (!localStream) throw new Error('Local recording stream is required.');
   const audioContext = createRecordingAudioContext(localStream);
   const source = audioContext.createMediaStreamSource(localStream);
@@ -152,9 +152,32 @@ export function createProcessedLocalRecordingStream({ localStream, makeupGain = 
   const compressor = audioContext.createDynamicsCompressor();
   const gain = audioContext.createGain();
   const destination = audioContext.createMediaStreamDestination();
-  const safeMakeupGain = Math.max(1, Math.min(VOICE_AUDIO_CONFIG.maxRecordingGain, Number(makeupGain) || VOICE_AUDIO_CONFIG.localMicMakeupGain));
 
-  applyCompressorSettings(compressor, LOCAL_COMPRESSOR_SETTINGS);
+  // ─── Channel fix: force mono-to-stereo up-mix ─────────────
+  // MediaStreamAudioDestinationNode defaults to 2 channels (stereo).
+  // With a mono source, the signal only reaches channel 0 (left) unless
+  // we explicitly configure the up-mix. By setting channelCountMode to
+  // 'explicit' and channelCount to 2 on the gain node, the Web Audio API
+  // up-mixes mono → stereo using channelInterpretation ('speakers'),
+  // which duplicates the mono signal to both L and R channels.
+  source.channelCountMode = 'explicit';
+  source.channelCount = 1;
+  gain.channelCountMode = 'explicit';
+  gain.channelCount = 2;
+  destination.channelInterpretation = 'speakers';
+
+  // ─── Conservative compressor (gentler than LOCAL_COMPRESSOR_SETTINGS) ─
+  // Softer threshold and lower ratio preserve speech clarity.
+  const RECORDING_COMPRESSOR_SETTINGS = {
+    threshold: -14,
+    knee: 12,
+    ratio: 2.5,
+    attack: 0.005,
+    release: 0.15,
+  };
+  const safeMakeupGain = Math.max(0.5, Math.min(VOICE_AUDIO_CONFIG.maxRecordingGain, Number(makeupGain) || VOICE_AUDIO_CONFIG.recordingLocalGain));
+
+  applyCompressorSettings(compressor, RECORDING_COMPRESSOR_SETTINGS);
   gain.gain.value = safeMakeupGain;
   source.connect(highpass);
   highpass.connect(compressor);
@@ -187,6 +210,10 @@ export function createProcessedLocalRecordingStream({ localStream, makeupGain = 
 export function createProcessedRecordingStream({ localStream, remoteStreams = [], settings = {} }) {
   const audioContext = createRecordingAudioContext(localStream);
   const destination = audioContext.createMediaStreamDestination();
+
+  // ─── Channel fix: up-mix mono sources to stereo ───────────
+  destination.channelInterpretation = 'speakers';
+
   const liveRemoteStreams = remoteStreams.filter((stream) =>
     stream?.getAudioTracks?.().some((track) => track.readyState === 'live')
   );
