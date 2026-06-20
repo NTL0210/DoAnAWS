@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { FiBriefcase, FiChevronDown, FiLoader, FiLock, FiMail, FiShield, FiUser, FiUserCheck, FiUserX, FiUsers } from 'react-icons/fi';
-import AppShell, { Panel, StatCard, StatusPill, LoadingState, EmptyState } from '../../src/components/layout/AppShell';
-import { useWorkspace } from '../../src/context/WorkspaceContext';
+import AppShell, { Panel, StatCard, StatusPill, LoadingState, EmptyState } from '../src/components/layout/AppShell';
+import { useWorkspace } from '../src/context/WorkspaceContext';
 
 export default function AdminUsers() {
   const {
@@ -27,7 +27,6 @@ export default function AdminUsers() {
     };
   }, [currentUser, workspaceRole]);
 
-  // Only show workspaces the user is a member of
   const myWorkspaces = useMemo(() => {
     if (!currentUser) return [];
     return workspaces.filter((ws) =>
@@ -35,7 +34,6 @@ export default function AdminUsers() {
     );
   }, [workspaces, currentUser]);
 
-  // Map workspace members to user objects (only workspace-level info)
   const members = useMemo(() => {
     return workspaceMembers.map((m) => ({
       id: m.userId,
@@ -74,7 +72,6 @@ export default function AdminUsers() {
     );
   }
 
-  // Workspace picker
   if (!activeWorkspace) {
     return (
       <AppShell user={user} showWorkspaceSwitcher={false}>
@@ -104,7 +101,6 @@ export default function AdminUsers() {
     );
   }
 
-  // Role check: only OWNER can manage members
   if (!isOwner) {
     return (
       <AppShell user={user} showWorkspaceSwitcher={false}>
@@ -120,7 +116,6 @@ export default function AdminUsers() {
     );
   }
 
-  // Filter by role
   const filtered = useMemo(() => {
     if (filterRole === 'all') return members;
     return members.filter((m) => m.role === filterRole);
@@ -148,7 +143,6 @@ export default function AdminUsers() {
       title="Member management"
       description={`${roleCounts.all} members · ${roleCounts.OWNER} owner · ${roleCounts.VICE_ADMIN} vice admin · ${roleCounts.MANAGER} manager · ${roleCounts.EMPLOYEE} employees`}
     >
-      {/* Workspace selector */}
       <div className="relative mb-4">
         <button
           type="button"

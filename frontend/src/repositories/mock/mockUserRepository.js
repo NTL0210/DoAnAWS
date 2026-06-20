@@ -1,7 +1,10 @@
 /**
  * MockUserRepository — in-memory mock implementation
  *
- * Uses seed data from @/data/seed/users
+ * Uses seed data from @/data/seed/users.
+ * NOTE: In mock/dev mode, data lives ONLY in memory (not localStorage).
+ * When migrating to AWS, swap this repo for a DynamoDB-backed implementation
+ * with ElastiCache (Redis) fronting for sub-3s latency.
  */
 
 import { mockUsers } from '@/data/seed/users';
@@ -16,28 +19,21 @@ function cloneUsers(users) {
   return users.map((user) => ({ ...user }));
 }
 
-function readPersistedStore() {
-  if (typeof window === 'undefined') return null;
+/** Clear any previously-persisted data when running in mock mode */
+function clearLegacyPersistedStore() {
+  if (typeof window === 'undefined') return;
   try {
-    const value = window.localStorage.getItem(STORAGE_KEY);
-    const parsed = value ? JSON.parse(value) : null;
-    return Array.isArray(parsed) ? parsed : null;
+    window.localStorage.removeItem(STORAGE_KEY);
   } catch {
-    return null;
-  }
-}
-
-function persistStore() {
-  if (typeof window === 'undefined' || !store) return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-  } catch {
-    // Mock persistence should never block auth flows.
+    // Best-effort cleanup
   }
 }
 
 function getStore() {
-  if (!store) store = readPersistedStore() || cloneUsers(mockUsers);
+  if (!store) {
+    clearLegacyPersistedStore();
+    store = cloneUsers(mockUsers);
+  }
   return store;
 }
 

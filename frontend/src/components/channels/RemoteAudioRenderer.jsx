@@ -46,7 +46,12 @@ function RemoteAudio({ userId, stream, deafen = false, outputDeviceId = '', volu
         audio.srcObject = null;
       }
     };
-    // Intentionally only depend on stream identity — deafen/volume are separate effects
+    // Intentionally only depend on stream identity — this effect owns srcObject lifecycle.
+    // Deafening/volume/outputDeviceId are managed by separate effects (2 and 3) that
+    // do NOT touch srcObject, preventing playback destruction.
+    // `onBlocked` is intentionally excluded because this effect fires on stream re-assignment,
+    // not on callback churn — stale onBlocked is a no-op (play-block is per-user, not per-stream).
+    // `DEBUG` is a module-level const (stable).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stream, userId]);
 

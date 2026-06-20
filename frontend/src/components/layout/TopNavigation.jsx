@@ -107,7 +107,7 @@ export default function TopNavigation() {
         />
 
         <button
-          onClick={() => router.push('/employee/profile')}
+          onClick={() => router.push('/profile')}
           className="top-nav-btn"
           title="Settings"
         >

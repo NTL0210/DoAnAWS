@@ -11,10 +11,10 @@ import {
   FiLoader,
   FiUser,
 } from 'react-icons/fi';
-import { StatusPill } from '../../../src/components/layout/AppShell';
-import { getMeetings } from '../../../src/services/legacyDataService';
+import { StatusPill } from '../../src/components/layout/AppShell';
+import { getMeetings } from '../../src/services/legacyDataService';
 
-export default function EmployeeMeetingDetail() {
+export default function MeetingDetailPage() {
   const router = useRouter();
   const { id } = router.query;
   const [meeting, setMeeting] = useState(null);
@@ -63,11 +63,10 @@ export default function EmployeeMeetingDetail() {
               <FiArrowLeft className="h-5 w-5" />
             </button>
             <div>
-              <p className="text-xs font-semibold text-primary-600">Employee view</p>
               <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">{meeting.title}</h1>
             </div>
           </div>
-          <Link href="/employee/meetings" className="text-sm font-semibold text-primary-600 hover:text-primary-700">
+          <Link href="/workspace?view=meetings" className="text-sm font-semibold text-primary-600 hover:text-primary-700">
             All meetings
           </Link>
         </div>

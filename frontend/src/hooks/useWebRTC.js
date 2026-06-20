@@ -732,7 +732,10 @@ export default function useWebRTC(opts) {
   useEffect(() => {
     if (!enabled || !socket?.connected || !channelId || !localStream || !joinedRef.current) return;
     joinChannel(channelId, { force: true });
-    // Intentionally keyed to socket connectivity for reconnect renegotiation.
+    // Intentionally keyed ONLY to socket?.connected — this is a reconnect renegotiation effect.
+    // enabled/channelId/localStream are guarded by the early return inside the effect.
+    // joinedRef is a ref (stable identity). joinChannel is from a useCallback with stable deps.
+    // Adding them would cause duplicate re-joins on unrelated state changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket?.connected]);
 

@@ -1,8 +1,10 @@
 /**
- * MockTaskRepository — mock implementation
+ * MockTaskRepository — in-memory mock implementation
  *
- * Persists to localStorage to survive server restarts.
- * Falls back to seed data from @/data/seed/tasks on first load.
+ * Uses seed data from @/data/seed/tasks.
+ * NOTE: In mock/dev mode, data lives ONLY in memory (not localStorage).
+ * When migrating to AWS, swap this repo for a DynamoDB-backed implementation
+ * with ElastiCache (Redis) fronting for sub-3s latency.
  */
 
 import { mockTasks } from '@/data/seed/tasks';
@@ -13,29 +15,15 @@ const delay = (ms = DELAY_MS) => new Promise((r) => setTimeout(r, ms));
 
 let store = null;
 
-function readPersistedStore() {
-  if (typeof window === 'undefined') return null;
-  try {
-    const value = window.localStorage.getItem(STORAGE_KEY);
-    return value ? JSON.parse(value) : null;
-  } catch {
-    return null;
-  }
-}
-
-function persistStore() {
-  if (typeof window === 'undefined' || !store) return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-  } catch {
-    // Swallow — persistence should never block operations.
-  }
+function clearLegacyPersistedStore() {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* best-effort */ }
 }
 
 function getStore() {
   if (!store) {
-    store = readPersistedStore();
-    if (!store) store = [...mockTasks];
+    clearLegacyPersistedStore();
+    store = [...mockTasks];
   }
   return store;
 }
@@ -109,7 +97,6 @@ export async function create(data) {
     updatedAt: null,
   };
   getStore().unshift(task);
-  persistStore();
   return { ...task };
 }
 
@@ -120,7 +107,6 @@ export async function update(id, data) {
   if (idx === -1) return null;
   const now = new Date().toISOString();
   s[idx] = { ...s[idx], ...data, updatedAt: now };
-  persistStore();
   return { ...s[idx] };
 }
 
@@ -129,7 +115,6 @@ export async function delete_(id) {
   const s = getStore();
   const idx = s.findIndex((t) => t.id === id);
   if (idx !== -1) s.splice(idx, 1);
-  persistStore();
 }
 
 export default { findById, findAll, findByWorkspace, findByDepartment, findByAssignee, findByMeeting, findByStatus, findOverdue, create, update, delete_ };

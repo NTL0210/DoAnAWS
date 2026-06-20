@@ -7,7 +7,9 @@
     "dev:voice": "cd server && node signaling.js",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "clean": "rm -rf .next .npm-cache",
+    "clean:all": "rm -rf .next .npm-cache node_modules && npm install"
   },
   "dependencies": {
     "framer-motion": "^12.40.0",

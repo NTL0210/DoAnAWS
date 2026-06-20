@@ -1,8 +1,10 @@
 /**
- * MockMeetingRepository — mock implementation
+ * MockMeetingRepository — in-memory mock implementation
  *
- * Persists to localStorage to survive server restarts.
- * Falls back to seed data from @/data/seed/meetings on first load.
+ * Uses seed data from @/data/seed/meetings.
+ * NOTE: In mock/dev mode, data lives ONLY in memory (not localStorage).
+ * When migrating to AWS, swap this repo for a DynamoDB-backed implementation
+ * with ElastiCache (Redis) fronting for sub-3s latency.
  */
 
 import { mockWorkspaceMeetings } from '@/data/seed/meetings';
@@ -13,29 +15,19 @@ const delay = (ms = DELAY_MS) => new Promise((r) => setTimeout(r, ms));
 
 let store = null;
 
-function readPersistedStore() {
-  if (typeof window === 'undefined') return null;
-  try {
-    const value = window.localStorage.getItem(STORAGE_KEY);
-    return value ? JSON.parse(value) : null;
-  } catch {
-    return null;
-  }
+function cloneDeep(obj) {
+  return JSON.parse(JSON.stringify(obj));
 }
 
-function persistStore() {
-  if (typeof window === 'undefined' || !store) return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-  } catch {
-    // Swallow — persistence should never block operations.
-  }
+function clearLegacyPersistedStore() {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* best-effort */ }
 }
 
 function getStore() {
   if (!store) {
-    store = readPersistedStore();
-    if (!store) store = JSON.parse(JSON.stringify(mockWorkspaceMeetings));
+    clearLegacyPersistedStore();
+    store = cloneDeep(mockWorkspaceMeetings);
   }
   return store;
 }
@@ -43,26 +35,26 @@ function getStore() {
 export async function findById(id) {
   await delay();
   const found = getStore().find((m) => m.id === id);
-  return found ? JSON.parse(JSON.stringify(found)) : null;
+  return found ? cloneDeep(found) : null;
 }
 
 export async function findAll() {
   await delay();
-  return getStore().map((m) => JSON.parse(JSON.stringify(m)));
+  return getStore().map((m) => cloneDeep(m));
 }
 
 export async function findByWorkspace(workspaceId) {
   await delay();
   return getStore()
     .filter((m) => m.workspaceId === workspaceId)
-    .map((m) => JSON.parse(JSON.stringify(m)));
+    .map((m) => cloneDeep(m));
 }
 
 export async function findByDepartment(departmentId) {
   await delay();
   return getStore()
     .filter((m) => m.departmentId === departmentId)
-    .map((m) => JSON.parse(JSON.stringify(m)));
+    .map((m) => cloneDeep(m));
 }
 
 export async function findRecentByWorkspace(workspaceId, limit = 10) {
@@ -71,7 +63,7 @@ export async function findRecentByWorkspace(workspaceId, limit = 10) {
     .filter((m) => m.workspaceId === workspaceId)
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, limit)
-    .map((m) => JSON.parse(JSON.stringify(m)));
+    .map((m) => cloneDeep(m));
 }
 
 export async function create(data) {
@@ -104,8 +96,7 @@ export async function create(data) {
     updatedAt: now,
   };
   getStore().unshift(meeting);
-  persistStore();
-  return JSON.parse(JSON.stringify(meeting));
+  return cloneDeep(meeting);
 }
 
 export async function update(id, data) {
@@ -115,8 +106,7 @@ export async function update(id, data) {
   if (idx === -1) return null;
   const now = new Date().toISOString();
   s[idx] = { ...s[idx], ...data, updatedAt: now };
-  persistStore();
-  return JSON.parse(JSON.stringify(s[idx]));
+  return cloneDeep(s[idx]);
 }
 
 export async function delete_(id) {
@@ -124,7 +114,6 @@ export async function delete_(id) {
   const s = getStore();
   const idx = s.findIndex((m) => m.id === id);
   if (idx !== -1) s.splice(idx, 1);
-  persistStore();
 }
 
 export default { findById, findAll, findByWorkspace, findByDepartment, findRecentByWorkspace, create, update, delete_ };

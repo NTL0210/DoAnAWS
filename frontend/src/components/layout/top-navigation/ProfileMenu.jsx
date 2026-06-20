@@ -46,13 +46,13 @@ export default function ProfileMenu({
           </div>
           <div className="mx-3 border-t border-[#1f2022]" />
           <button
-            onClick={() => handleNavigation('/employee/profile')}
+            onClick={() => handleNavigation('/profile')}
             className="flex w-full items-center gap-3 px-4 py-2 text-sm text-[#dbdee1] transition hover:bg-[#36373c]"
           >
             <FiUser className="h-4 w-4 text-[#949ba4]" /> Profile
           </button>
           <button
-            onClick={() => handleNavigation('/employee/profile')}
+            onClick={() => handleNavigation('/profile')}
             className="flex w-full items-center gap-3 px-4 py-2 text-sm text-[#dbdee1] transition hover:bg-[#36373c]"
           >
             <FiSettings className="h-4 w-4 text-[#949ba4]" /> Settings

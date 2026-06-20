@@ -1,8 +1,10 @@
 /**
- * MockWorkspaceRepository — mock implementation
+ * MockWorkspaceRepository — in-memory mock implementation
  *
- * Persists to localStorage to survive server restarts.
- * Falls back to seed data from @/data/seed/workspaces on first load.
+ * Uses seed data from @/data/seed/workspaces.
+ * NOTE: In mock/dev mode, data lives ONLY in memory (not localStorage).
+ * When migrating to AWS, swap this repo for a DynamoDB-backed implementation
+ * with ElastiCache (Redis) fronting for sub-3s latency.
  */
 
 import { workspaces as seedWorkspaces, userWorkspaces as seedUserWorkspaces } from '@/data/seed/workspaces';
@@ -14,58 +16,41 @@ const delay = (ms = DELAY_MS) => new Promise((r) => setTimeout(r, ms));
 
 let store = null;
 
-function readPersistedStore() {
-  if (typeof window === 'undefined') return null;
-  try {
-    const value = window.localStorage.getItem(STORAGE_KEY);
-    return value ? JSON.parse(value) : null;
-  } catch {
-    return null;
-  }
+function cloneDeep(obj) {
+  return JSON.parse(JSON.stringify(obj));
 }
 
-function persistStore() {
-  if (typeof window === 'undefined' || !store) return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-  } catch {
-    // Swallow — persistence should never block operations.
-  }
+function clearLegacyPersistedStore() {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* best-effort */ }
 }
 
 function getStore() {
   if (!store) {
-    store = readPersistedStore();
-    if (!store) {
-      store = seedWorkspaces.map((ws) => ({ ...ws, channels: [...ws.channels], teams: [...ws.teams], members: [...ws.members] }));
-    }
+    clearLegacyPersistedStore();
+    store = seedWorkspaces.map((ws) => ({ ...ws, channels: [...ws.channels], teams: [...ws.teams], members: [...ws.members] }));
   }
   return store;
-}
-
-function cloneWorkspace(ws) {
-  return JSON.parse(JSON.stringify(ws));
 }
 
 export async function findById(id) {
   await delay();
   const ws = getStore().find((w) => w.id === id);
-  return ws ? cloneWorkspace(ws) : null;
+  return ws ? cloneDeep(ws) : null;
 }
 
 export async function findByUserId(userId) {
   await delay();
-  // Match by membership in persisted data, fall back to seed mapping
   const all = getStore();
   const seedIds = seedUserWorkspaces[userId] || [];
   return all
     .filter((ws) => seedIds.includes(ws.id) || ws.members?.some((m) => m.userId === userId))
-    .map(cloneWorkspace);
+    .map(cloneDeep);
 }
 
 export async function findAll() {
   await delay();
-  return getStore().map(cloneWorkspace);
+  return getStore().map(cloneDeep);
 }
 
 export async function create(data) {
@@ -96,8 +81,7 @@ export async function create(data) {
     updatedAt: data.updatedAt || now,
   };
   getStore().push(ws);
-  persistStore();
-  return cloneWorkspace(ws);
+  return cloneDeep(ws);
 }
 
 export async function update(id, data) {
@@ -107,8 +91,7 @@ export async function update(id, data) {
   if (idx === -1) return null;
   const now = new Date().toISOString();
   s[idx] = { ...s[idx], ...data, updatedAt: now };
-  persistStore();
-  return cloneWorkspace(s[idx]);
+  return cloneDeep(s[idx]);
 }
 
 export async function delete_(id) {
@@ -116,7 +99,6 @@ export async function delete_(id) {
   const s = getStore();
   const idx = s.findIndex((w) => w.id === id);
   if (idx !== -1) s.splice(idx, 1);
-  persistStore();
 }
 
 export default { findById, findByUserId, findAll, create, update, delete_ };

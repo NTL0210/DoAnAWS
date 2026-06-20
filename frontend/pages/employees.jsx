@@ -9,8 +9,8 @@ import {
   FiUser,
   FiUsers,
 } from 'react-icons/fi';
-import AppShell, { Panel, StatCard, StatusPill, LoadingState, EmptyState } from '../../src/components/layout/AppShell';
-import { getUsers, getTasks as getMockTasks } from '../../src/services/legacyDataService';
+import AppShell, { Panel, StatCard, StatusPill, LoadingState, EmptyState } from '../src/components/layout/AppShell';
+import { getUsers, getTasks as getMockTasks } from '../src/services/legacyDataService';
 
 export default function ManagerEmployees() {
   const [user, setUser] = useState(null);

@@ -16,8 +16,8 @@ import {
   FiBriefcase,
   FiChevronDown,
 } from 'react-icons/fi';
-import AppShell, { Panel, StatCard, LoadingState } from '../../src/components/layout/AppShell';
-import { useWorkspace } from '../../src/context/WorkspaceContext';
+import AppShell, { Panel, StatCard, LoadingState } from '../src/components/layout/AppShell';
+import { useWorkspace } from '../src/context/WorkspaceContext';
 
 const actionConfig = {
   LOGIN_SUCCESS: { icon: FiLogIn, color: 'bg-emerald-50 text-emerald-600' },
@@ -69,7 +69,6 @@ export default function AdminLogs() {
 
   const isOwner = workspaceRole === 'OWNER';
 
-  // Get activity feed for active workspace
   const scopedLogs = useMemo(() => {
     if (!activeWorkspace || !activityFeed) return [];
     const feed = activityFeed[activeWorkspace.id];
@@ -164,7 +163,6 @@ export default function AdminLogs() {
       title="Activity log"
       description={`${scopedLogs.length} events · ${errorCount} errors · ${warningCount} warnings`}
     >
-      {/* Workspace selector */}
       <div className="relative mb-4">
         <button
           type="button"

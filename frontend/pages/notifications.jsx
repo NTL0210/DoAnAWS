@@ -9,7 +9,7 @@ import {
   FiLoader,
   FiUserPlus,
 } from 'react-icons/fi';
-import AppShell, { Panel, StatusPill, LoadingState, EmptyState } from '../../src/components/layout/AppShell';
+import AppShell, { Panel, StatusPill, LoadingState, EmptyState } from '../src/components/layout/AppShell';
 
 const MOCK_NOTIFICATIONS = [
   { id: 'n1', title: 'New task assigned', message: 'You have been assigned: Implement form validation for login page', type: 'task_assigned', isRead: false, createdAt: '2026-05-21T10:30:00Z' },

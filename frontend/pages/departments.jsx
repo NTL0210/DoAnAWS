@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { FiBriefcase, FiChevronDown, FiLoader, FiLock, FiUsers, FiCheckCircle, FiUser, FiPlus } from 'react-icons/fi';
-import AppShell, { Panel, StatCard, StatusPill, LoadingState, EmptyState } from '../../src/components/layout/AppShell';
-import { useWorkspace } from '../../src/context/WorkspaceContext';
+import AppShell, { Panel, StatCard, StatusPill, LoadingState, EmptyState } from '../src/components/layout/AppShell';
+import { useWorkspace } from '../src/context/WorkspaceContext';
 
 export default function AdminDepartments() {
   const {
@@ -26,7 +26,6 @@ export default function AdminDepartments() {
     };
   }, [currentUser, workspaceRole]);
 
-  // Only show workspaces the user is a member of
   const myWorkspaces = useMemo(() => {
     if (!currentUser) return [];
     return workspaces.filter((ws) =>
@@ -36,7 +35,6 @@ export default function AdminDepartments() {
 
   const isOwner = workspaceRole === 'OWNER';
 
-  // Enhance teams with computed metrics
   const enhancedTeams = useMemo(() => {
     if (!workspaceTeams || !workspaceMembers) return [];
     return workspaceTeams.map((team) => {
@@ -81,7 +79,6 @@ export default function AdminDepartments() {
     );
   }
 
-  // Workspace picker
   if (!activeWorkspace) {
     return (
       <AppShell user={user} showWorkspaceSwitcher={false}>
@@ -111,7 +108,6 @@ export default function AdminDepartments() {
     );
   }
 
-  // Role check: only OWNER can manage teams
   if (!isOwner) {
     return (
       <AppShell user={user} showWorkspaceSwitcher={false}>
@@ -137,7 +133,6 @@ export default function AdminDepartments() {
       title="Team management"
       description={`${totalTeams} teams · ${totalMembers} total members in ${activeWorkspace.name}`}
     >
-      {/* Workspace selector */}
       <div className="relative mb-4">
         <button
           type="button"

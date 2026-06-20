@@ -16,12 +16,9 @@ import {
   FiBriefcase,
   FiChevronDown,
 } from 'react-icons/fi';
-import AppShell, { Panel, StatusPill, LoadingState } from '../../src/components/layout/AppShell';
-import { useWorkspace } from '../../src/context/WorkspaceContext';
+import AppShell, { Panel, StatusPill, LoadingState } from '../src/components/layout/AppShell';
+import { useWorkspace } from '../src/context/WorkspaceContext';
 
-/**
- * Reusable toggle switch component.
- */
 function Toggle({ label, value, onChange }) {
   return (
     <div className="flex items-center justify-between py-2">
@@ -166,7 +163,6 @@ export default function AdminSettings() {
       title="Workspace settings"
       description="Configure platform behavior, notifications, and defaults."
     >
-      {/* Workspace selector */}
       <div className="relative mb-4">
         <button
           type="button"
@@ -201,7 +197,6 @@ export default function AdminSettings() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        {/* General settings */}
         <Panel title="General" description="Basic platform configuration">
           <div className="space-y-5">
             <div>
@@ -280,7 +275,6 @@ export default function AdminSettings() {
           </div>
         </Panel>
 
-        {/* Notifications */}
         <Panel title="Notifications" description="Configure alert preferences">
           <div className="space-y-1">
             <Toggle label="Auto-assign tasks from AI" value={settings.autoAssignTasks} onChange={(v) => update('autoAssignTasks', v)} />
@@ -305,7 +299,6 @@ export default function AdminSettings() {
           </div>
         </Panel>
 
-        {/* System info */}
         <Panel title="System information" description="Platform version and status">
           <div className="space-y-4">
             {[
@@ -324,7 +317,6 @@ export default function AdminSettings() {
           </div>
         </Panel>
 
-        {/* Security */}
         <Panel title="Security" description="Access and audit configuration">
           <div className="space-y-4">
             <div className="flex items-center gap-4 rounded-lg bg-slate-50 p-4 dark:bg-slate-800">

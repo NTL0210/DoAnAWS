@@ -396,7 +396,5 @@ function Input({ id, label, icon: Icon, ...props }) {
 
 function getDashboardPath(user) {
   if (!user?.role) return '/workspace';
-  if (user?.role === 'EMPLOYEE') return '/employee/dashboard';
-  if (user?.role === 'MANAGER') return '/manager/dashboard';
-  return '/admin/dashboard';
+  return '/dashboard';
 }

@@ -15,8 +15,8 @@ import {
   FiUsers,
   FiX,
 } from 'react-icons/fi';
-import AppShell, { Panel } from '../../src/components/layout/AppShell';
-import { useWorkspace } from '../../src/context/WorkspaceContext';
+import AppShell, { Panel } from '../src/components/layout/AppShell';
+import { useWorkspace } from '../src/context/WorkspaceContext';
 
 const PRESET_COLORS = ['5865F2', 'ED4245', '57F287', 'FEE75C', 'EB459E', 'FF73FA', '00B0FF', '9B59B6'];
 
@@ -79,7 +79,7 @@ export default function AccountSettings() {
   const workspaceName = myWorkspace?.name || '—';
   const departmentName = departmentNames[user?.departmentId] || workspaceName;
 
-  // ── Save display name & phone ──
+  // Save display name & phone
   const handleSave = async () => {
     if (!displayName.trim()) {
       showToast('error', 'Display name cannot be empty.');
@@ -87,7 +87,6 @@ export default function AccountSettings() {
     }
     setSaving(true);
     try {
-      // Simulate network delay
       await new Promise((r) => setTimeout(r, 300));
       updateCurrentUser({
         name: displayName.trim(),
@@ -103,19 +102,16 @@ export default function AccountSettings() {
     }
   };
 
-  // ── Avatar management ──
+  // Avatar management
   const handleSelectAvatar = (newUrl) => {
     if (newUrl === avatar) {
       setShowAvatarPicker(false);
       return;
     }
 
-    // Build updated history
     let newHistory = [...avatarHistory];
     if (avatar) {
-      // Push current avatar into history
       newHistory = [avatar, ...newHistory.filter((a) => a !== newUrl)];
-      // Keep max 5
       if (newHistory.length > 5) newHistory = newHistory.slice(0, 5);
     }
 
@@ -124,7 +120,6 @@ export default function AccountSettings() {
     setShowAvatarPicker(false);
     setCustomAvatarUrl('');
 
-    // Persist immediately
     updateCurrentUser({ avatar: newUrl, avatarHistory: newHistory });
     showToast('success', 'Avatar updated.');
   };
@@ -132,7 +127,6 @@ export default function AccountSettings() {
   const handleRestoreHistoryAvatar = (oldUrl) => {
     if (oldUrl === avatar) return;
 
-    // Remove from history, push current into history
     let newHistory = avatarHistory.filter((a) => a !== oldUrl);
     if (avatar) newHistory.unshift(avatar);
     if (newHistory.length > 5) newHistory.length = 5;
@@ -146,7 +140,6 @@ export default function AccountSettings() {
   const handleCustomAvatarSubmit = () => {
     const url = customAvatarUrl.trim();
     if (!url) return;
-    // Basic URL validation
     try {
       new URL(url);
       handleSelectAvatar(url);
@@ -155,7 +148,7 @@ export default function AccountSettings() {
     }
   };
 
-  // ── Guard: not logged in ──
+  // Guard: not logged in
   if (!loading && !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background dark:bg-slate-950">
@@ -167,7 +160,6 @@ export default function AccountSettings() {
     );
   }
 
-  // ── Loading ──
   if (loading || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background dark:bg-slate-950">
@@ -187,13 +179,12 @@ export default function AccountSettings() {
       description="View and manage your personal account information."
     >
       <div className="grid gap-6 xl:grid-cols-[0.55fr_1.45fr]">
-        {/* ===== LEFT COLUMN: Avatar ===== */}
+        {/* LEFT COLUMN: Avatar */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           className="space-y-5"
         >
-          {/* Current avatar card */}
           <div className="rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900/60 p-6 text-center shadow-sm">
             <div className="relative mx-auto inline-block">
               {avatar ? (
@@ -230,7 +221,6 @@ export default function AccountSettings() {
             )}
           </div>
 
-          {/* Avatar history */}
           {avatarHistory.length > 0 && (
             <div className="rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900/60 p-4 shadow-sm">
               <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -260,7 +250,7 @@ export default function AccountSettings() {
           )}
         </motion.div>
 
-        {/* ===== RIGHT COLUMN: Details ===== */}
+        {/* RIGHT COLUMN: Details */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -269,7 +259,6 @@ export default function AccountSettings() {
         >
           <Panel title="Account details" description="Basic information about your account.">
             <div className="space-y-5">
-              {/* Display name */}
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   Display name
@@ -282,7 +271,6 @@ export default function AccountSettings() {
                 />
               </div>
 
-              {/* Email */}
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   Email
@@ -293,7 +281,6 @@ export default function AccountSettings() {
                 </p>
               </div>
 
-              {/* Phone */}
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   Phone <span className="font-normal lowercase text-slate-400 dark:text-slate-500">(optional)</span>
@@ -309,7 +296,6 @@ export default function AccountSettings() {
                 </div>
               </div>
 
-              {/* Role */}
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   Role
@@ -320,7 +306,6 @@ export default function AccountSettings() {
                 </span>
               </div>
 
-              {/* Department / Workspace */}
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   Department
@@ -331,7 +316,6 @@ export default function AccountSettings() {
                 </p>
               </div>
 
-              {/* Joined */}
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   Joined
@@ -348,7 +332,6 @@ export default function AccountSettings() {
                 </p>
               </div>
 
-              {/* Save button */}
               <div className="flex items-center gap-3 pt-2">
                 <button
                   type="button"
@@ -379,7 +362,7 @@ export default function AccountSettings() {
         </motion.div>
       </div>
 
-      {/* ===== Avatar picker modal ===== */}
+      {/* Avatar picker modal */}
       {showAvatarPicker && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <motion.div
@@ -401,7 +384,6 @@ export default function AccountSettings() {
               </button>
             </div>
 
-            {/* Preset avatars */}
             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Presets</p>
             <div className="mb-4 grid grid-cols-4 gap-2.5">
               {buildPresetAvatars(user.name).map((preset) => {
@@ -428,7 +410,6 @@ export default function AccountSettings() {
               })}
             </div>
 
-            {/* Custom URL */}
             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Or use a custom URL</p>
             <div className="flex gap-2">
               <input

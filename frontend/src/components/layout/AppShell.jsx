@@ -35,39 +35,39 @@ const roleMeta = {
   ADMIN: {
     label: 'Admin',
     nav: [
-      { label: 'Dashboard', href: '/admin/dashboard', icon: FiGrid, anim: 'float' },
+      { label: 'Dashboard', href: '/dashboard', icon: FiGrid, anim: 'float' },
       { label: 'Workspace', href: '/workspace', icon: FiLayers, anim: 'pulse' },
       { label: 'Meetings', href: '/workspace?view=meetings', icon: FiFileText, anim: 'bob' },
       { label: 'Upload', href: '/workspace?view=meetings&tab=upload', icon: FiUploadCloud, anim: 'spin' },
-      { label: 'Departments', href: '/admin/departments', icon: FiBriefcase, anim: 'pulse' },
-      { label: 'Users', href: '/admin/users', icon: FiUsers, anim: 'bob' },
+      { label: 'Departments', href: '/departments', icon: FiBriefcase, anim: 'pulse' },
+      { label: 'Users', href: '/users', icon: FiUsers, anim: 'bob' },
       { label: 'All Tasks', href: '/workspace?view=tasks', icon: FiCheckCircle, anim: 'float' },
       { label: 'Analytics', href: '/workspace?view=analytics', icon: FiBarChart2, anim: 'pulse' },
-      { label: 'Logs', href: '/admin/logs', icon: FiActivity, anim: 'bob' },
-      { label: 'Settings', href: '/admin/settings', icon: FiSettings, anim: 'spin' },
+      { label: 'Logs', href: '/logs', icon: FiActivity, anim: 'bob' },
+      { label: 'Settings', href: '/settings', icon: FiSettings, anim: 'spin' },
     ],
   },
   MANAGER: {
     label: 'Manager',
     nav: [
-      { label: 'Dashboard', href: '/manager/dashboard', icon: FiHome, anim: 'float' },
+      { label: 'Dashboard', href: '/dashboard', icon: FiHome, anim: 'float' },
       { label: 'Workspace', href: '/workspace', icon: FiLayers, anim: 'pulse' },
       { label: 'Meetings', href: '/workspace?view=meetings', icon: FiFileText, anim: 'bob' },
       { label: 'Upload', href: '/workspace?view=meetings&tab=upload', icon: FiUploadCloud, anim: 'spin' },
       { label: 'Team Tasks', href: '/workspace?view=tasks', icon: FiCheckCircle, anim: 'float' },
-      { label: 'Employees', href: '/manager/employees', icon: FiUsers, anim: 'bob' },
+      { label: 'Employees', href: '/employees', icon: FiUsers, anim: 'bob' },
       { label: 'Analytics', href: '/workspace?view=analytics', icon: FiBarChart2, anim: 'pulse' },
     ],
   },
   EMPLOYEE: {
     label: 'Employee',
     nav: [
-      { label: 'Dashboard', href: '/employee/dashboard', icon: FiHome, anim: 'float' },
+      { label: 'Dashboard', href: '/dashboard', icon: FiHome, anim: 'float' },
       { label: 'Workspace', href: '/workspace', icon: FiLayers, anim: 'pulse' },
       { label: 'Meetings', href: '/workspace?view=meetings', icon: FiFileText, anim: 'bob' },
       { label: 'My Tasks', href: '/workspace?view=tasks', icon: FiCheckCircle, anim: 'float' },
-      { label: 'Notifications', href: '/employee/notifications', icon: FiBell, anim: 'pulse' },
-      { label: 'Profile', href: '/employee/profile', icon: FiUser, anim: 'spin' },
+      { label: 'Notifications', href: '/notifications', icon: FiBell, anim: 'pulse' },
+      { label: 'Profile', href: '/profile', icon: FiUser, anim: 'spin' },
     ],
   },
 };
@@ -87,7 +87,7 @@ const iconAnimClass = {
 };
 
 /* ============================================
-   APP SHELL â€” MAIN LAYOUT (dark narrow sidebar)
+   APP SHELL — MAIN LAYOUT (dark narrow sidebar)
    ============================================ */
 export default function AppShell({ user, children, eyebrow, title, description, actions, showWorkspaceSwitcher = true }) {
   const router = useRouter();
@@ -123,7 +123,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
   const initials = getInitials(shellUser?.name || meta.label);
   const department = departmentNames[shellUser?.departmentId] || 'Company workspace';
   const dashboardHref = getDashboardHref(effectiveRole);
-  const profileHref = '/employee/profile';
+  const profileHref = '/profile';
   const notifications = aiNotifications || [];
 
   const [notifOpen, setNotifOpen] = useState(false);
@@ -194,7 +194,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
     <div className="min-h-screen bg-background text-foreground dark:bg-slate-950 dark:text-slate-50">
       {/* ========== DARK NARROW SIDEBAR ========== */}
       <aside className="app-sidebar-rail fixed inset-y-0 left-0 z-30 hidden w-[76px] flex-col items-center border-r border-slate-950 bg-[#111214] py-4 text-slate-400 shadow-2xl lg:flex">
-        {/* Brand icon â€” static (icon web) */}
+        {/* Brand icon — static (icon web) */}
         <span
           className="mb-6 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500 to-blue-500 font-bold shadow-lg shadow-blue-500/20"
           title="AI Meeting Platform"
@@ -206,7 +206,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
         <div className="sidebar-orb sidebar-orb-1 !opacity-10" />
         <div className="sidebar-orb sidebar-orb-2 !opacity-10" />
 
-        {/* Navigation â€” all items are clickable links */}
+        {/* Navigation — all items are clickable links */}
         <nav className="app-sidebar-nav relative z-10 flex flex-1 flex-col gap-2 px-2 overflow-y-auto overflow-x-hidden">
           {meta.nav.map((item) => {
             const active = isActive(item.href);
@@ -314,8 +314,10 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-black text-slate-900 dark:text-slate-100">
+                      {activeWorkspace?.name || 'Select workspace'}
                     </span>
                     <span className="block truncate text-[11px] font-bold text-slate-400 dark:text-slate-500">
+                      {meta.label}
                     </span>
                   </span>
                 </span>
@@ -531,7 +533,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                       </div>
                       <div className="border-t border-slate-200 px-4 py-2.5 dark:border-slate-800">
                         <Link
-                          href="/employee/notifications"
+                          href="/notifications"
                           className="block text-center text-xs font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
                           onClick={() => setNotifOpen(false)}
                         >
@@ -710,7 +712,6 @@ export function EmptyState({ icon: Icon, title, description, action }) {
       <h3 className="mt-4 text-base font-bold text-slate-900 dark:text-slate-100">{title}</h3>
       {description && <p className="mt-2 max-w-sm text-sm text-slate-500 dark:text-slate-400">{description}</p>}
       {action && <div className="mt-5">{action}</div>}
-      {action && <div className="mt-5">{action}</div>}
     </div>
   );
 }
@@ -727,9 +728,7 @@ function getInitials(name) {
 }
 
 function getDashboardHref(role) {
-  if (role === 'EMPLOYEE') return '/employee/dashboard';
-  if (role === 'MANAGER') return '/manager/dashboard';
-  return '/admin/dashboard';
+  return '/dashboard';
 }
 
 function normalizeWorkspaceRole(role) {

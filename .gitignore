@@ -9,6 +9,8 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+.npm-cache/
+
 # Do NOT ignore package-lock.json / yarn.lock / pnpm-lock.yaml
 # These lock files should usually be committed.
 

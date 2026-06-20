@@ -157,8 +157,14 @@ export default function WorkspaceChannelView() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router.isReady, router.asPath]);
-  // NOTE: We intentionally exclude `activeView` and `router.query.view` from deps
-  // to prevent the loop. `router.asPath` catches ALL URL changes (including query).
+  // NOTE: We intentionally exclude `activeView`, `router.query.view`, `selectChannel`,
+  // `selectTeamChat`, `selectView`, and `activeTeamId` from deps:
+  //   - `router.asPath` catches ALL URL changes (including query), so the effect
+  //     fires on every external navigation already.
+  //   - Adding `activeView`/`selectView` etc. would create a loop: changing state →
+  //     re-render → new `activeView` → effect fires → changes URL → new `asPath` → fires again.
+  //   - The guard `lastSyncedView.current` paired with `openWorkspaceView()` prevents
+  //     double-applying our own internal updates.
 
   /**
    * Navigate to a workspace view.
@@ -222,8 +228,8 @@ export default function WorkspaceChannelView() {
         if (!confirmed) return;
         result = await switchVoiceChannel(channelId, { confirmedTargetRecording: true, confirmedStopRecording: true });
       }
-      if (!result?.ok) return;
-      if (!result.unchanged) {
+      // Nếu join voice thất bại vẫn cho xem UI (có nút Join để click thủ công)
+      if (result?.ok && !result?.unchanged) {
         voiceLeaveChannel();
       }
     }
@@ -503,6 +509,9 @@ export default function WorkspaceChannelView() {
                 ))}
                 {voiceChannels.map((channel) => {
                   const hasAccess = canAccessVoice(channel);
+                  // Ẩn voice channel nếu user ko có quyền (trừ OWNER/VICE_ADMIN)
+                  const isAdmin = workspaceRole === 'OWNER' || workspaceRole === 'VICE_ADMIN';
+                  if (!hasAccess && !isAdmin) return null;
                   return (
                     <SidebarItem
                       key={channel.id}
@@ -516,7 +525,7 @@ export default function WorkspaceChannelView() {
                         connected: channel.id === activeVoiceChannelId,
                         lockTitle: 'You do not have access to this voice channel.',
                         recording: Boolean(activeVoiceRecordings[channel.id]),
-                        participants: voiceParticipants[channel.id] || [],
+                        participants: Object.values(voiceParticipants[channel.id] || {}),
                         workspaceMembers,
                       }}
                     />

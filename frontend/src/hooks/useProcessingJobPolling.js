@@ -182,6 +182,11 @@ export default function useProcessingJobPolling(jobId, options = {}) {
         intervalRef.current = null;
       }
     };
+    // Only depend on enabled/resolvedJobId — the lifecycle of polling (start/stop).
+    // poll() is a useCallback with its own deps (jobId, meetingId, callbacks).
+    // getInterval() depends only on elapsedRef (ref) and POLLING_INTERVALS (const), both stable.
+    // Adding poll/getInterval as deps would restart the interval timer on every callback change
+    // without actually starting a new job, losing the adaptive timing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, resolvedJobId]);
 

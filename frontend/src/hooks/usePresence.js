@@ -34,7 +34,12 @@ export default function usePresence() {
   const { currentUser, activeWorkspaceId } = useWorkspace();
   const heartbeatRef = useRef(null);
   const idleTimerRef = useRef(null);
-  const activityRef = useRef(Date.now());
+  const activityRef = useRef(null);
+  const [lastSeen, setLastSeen] = useState(() => Date.now());
+
+  useEffect(() => {
+    activityRef.current = Date.now();
+  }, []);
   const [status, setStatus] = useState('online');
   const [presenceMap, setPresenceMap] = useState({});
 
@@ -165,8 +170,13 @@ export default function usePresence() {
     userId,
     name: userName,
     status,
-    lastSeen: Date.now(),
-  }), [userId, userName, status]);
+    lastSeen,
+  }), [userId, userName, status, lastSeen]);
+
+  // Update lastSeen when status, user, or name changes
+  useEffect(() => {
+    setLastSeen(Date.now());
+  }, [userId, userName, status]);
 
   return { onlineUsers, currentStatus };
 }
