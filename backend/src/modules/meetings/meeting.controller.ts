@@ -4,7 +4,7 @@ import {
   createMeetingSchema,
   idParamsSchema,
   listMeetingsSchema,
-  updateMeetingSchema
+  updateMeetingSchema,
 } from "./meeting.schemas.js";
 import type { MeetingService } from "./meeting.service.js";
 
@@ -14,10 +14,11 @@ export class MeetingController {
   list = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const input = listMeetingsSchema.parse(req.query);
-      const result = await this.service.list(input);
+      const workspaceId = res.locals.workspaceId ?? input.workspaceId ?? "";
+      const result = await this.service.list({ ...input, workspaceId });
       res.status(200).json({
         items: result.items.map(toMeetingResponse),
-        nextToken: result.nextToken
+        nextToken: result.nextToken,
       });
     } catch (error) {
       next(error);
@@ -27,10 +28,10 @@ export class MeetingController {
   get = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const params = idParamsSchema.parse(req.params);
-      const query = listMeetingsSchema.pick({ workspaceId: true }).parse(req.query);
+      const workspaceId = res.locals.workspaceId ?? "";
       const meeting = await this.service.get({
-        workspaceId: query.workspaceId,
-        meetingId: params.id
+        workspaceId,
+        meetingId: params.id,
       });
       res.status(200).json(toMeetingResponse(meeting));
     } catch (error) {
@@ -41,7 +42,12 @@ export class MeetingController {
   create = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const input = createMeetingSchema.parse(req.body);
-      const meeting = await this.service.create(input);
+      const workspaceId = res.locals.workspaceId ?? input.workspaceId ?? "";
+      const meeting = await this.service.create({
+        ...input,
+        workspaceId,
+        createdBy: input.createdBy ?? req.user?.userId,
+      });
       res.status(201).json(toMeetingResponse(meeting));
     } catch (error) {
       next(error);
@@ -51,12 +57,12 @@ export class MeetingController {
   update = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const params = idParamsSchema.parse(req.params);
-      const query = listMeetingsSchema.pick({ workspaceId: true }).parse(req.query);
       const patch = updateMeetingSchema.parse(req.body);
+      const workspaceId = res.locals.workspaceId ?? "";
       const meeting = await this.service.update({
-        workspaceId: query.workspaceId,
+        workspaceId,
         meetingId: params.id,
-        patch
+        patch,
       });
       res.status(200).json(toMeetingResponse(meeting));
     } catch (error) {

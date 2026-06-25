@@ -48,7 +48,7 @@ export default function CreateTeamModal({ onClose }) {
       form.managerId,
     ].filter(Boolean)));
 
-    createTeam(activeWorkspace?.id, {
+    const created = createTeam(activeWorkspace?.id, {
       name: form.name.trim(),
       description: form.description.trim(),
       color: form.color,
@@ -57,6 +57,10 @@ export default function CreateTeamModal({ onClose }) {
     });
 
     setIsCreating(false);
+    if (!created) {
+      setError('Unable to create this team right now. Check workspace permissions or billing status.');
+      return;
+    }
     if (onClose) onClose();
   };
 
@@ -65,22 +69,22 @@ export default function CreateTeamModal({ onClose }) {
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-slate-900">Create Team</h2>
-          <button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Create Team</h2>
+          <button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition dark:hover:bg-slate-700 dark:hover:text-slate-300">
             <FiX className="h-5 w-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Team Name</label>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Team Name</label>
             <input
               type="text"
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               placeholder="e.g., Frontend Team"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -90,9 +94,9 @@ export default function CreateTeamModal({ onClose }) {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Description</label>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Description</label>
             <textarea
-              className="w-full min-h-[60px] resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+              className="w-full min-h-[60px] resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               placeholder="What does this team do?"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -101,7 +105,7 @@ export default function CreateTeamModal({ onClose }) {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Color</label>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Color</label>
             <div className="flex gap-2">
               {TEAM_COLORS.map((c) => (
                 <button
@@ -109,7 +113,7 @@ export default function CreateTeamModal({ onClose }) {
                   type="button"
                   onClick={() => setForm({ ...form, color: c.value })}
                   className={`h-8 w-8 rounded-full transition-all duration-200 ${
-                    form.color === c.value ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'hover:scale-110'
+                    form.color === c.value ? 'ring-2 ring-offset-2 ring-slate-400 scale-110 dark:ring-offset-slate-900' : 'hover:scale-110'
                   }`}
                   style={{ backgroundColor: c.value }}
                   title={c.label}
@@ -119,9 +123,9 @@ export default function CreateTeamModal({ onClose }) {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Team Manager</label>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Team Manager</label>
             <select
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               value={form.managerId}
               onChange={(e) => {
                 const managerId = e.target.value;
@@ -142,13 +146,13 @@ export default function CreateTeamModal({ onClose }) {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Initial Members</label>
-            <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Initial Members</label>
+            <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800">
               {workspaceMembers.map((m) => {
                 const checked = form.memberIds.includes(m.userId);
                 const locked = m.userId === currentUser?.id || m.userId === form.managerId;
                 return (
-                  <label key={m.userId} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-white">
+                  <label key={m.userId} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700">
                     <input
                       type="checkbox"
                       className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
@@ -176,7 +180,7 @@ export default function CreateTeamModal({ onClose }) {
             <motion.div
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
-              className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700"
+              className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-300"
             >
               {error}
             </motion.div>
@@ -186,14 +190,14 @@ export default function CreateTeamModal({ onClose }) {
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+              className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isCreating || !form.name.trim()}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-600/25 hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-400 disabled:shadow-none transition"
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-600/25 hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-400 disabled:shadow-none transition dark:disabled:bg-slate-700 dark:disabled:text-slate-500"
             >
               {isCreating ? (
                 <><FiLoader className="h-4 w-4 animate-spin" /> Creating...</>

@@ -44,7 +44,12 @@ export default function WorkspaceHomeView() {
     else setGreeting('Good evening');
   }, []);
 
-  const workspaceTaskList = useMemo(() => workspaceTasks || [], [workspaceTasks]);
+  const workspaceTaskList = useMemo(() => {
+    if (!activeWorkspace) return [];
+    return (workspaceTasks || []).filter(
+      (t) => t.workspaceId === activeWorkspace.id || t.departmentId === activeWorkspace.id
+    );
+  }, [workspaceTasks, activeWorkspace]);
 
   const stats = useMemo(() => ({
     openTasks: workspaceTaskList.filter((t) => t.status !== 'COMPLETED').length,
@@ -96,21 +101,21 @@ export default function WorkspaceHomeView() {
 
   const getPriorityBadge = (priority) => {
     switch (priority) {
-      case 'URGENT': return 'bg-red-100 text-red-700';
-      case 'HIGH': return 'bg-orange-100 text-orange-700';
-      case 'MEDIUM': return 'bg-yellow-100 text-yellow-700';
-      default: return 'bg-slate-100 text-slate-600';
+      case 'URGENT': return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
+      case 'HIGH': return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300';
+      case 'MEDIUM': return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300';
+      default: return 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300';
     }
   };
 
   const getRoleBadgeColor = (role) => {
     const colors = {
-      OWNER: 'bg-red-100 text-red-700',
-      VICE_ADMIN: 'bg-purple-100 text-purple-700',
-      MANAGER: 'bg-blue-100 text-blue-700',
-      EMPLOYEE: 'bg-green-100 text-green-700',
+      OWNER: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300',
+      VICE_ADMIN: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300',
+      MANAGER: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
+      EMPLOYEE: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',
     };
-    return colors[role] || 'bg-slate-100 text-slate-600';
+    return colors[role] || 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300';
   };
 
   const formatDeadline = (dateStr) => {
@@ -141,17 +146,17 @@ export default function WorkspaceHomeView() {
   return (
     <div className="h-full overflow-y-auto p-5 md:p-6 space-y-6">
       {isEmptyWorkspace ? (
-        <div className="rounded-xl border border-dashed border-blue-200 bg-blue-50 p-6">
-          <h2 className="text-xl font-black text-slate-900">Welcome to your new workspace</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+        <div className="rounded-xl border border-dashed border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800 p-6">
+          <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">Welcome to your new workspace</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
             Start by creating a team, inviting members, or creating your first channel.
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
             <button type="button" onClick={() => setShowCreateTeam(true)} className="workspace-action-lift rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-black text-white hover:bg-blue-700">Create Team</button>
-            <button type="button" onClick={() => setShowCreateChannel(true)} className="workspace-action-lift rounded-lg border border-blue-200 bg-white px-4 py-2.5 text-sm font-black text-blue-700 hover:bg-blue-50">Create Text Channel</button>
-            <button type="button" onClick={() => setShowCreateChannel(true)} className="workspace-action-lift rounded-lg border border-blue-200 bg-white px-4 py-2.5 text-sm font-black text-blue-700 hover:bg-blue-50">Create Voice Channel</button>
-            <button type="button" onClick={() => setShowInviteMember(true)} className="workspace-action-lift rounded-lg border border-blue-200 bg-white px-4 py-2.5 text-sm font-black text-blue-700 hover:bg-blue-50">Invite Members</button>
-            <button type="button" onClick={() => selectView('meetings')} className="workspace-action-lift rounded-lg border border-blue-200 bg-white px-4 py-2.5 text-sm font-black text-blue-700 hover:bg-blue-50">Upload Meeting</button>
+            <button type="button" onClick={() => setShowCreateChannel(true)} className="workspace-action-lift rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-black text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-slate-800">Create Text Channel</button>
+            <button type="button" onClick={() => setShowCreateChannel(true)} className="workspace-action-lift rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-black text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-slate-800">Create Voice Channel</button>
+            <button type="button" onClick={() => setShowInviteMember(true)} className="workspace-action-lift rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-black text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-slate-800">Invite Members</button>
+            <button type="button" onClick={() => selectView('meetings')} className="workspace-action-lift rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-black text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-slate-800">Upload Meeting</button>
           </div>
         </div>
       ) : null}
@@ -159,7 +164,7 @@ export default function WorkspaceHomeView() {
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 p-6 text-white shadow-xl"
+        className="relative overflow-hidden rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 p-6 text-white shadow-xl"
       >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -235,16 +240,16 @@ export default function WorkspaceHomeView() {
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="workspace-card-25d rounded-xl border border-blue-200 bg-blue-50 p-5"
+              className="workspace-card-25d rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-5"
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <FiStar className="h-5 w-5 text-blue-600" />
-                  <h3 className="text-sm font-bold text-blue-900">Getting Started Checklist</h3>
+                  <FiStar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  <h3 className="text-sm font-bold text-blue-900 dark:text-blue-200">Getting Started Checklist</h3>
                 </div>
                 <button
                   onClick={dismissOnboarding}
-                  className="text-xs font-semibold text-blue-500 hover:text-blue-700"
+                  className="text-xs font-semibold text-blue-500 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
                 >
                   Dismiss
                 </button>
@@ -259,17 +264,17 @@ export default function WorkspaceHomeView() {
                       disabled={done}
                       className={`flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left text-sm transition ${
                         done
-                          ? 'bg-white/50 text-slate-400 cursor-default'
-                          : 'workspace-action-lift bg-white hover:bg-blue-100/50 text-slate-700 hover:text-blue-700 cursor-pointer'
+                          ? 'bg-white/50 dark:bg-slate-800/30 text-slate-400 dark:text-slate-500 cursor-default'
+                          : 'workspace-action-lift bg-white dark:bg-slate-800 hover:bg-blue-100/50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-blue-700 dark:hover:text-blue-300 cursor-pointer'
                       }`}
                     >
                       <div className={`flex h-6 w-6 items-center justify-center rounded-full ${
-                        done ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-400'
+                        done ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
                       }`}>
                         {done ? <FiCheckCircle className="h-3.5 w-3.5" /> : <span className="text-xs font-bold">{ONBOARDING_STEPS.indexOf(step) + 1}</span>}
                       </div>
                       <span className={`font-semibold ${done ? 'line-through' : ''}`}>{step.label}</span>
-                      {!done && <FiArrowRight className="h-3.5 w-3.5 ml-auto text-slate-300" />}
+                      {!done && <FiArrowRight className="h-3.5 w-3.5 ml-auto text-slate-300 dark:text-slate-600" />}
                     </button>
                   );
                 })}
@@ -286,21 +291,21 @@ export default function WorkspaceHomeView() {
           </div>
 
           {/* ─── Upcoming Deadlines ─── */}
-          <div className="workspace-card-25d rounded-xl border border-slate-200 bg-white p-5">
+          <div className="workspace-card-25d rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 <FiCalendar className="text-amber-500" />
                 Upcoming Deadlines
               </h2>
               <button
                 onClick={() => selectView('tasks')}
-                className="text-xs font-semibold text-primary-600 hover:text-primary-700 flex items-center gap-1"
+                className="text-xs font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 flex items-center gap-1"
               >
                 View all <FiArrowRight className="h-3 w-3" />
               </button>
             </div>
             {upcomingDeadlines.length === 0 ? (
-              <p className="text-sm text-slate-400 italic py-6 text-center">
+              <p className="text-sm text-slate-400 dark:text-slate-500 italic py-6 text-center">
                 No upcoming deadlines. Create a task!
               </p>
             ) : (
@@ -308,12 +313,12 @@ export default function WorkspaceHomeView() {
                 {upcomingDeadlines.map((t) => (
                   <div
                     key={t.id}
-                    className="workspace-action-lift flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 hover:border-slate-200 transition cursor-pointer"
+                    className="workspace-action-lift flex items-center justify-between rounded-lg border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-4 py-3 hover:border-slate-200 dark:hover:border-slate-600 transition cursor-pointer"
                     onClick={() => selectView('tasks')}
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-slate-800 truncate">{t.title}</p>
-                      <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{t.title}</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 flex items-center gap-1">
                         <FiUser className="h-3 w-3 inline" />
                         {getAssigneeName(t.assigneeId)}
                       </p>
@@ -322,7 +327,7 @@ export default function WorkspaceHomeView() {
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${getPriorityBadge(t.priority)}`}>
                         {t.priority}
                       </span>
-                      <span className={`text-xs whitespace-nowrap font-semibold ${isOverdue(t.deadline) ? 'text-red-500' : 'text-slate-400'}`}>
+                      <span className={`text-xs whitespace-nowrap font-semibold ${isOverdue(t.deadline) ? 'text-red-500' : 'text-slate-400 dark:text-slate-500'}`}>
                         {formatDeadline(t.deadline)}
                       </span>
                     </div>
@@ -332,8 +337,8 @@ export default function WorkspaceHomeView() {
             )}
           </div>
 
-          <div className="workspace-card-25d rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-slate-900">
+          <div className="workspace-card-25d rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-5">
+            <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100">
               <FiAlertCircle className="text-rose-500" />
               Deadline intelligence
             </h2>
@@ -347,27 +352,27 @@ export default function WorkspaceHomeView() {
 
         <div className="space-y-6">
           {/* ─── Recent Activity ─── */}
-          <div className="workspace-card-25d rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-4">
+          <div className="workspace-card-25d rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-5">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 mb-4">
               <FiClock className="text-blue-500" />
               Recent Activity
             </h2>
             {recentActivities.length === 0 ? (
               <div className="text-center py-8">
-                <FiInfo className="mx-auto h-8 w-8 text-slate-300 mb-2" />
-                <p className="text-sm text-slate-400">No recent activity</p>
-                <p className="text-xs text-slate-400 mt-1">Actions in your workspace will appear here.</p>
+                <FiInfo className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600 mb-2" />
+                <p className="text-sm text-slate-400 dark:text-slate-500">No recent activity</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Actions in your workspace will appear here.</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {recentActivities.map((act) => (
                   <div key={act.id} className="flex items-start gap-3">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-100 text-[9px] font-bold text-primary-700 flex-shrink-0 mt-0.5">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/40 text-[9px] font-bold text-primary-700 dark:text-primary-300 flex-shrink-0 mt-0.5">
                       {getInitials(act.userName)}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm text-slate-700">{act.message}</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">
+                      <p className="text-sm text-slate-700 dark:text-slate-300">{act.message}</p>
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
                         {formatTimeAgo(act.timestamp)}
                       </p>
                     </div>
@@ -378,29 +383,29 @@ export default function WorkspaceHomeView() {
           </div>
 
           {/* ─── Teams Overview ─── */}
-          <div className="workspace-card-25d rounded-xl border border-slate-200 bg-white p-5">
+          <div className="workspace-card-25d rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 <FiUsers className="text-emerald-500" />
                 Teams ({workspaceTeams.length})
               </h2>
               {canCreateTeam && (
                 <button
                   onClick={() => setShowCreateTeam(true)}
-                  className="text-xs font-semibold text-primary-600 hover:text-primary-700"
+                  className="text-xs font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
                 >
                   + New
                 </button>
               )}
             </div>
             {workspaceTeams.length === 0 ? (
-              <p className="text-sm text-slate-400 italic py-4 text-center">
+              <p className="text-sm text-slate-400 dark:text-slate-500 italic py-4 text-center">
                 No teams yet. Create one to organize your workspace.
               </p>
             ) : (
               <div className="space-y-2">
                 {workspaceTeams.slice(0, 5).map((team) => (
-                  <div key={team.id} className="workspace-action-lift flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5">
+                  <div key={team.id} className="workspace-action-lift flex items-center gap-3 rounded-lg border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-2.5">
                     <div
                       className="flex h-8 w-8 items-center justify-center rounded-lg text-white text-xs font-bold"
                       style={{ backgroundColor: team.color || '#5865F2' }}
@@ -408,8 +413,8 @@ export default function WorkspaceHomeView() {
                       {getInitials(team.name)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-slate-800 truncate">{team.name}</p>
-                      <p className="text-xs text-slate-400">{team.memberIds?.length || 0} members</p>
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{team.name}</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">{team.memberIds?.length || 0} members</p>
                     </div>
                   </div>
                 ))}
@@ -417,21 +422,21 @@ export default function WorkspaceHomeView() {
             )}
           </div>
 
-          <div className="workspace-card-25d rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-slate-900">
+          <div className="workspace-card-25d rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-5">
+            <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100">
               <FiUsers className="text-violet-500" />
               Workload signals
             </h2>
             <div className="space-y-2">
               {workloadInsights.overloaded.length === 0 ? (
-                <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">No overloaded members detected.</p>
+                <p className="rounded-lg bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-300">No overloaded members detected.</p>
               ) : workloadInsights.overloaded.map((member) => (
-                <p key={member.userId} className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">
+                <p key={member.userId} className="rounded-lg bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs font-bold text-amber-700 dark:text-amber-300">
                   {member.name}: {member.activeCount} active tasks
                 </p>
               ))}
               {workloadInsights.idle.length > 0 ? (
-                <p className="text-xs font-semibold text-slate-400">
+                <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">
                   No active tasks: {workloadInsights.idle.map((member) => member.name).join(', ')}
                 </p>
               ) : null}
@@ -489,12 +494,12 @@ function StatCard({ icon, label, value, sub, color, highlight }) {
   };
 
   return (
-    <div className={`workspace-card-25d rounded-xl border border-slate-200 bg-white p-4 ${highlight ? 'ring-2 ring-red-200' : ''}`}>
+    <div className={`workspace-card-25d rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-4 ${highlight ? 'ring-2 ring-red-200 dark:ring-red-900/50' : ''}`}>
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs text-slate-500">{label}</p>
-          <p className={`text-2xl font-bold mt-1 ${highlight ? 'text-red-600' : 'text-slate-900'}`}>{value}</p>
-          {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
+          <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+          <p className={`text-2xl font-bold mt-1 ${highlight ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-slate-100'}`}>{value}</p>
+          {sub && <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{sub}</p>}
         </div>
         <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${colorMap[color] || colorMap.primary}`}>
           {icon}
@@ -506,15 +511,15 @@ function StatCard({ icon, label, value, sub, color, highlight }) {
 
 function InsightList({ title, items, tone }) {
   const toneClass = tone === 'rose'
-    ? 'bg-rose-50 text-rose-700'
+    ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300'
     : tone === 'amber'
-      ? 'bg-amber-50 text-amber-700'
-      : 'bg-blue-50 text-blue-700';
+      ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+      : 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
   return (
-    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-      <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">{title}</p>
+    <div className="rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
+      <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">{title}</p>
       {items.length === 0 ? (
-        <p className="text-xs font-semibold text-slate-400">None</p>
+        <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">None</p>
       ) : (
         <div className="space-y-2">
           {items.map((task) => (

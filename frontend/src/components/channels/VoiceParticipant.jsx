@@ -49,7 +49,7 @@ function VoiceParticipant({
 
   return (
     <div
-      className={`flex items-center gap-3 rounded-xl bg-white p-3 shadow-sm transition ${
+      className={`flex items-center gap-3 rounded-xl bg-white p-3 shadow-sm transition dark:bg-slate-900 ${
         effectiveSpeaking
           ? 'ring-2 ring-emerald-400 shadow-lg shadow-emerald-500/20'
           : ''
@@ -68,11 +68,11 @@ function VoiceParticipant({
       {/* ─── Info ────────────────────────────────────────── */}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`truncate text-sm font-black ${effectiveSpeaking ? 'text-emerald-700' : 'text-slate-800'}`}>
+          <span className={`truncate text-sm font-black ${effectiveSpeaking ? 'text-emerald-700' : 'text-slate-800 dark:text-slate-200'}`}>
             {displayName}
             {isLocal ? ' (You)' : ''}
           </span>
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-500">
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-500 dark:bg-slate-700 dark:text-slate-400">
             {participant.role || 'Member'}
           </span>
           {isRecorder ? (
@@ -96,7 +96,7 @@ function VoiceParticipant({
             </span>
           ) : null}
         </div>
-        <p className="mt-0.5 text-[11px] font-semibold text-slate-400">
+        <p className="mt-0.5 text-[11px] font-semibold text-slate-400 dark:text-slate-500">
           Joined {formatTime(participant.joinedAt)}
           {effectiveMuted ? ' · Muted' : ''}
         </p>
@@ -125,26 +125,26 @@ function VoiceParticipant({
         ) : null}
         {!isLocal && onVolumeChange ? (
           <div className="flex w-24 items-center gap-1" title={`Local volume ${Math.round(volume * 100)}%`}>
-            {volume <= 0 ? <FiVolumeX className="h-3.5 w-3.5 text-slate-400" /> : <FiVolume2 className="h-3.5 w-3.5 text-slate-400" />}
+            {volume <= 0 ? <FiVolumeX className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" /> : <FiVolume2 className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />}
             <input
               type="range"
               min="0"
               max="100"
               value={Math.round(volume * 100)}
               onChange={(event) => onVolumeChange(Number(event.target.value) / 100)}
-              className="h-1 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-blue-500"
+              className="h-1 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-blue-500 dark:bg-slate-600"
             />
           </div>
         ) : null}
         {effectiveMuted ? (
-          <FiMicOff className="h-4 w-4 text-slate-400" />
+          <FiMicOff className="h-4 w-4 text-slate-400 dark:text-slate-500" />
         ) : (
           <FiMic className={`h-4 w-4 ${
             effectiveSpeaking || levelIsActive
               ? 'text-emerald-500'
               : isLocal && connectionStatus?.isLive
                 ? 'text-blue-400'
-                : 'text-slate-300'
+                : 'text-slate-300 dark:text-slate-400'
           }`} />
         )}
       </div>
@@ -223,7 +223,7 @@ function Avatar({ name, recording, speaking, muted, audioLevel = 0, connectionSt
 
       {/* Muted indicator */}
       {muted && !recording ? (
-        <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-slate-500">
+        <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-slate-500 dark:border-slate-900 dark:bg-slate-600">
           <FiMicOff className="h-2 w-2 text-white" />
         </span>
       ) : null}
@@ -231,7 +231,7 @@ function Avatar({ name, recording, speaking, muted, audioLevel = 0, connectionSt
       {/* Connection status dot (local user — shows mic is live on server) */}
       {connectionStatus && !recording && !muted ? (
         <span
-          className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white ${connectionStatus.dotClass}`}
+          className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white dark:border-slate-900 ${connectionStatus.dotClass}`}
           title={connectionStatus.label}
         />
       ) : null}

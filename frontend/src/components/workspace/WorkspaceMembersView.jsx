@@ -75,8 +75,8 @@ export default function WorkspaceMembersView() {
     <div className="h-full overflow-y-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Members</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Members</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             {workspaceMembers.length} {workspaceMembers.length === 1 ? 'member' : 'members'} in this workspace
           </p>
         </div>
@@ -95,11 +95,11 @@ export default function WorkspaceMembersView() {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-6 rounded-xl border border-primary-200 bg-primary-50 p-5"
+          className="mb-6 rounded-xl border border-primary-200 dark:border-primary-800 bg-primary-50 dark:bg-primary-900/20 p-5"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-primary-900">Invite a new member</h3>
-            <button onClick={() => setShowInviteMember(false)} className="text-primary-400 hover:text-primary-600">
+            <h3 className="text-sm font-bold text-primary-900 dark:text-primary-200">Invite a new member</h3>
+            <button onClick={() => setShowInviteMember(false)} className="text-primary-400 hover:text-primary-600 dark:text-primary-300">
               <FiX className="h-4 w-4" />
             </button>
           </div>
@@ -108,7 +108,7 @@ export default function WorkspaceMembersView() {
               <div className="flex-1 min-w-[200px]">
                 <input
                   type="email"
-                  className="w-full rounded-lg border border-primary-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+                  className="w-full rounded-lg border border-primary-200 dark:border-primary-800 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
                   placeholder="Enter email address"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
@@ -116,7 +116,7 @@ export default function WorkspaceMembersView() {
                 />
               </div>
               <select
-                className="rounded-lg border border-primary-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-primary-500"
+                className="rounded-lg border border-primary-200 dark:border-primary-800 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-primary-500"
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value)}
               >
@@ -134,10 +134,10 @@ export default function WorkspaceMembersView() {
               </button>
             </div>
             <div>
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-primary-700">Assign to teams</p>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-primary-700 dark:text-primary-300">Assign to teams</p>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {(workspaceTeams || []).map((team) => (
-                  <label key={team.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-primary-100 bg-white px-3 py-2 text-xs font-semibold text-slate-600">
+                  <label key={team.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-primary-100 dark:border-primary-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
                     <input
                       type="checkbox"
                       className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
@@ -154,7 +154,7 @@ export default function WorkspaceMembersView() {
                   </label>
                 ))}
                 {(workspaceTeams || []).length === 0 && (
-                  <p className="text-xs text-primary-500">No teams available yet.</p>
+                  <p className="text-xs text-primary-500 dark:text-primary-400">No teams available yet.</p>
                 )}
               </div>
             </div>
@@ -163,8 +163,8 @@ export default function WorkspaceMembersView() {
       )}
 
       {/* ─── Members List ─── */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="divide-y divide-slate-100">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 shadow-sm overflow-hidden">
+        <div className="divide-y divide-slate-100 dark:divide-slate-800">
           {workspaceMembers.map((m, index) => {
             const isCurrent = m.userId === currentUser?.id;
             return (
@@ -173,21 +173,21 @@ export default function WorkspaceMembersView() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: index * 0.03 }}
-                className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition group"
+                className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition group"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-700">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/40 text-xs font-bold text-primary-700 dark:text-primary-300">
                   {getInitials(m.name || m.nickname)}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-bold text-slate-900">
+                    <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
                       {m.name || m.nickname || 'Unknown'}
                     </p>
                     {isCurrent && (
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">You</span>
+                      <span className="rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400">You</span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-400 dark:text-slate-500">
                     Joined {m.joinedAt ? new Date(m.joinedAt).toLocaleDateString() : 'Recently'}
                   </p>
                 </div>
@@ -195,7 +195,7 @@ export default function WorkspaceMembersView() {
                 {/* Role Badge / Select */}
                 {canManageRoles && !isCurrent ? (
                   <select
-                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-primary-500"
+                    className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-primary-500"
                     value={m.role}
                     onChange={(e) => handleRoleChange(m.userId, e.target.value)}
                   >
@@ -204,7 +204,7 @@ export default function WorkspaceMembersView() {
                     ))}
                   </select>
                 ) : (
-                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${workspaceRoleColors[m.role] || 'bg-slate-100 text-slate-600'}`}>
+                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${workspaceRoleColors[m.role] || 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
                     <FiShield className="inline h-3 w-3 mr-1" />
                     {workspaceRoleLabels[m.role] || m.role}
                   </span>
@@ -214,7 +214,7 @@ export default function WorkspaceMembersView() {
                 {canRemove && !isCurrent && (
                   <button
                     onClick={() => handleRemove(m.userId)}
-                    className="rounded-lg p-2 text-slate-300 opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 transition-all"
+                    className="rounded-lg p-2 text-slate-300 dark:text-slate-600 opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 dark:hover:text-red-400 transition-all"
                     title="Remove member"
                   >
                     <FiX className="h-4 w-4" />
@@ -226,8 +226,8 @@ export default function WorkspaceMembersView() {
 
           {workspaceMembers.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <FiUser className="h-10 w-10 text-slate-300 mb-3" />
-              <p className="text-sm text-slate-500">No members yet. Invite your team to get started!</p>
+              <FiUser className="h-10 w-10 text-slate-300 dark:text-slate-600 mb-3" />
+              <p className="text-sm text-slate-500 dark:text-slate-400">No members yet. Invite your team to get started!</p>
             </div>
           )}
         </div>

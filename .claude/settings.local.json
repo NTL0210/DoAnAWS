@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(aws --version)",
+      "Bash(aws configure *)",
+      "Bash(aws sts *)",
+      "Bash(aws iam *)",
+      "Bash(npm run *)",
+      "Bash(npm install *)",
+      "Bash(npm ls *)"
+    ]
+  }
+}

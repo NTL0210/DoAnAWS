@@ -1,3 +1,4 @@
+import { useRouter } from 'next/router';
 import { FiLogOut, FiSettings, FiUser } from 'react-icons/fi';
 
 export default function ProfileMenu({
@@ -7,6 +8,8 @@ export default function ProfileMenu({
   setShowProfileMenu,
   logout,
 }) {
+  const router = useRouter();
+
   const initials = currentUser?.name
     ?.split(' ')
     .filter(Boolean)
@@ -14,6 +17,11 @@ export default function ProfileMenu({
     .map((p) => p[0])
     .join('')
     .toUpperCase() || '?';
+
+  const handleNavigation = (path) => {
+    setShowProfileMenu(false);
+    if (router.asPath !== path) router.push(path);
+  };
 
   return (
     <div className="relative ml-2" ref={dropdownRef}>
@@ -37,10 +45,16 @@ export default function ProfileMenu({
             <div className="text-xs text-[#949ba4]">{currentUser?.email}</div>
           </div>
           <div className="mx-3 border-t border-[#1f2022]" />
-          <button className="flex w-full items-center gap-3 px-4 py-2 text-sm text-[#dbdee1] transition hover:bg-[#36373c]">
+          <button
+            onClick={() => handleNavigation('/profile')}
+            className="flex w-full items-center gap-3 px-4 py-2 text-sm text-[#dbdee1] transition hover:bg-[#36373c]"
+          >
             <FiUser className="h-4 w-4 text-[#949ba4]" /> Profile
           </button>
-          <button className="flex w-full items-center gap-3 px-4 py-2 text-sm text-[#dbdee1] transition hover:bg-[#36373c]">
+          <button
+            onClick={() => handleNavigation('/profile')}
+            className="flex w-full items-center gap-3 px-4 py-2 text-sm text-[#dbdee1] transition hover:bg-[#36373c]"
+          >
             <FiSettings className="h-4 w-4 text-[#949ba4]" /> Settings
           </button>
           <div className="mx-3 border-t border-[#1f2022]" />

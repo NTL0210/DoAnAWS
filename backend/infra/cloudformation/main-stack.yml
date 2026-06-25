@@ -1,0 +1,1231 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "AI-Powered Meeting & Workforce Platform — Full Architecture (5 Layers)"
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [dev, staging, prod]
+    Default: dev
+  LowCostMode:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "true"
+  VpcCIDR:
+    Type: String
+    Default: "10.0.0.0/16"
+    Description: CIDR block for the VPC
+  PublicSubnetCIDR:
+    Type: String
+    Default: "10.0.1.0/24"
+  PrivateSubnetCIDR:
+    Type: String
+    Default: "10.0.2.0/24"
+  DomainName:
+    Type: String
+    Default: ""
+    Description: Custom domain for CloudFront (optional)
+
+Conditions:
+  HasCustomDomain: !Not [!Equals [!Ref DomainName, ""]]
+  IsProd: !Equals [!Ref Environment, prod]
+  EnablePitr: !Or [!Condition IsProd, !Equals [!Ref LowCostMode, "false"]]
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: nodejs22.x
+    Architectures:
+      - arm64
+    Tracing: Active
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        TABLE_NAME: !Ref DynamoDBTable
+        LOG_LEVEL: !If [IsProd, info, debug]
+
+Resources:
+  # ═══════════════════════════════════════════════════════
+  # LAYER 3: STORAGE & DATABASE
+  # ═══════════════════════════════════════════════════════
+  MeetingStorageBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub "ai-meeting-files-${AWS::AccountId}-${Environment}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: GlacierTransition
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+              - TransitionInDays: 90
+                StorageClass: GlacierInstantRetrieval
+              - TransitionInDays: 365
+                StorageClass: GlacierDeepArchive
+            ExpirationInDays: 2555
+          - Id: AbortIncompleteMultipartUpload
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - !If [IsProd, !Ref DomainName, "*"]
+            AllowedMethods: [GET, PUT, POST]
+            AllowedHeaders: ["*"]
+            MaxAge: 3600
+
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [EnablePitr, true, false]
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: GSI1PK
+          AttributeType: S
+        - AttributeName: GSI1SK
+          AttributeType: S
+        - AttributeName: GSI2PK
+          AttributeType: S
+        - AttributeName: GSI2SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: GSI1PK
+              KeyType: HASH
+            - AttributeName: GSI1SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: GSI2
+          KeySchema:
+            - AttributeName: GSI2PK
+              KeyType: HASH
+            - AttributeName: GSI2SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Service
+          Value: ai-meeting-workforce
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ═══════════════════════════════════════════════════════
+  # LAYER 2: APPLICATION — API GATEWAY + LAMBDA
+  # ═══════════════════════════════════════════════════════
+  ApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub "ai-meeting-api-${Environment}"
+      Description: API Gateway for AI Meeting Workforce Platform
+      MinimumCompressionSize: 1024
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Policy:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: execute-api:Invoke
+            Resource: "*"
+            Condition:
+              IpAddress:
+                aws:SourceIp:
+                  - "0.0.0.0/0"
+
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:BatchGetItem
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:TransactWriteItems
+                Resource:
+                  - !GetAtt DynamoDBTable.Arn
+                  - !Sub "${DynamoDBTable.Arn}/index/*"
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:DeleteObject
+                  - s3:GetObjectUrl
+                Resource: !Sub "${MeetingStorageBucket.Arn}/*"
+        - PolicyName: SESAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: "*"
+        - PolicyName: SNSAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref NotificationTopic
+
+  # Lambda Functions — Users
+  UsersLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "ai-meeting-users-${Environment}"
+      Description: User management CRUD
+      Code:
+        S3Bucket: !Sub "ai-meeting-lambda-${AWS::AccountId}"
+        S3Key: !Sub "lambdas/users.zip"
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref DynamoDBTable
+          ENVIRONMENT: !Ref Environment
+
+  # Lambda Functions — Meetings
+  MeetingsLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "ai-meeting-meetings-${Environment}"
+      Description: Meeting management CRUD
+      Code:
+        S3Bucket: !Sub "ai-meeting-lambda-${AWS::AccountId}"
+        S3Key: !Sub "lambdas/meetings.zip"
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+
+  # Lambda Functions — Tasks
+  TasksLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "ai-meeting-tasks-${Environment}"
+      Description: Task management CRUD
+      Code:
+        S3Bucket: !Sub "ai-meeting-lambda-${AWS::AccountId}"
+        S3Key: !Sub "lambdas/tasks.zip"
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+
+  # Lambda Functions — AI Processing
+  AIProcessingLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "ai-meeting-ai-process-${Environment}"
+      Description: AI meeting processing (Transcribe + Bedrock)
+      Timeout: 300
+      MemorySize: 1024
+      Code:
+        S3Bucket: !Sub "ai-meeting-lambda-${AWS::AccountId}"
+        S3Key: !Sub "lambdas/ai-processing.zip"
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref DynamoDBTable
+          ENVIRONMENT: !Ref Environment
+          TRANSCRIBE_OUTPUT_BUCKET: !Ref MeetingStorageBucket
+
+  # ─── API Gateway Resources & Methods ────────────────
+  # Users API
+  UsersResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: users
+
+  UsersResourceProxy:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref UsersResource
+      PathPart: "{proxy+}"
+
+  UsersMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref UsersResource
+      HttpMethod: ANY
+      AuthorizationType: COGNITO
+      AuthorizerId: !Ref CognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UsersLambda.Arn}/invocations"
+
+  UsersProxyMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref UsersResourceProxy
+      HttpMethod: ANY
+      AuthorizationType: COGNITO
+      AuthorizerId: !Ref CognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UsersLambda.Arn}/invocations"
+
+  # Meetings API
+  MeetingsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: meetings
+
+  MeetingsResourceProxy:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref MeetingsResource
+      PathPart: "{proxy+}"
+
+  MeetingsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref MeetingsResource
+      HttpMethod: ANY
+      AuthorizationType: COGNITO
+      AuthorizerId: !Ref CognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MeetingsLambda.Arn}/invocations"
+
+  MeetingsProxyMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref MeetingsResourceProxy
+      HttpMethod: ANY
+      AuthorizationType: COGNITO
+      AuthorizerId: !Ref CognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MeetingsLambda.Arn}/invocations"
+
+  # Tasks API
+  TasksResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: tasks
+
+  TasksResourceProxy:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref TasksResource
+      PathPart: "{proxy+}"
+
+  TasksMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref TasksResource
+      HttpMethod: ANY
+      AuthorizationType: COGNITO
+      AuthorizerId: !Ref CognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TasksLambda.Arn}/invocations"
+
+  TasksProxyMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref TasksResourceProxy
+      HttpMethod: ANY
+      AuthorizationType: COGNITO
+      AuthorizerId: !Ref CognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TasksLambda.Arn}/invocations"
+
+  # Auth API
+  AuthResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: auth
+
+  AuthLoginResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref AuthResource
+      PathPart: login
+
+  AuthMeResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref AuthResource
+      PathPart: me
+
+  AuthLoginMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref AuthLoginResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthLambda.Arn}/invocations"
+
+  AuthMeMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref AuthMeResource
+      HttpMethod: GET
+      AuthorizationType: COGNITO
+      AuthorizerId: !Ref CognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthLambda.Arn}/invocations"
+
+  AuthLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "ai-meeting-auth-${Environment}"
+      Description: Authentication handlers (login, me)
+      Code:
+        S3Bucket: !Sub "ai-meeting-lambda-${AWS::AccountId}"
+        S3Key: !Sub "lambdas/auth.zip"
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref DynamoDBTable
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPool
+          COGNITO_CLIENT_ID: !Ref CognitoUserPoolClient
+
+  # Lambda Invoke Permissions
+  LambdaInvokePermissionUsers:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref UsersLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/users*"
+
+  LambdaInvokePermissionMeetings:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref MeetingsLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/meetings*"
+
+  LambdaInvokePermissionTasks:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TasksLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/tasks*"
+
+  LambdaInvokePermissionAuth:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AuthLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/auth*"
+
+  # ═══════════════════════════════════════════════════════
+  # LAYER 1: USER INTERACTION — COGNITO
+  # ═══════════════════════════════════════════════════════
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "ai-meeting-users-${Environment}"
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      AutoVerifiedAttributes:
+        - email
+      EmailVerificationSubject: "Verify your AI Meeting account"
+      EmailVerificationMessage: "Your verification code is {####}"
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+          TemporaryPasswordValidityDays: 7
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+        - Name: name
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+        - Name: preferred_username
+          AttributeDataType: String
+          Required: false
+          Mutable: true
+      UserPoolTags:
+        Service: ai-meeting-workforce
+        Environment: !Ref Environment
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "ai-meeting-app-${Environment}"
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_CUSTOM_AUTH
+        - ALLOW_USER_SRP_AUTH
+      PreventUserExistenceErrors: ENABLED
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: days
+      AccessTokenValidity: 15
+      IdTokenValidity: 15
+      RefreshTokenValidity: 7
+      SupportedIdentityProviders:
+        - COGNITO
+
+  CognitoAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      Name: !Sub "cognito-authorizer-${Environment}"
+      RestApiId: !Ref ApiGateway
+      Type: COGNITO_USER_POOLS
+      IdentitySource: method.request.header.Authorization
+      ProviderARNs:
+        - !GetAtt CognitoUserPool.Arn
+
+  # ═══════════════════════════════════════════════════════
+  # LAYER 1: USER INTERACTION — WAF + CLOUDFRONT
+  # ═══════════════════════════════════════════════════════
+  WafAcl:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub "ai-meeting-waf-${Environment}"
+      Scope: CLOUDFRONT
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub "ai-meeting-waf-metrics-${Environment}"
+      Rules:
+        - Name: AWSManagedRulesCommonRuleSet
+          Priority: 0
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub "aws-common-rules-${Environment}"
+        - Name: AWSManagedRulesAmazonIpReputationList
+          Priority: 1
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAmazonIpReputationList
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub "aws-ip-rep-${Environment}"
+        - Name: RateLimit
+          Priority: 2
+          Action:
+            Block: {}
+          Statement:
+            RateBasedStatement:
+              Limit: 5000
+              AggregateKeyType: IP
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub "rate-limit-${Environment}"
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    DependsOn:
+      - WafAcl
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        HttpVersion: http2
+        PriceClass: PriceClass_100
+        Aliases: !If [HasCustomDomain, [!Ref DomainName], !Ref "AWS::NoValue"]
+        ViewerCertificate:
+          AcmCertificateArn: !If [HasCustomDomain, !Ref CertificateArn, !Ref "AWS::NoValue"]
+          SslSupportMethod: !If [HasCustomDomain, sni-only, !Ref "AWS::NoValue"]
+        WebACLId: !GetAtt WafAcl.Arn
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt MeetingStorageBucket.DomainName
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+          - Id: ApiOrigin
+            DomainName: !Sub "${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com"
+            OriginPath: !Sub "/${Environment}"
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          DefaultTTL: 86400
+          MaxTTL: 604800
+          Compress: true
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          ForwardedValues:
+            QueryString: false
+        CacheBehaviors:
+          - PathPattern: "/api/*"
+            TargetOriginId: ApiOrigin
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachedMethods: [GET, HEAD]
+            ForwardedValues:
+              QueryString: true
+              Headers:
+                - Authorization
+                - Content-Type
+            DefaultTTL: 0
+            MinTTL: 0
+            MaxTTL: 0
+          - PathPattern: "_next/*"
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            Compress: true
+            AllowedMethods: [GET, HEAD, OPTIONS]
+            CachedMethods: [GET, HEAD]
+            ForwardedValues:
+              QueryString: false
+
+  # ═══════════════════════════════════════════════════════
+  # LAYER 4: COMMUNICATION — VPC + ALB + EC2
+  # ═══════════════════════════════════════════════════════
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub "ai-meeting-vpc-${Environment}"
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnetCIDR
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub "ai-meeting-public-${Environment}"
+
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnetCIDR
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub "ai-meeting-private-${Environment}"
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "ai-meeting-igw-${Environment}"
+
+  IGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRouteToInternet:
+    Type: AWS::EC2::Route
+    DependsOn: IGWAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "ai-meeting-alb-${Environment}"
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !Ref PublicSubnet
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Tags:
+        - Key: Service
+          Value: ai-meeting-communication
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "ai-meeting-ec2-tg-${Environment}"
+      Port: 3001
+      Protocol: HTTP
+      TargetType: instance
+      VpcId: !Ref VPC
+      HealthCheckPath: /healthz
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: "200"
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !If [HasCustomDomain, !Ref CertificateArn, !Ref "AWS::NoValue"]
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ALB
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: "0.0.0.0/0"
+
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EC2 chat/voice servers
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3001
+          ToPort: 3001
+          SourceSecurityGroupId: !GetAtt ALBSecurityGroup.GroupId
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2Role
+
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt DynamoDBTable.Arn
+                  - !Sub "${DynamoDBTable.Arn}/index/*"
+
+  EC2AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub "ai-meeting-ec2-asg-${Environment}"
+      MinSize: "1"
+      MaxSize: "5"
+      DesiredCapacity: "1"
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet
+      LaunchTemplate:
+        LaunchTemplateId: !Ref EC2LaunchTemplate
+        Version: !GetAtt EC2LaunchTemplate.DefaultVersionNumber
+      Tags:
+        - Key: Name
+          Value: !Sub "ai-meeting-ec2-${Environment}"
+          PropagateAtLaunch: true
+
+  EC2LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub "ai-meeting-ec2-lt-${Environment}"
+      LaunchTemplateData:
+        InstanceType: t4g.nano
+        ImageId: !Ref LatestAMIRA
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref EC2SecurityGroup
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            cd /home/ec2-user/app
+            node dist/app/server.js
+
+  # AMI lookup
+  LatestAMIRA:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Value: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
+
+  # ═══════════════════════════════════════════════════════
+  # LAYER 3: MEETING PROCESSING — STEP FUNCTIONS
+  # ═══════════════════════════════════════════════════════
+  AIStepFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StepFunctionExec
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt AIProcessingLambda.Arn
+              - Effect: Allow
+                Action:
+                  - transcribe:StartTranscriptionJob
+                  - transcribe:GetTranscriptionJob
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub "${MeetingStorageBucket.Arn}/*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                  - dynamodb:GetItem
+                Resource: !GetAtt DynamoDBTable.Arn
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref NotificationTopic
+
+  AIProcessingStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub "ai-meeting-processing-${Environment}"
+      RoleArn: !GetAtt AIStepFunctionRole.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "AI Meeting Processing Workflow: Transcribe -> Bedrock -> Save Results",
+          "StartAt": "ProcessTranscript",
+          "States": {
+            "ProcessTranscript": {
+              "Type": "Task",
+              "Resource": "${AIProcessingLambda.Arn}",
+              "Parameters": {
+                "action": "transcribe",
+                "meetingId.$": "$.meetingId",
+                "storageKey.$": "$.storageKey"
+              },
+              "Next": "GenerateSummary",
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "Next": "NotifyFailure"
+                }
+              ]
+            },
+            "GenerateSummary": {
+              "Type": "Task",
+              "Resource": "${AIProcessingLambda.Arn}",
+              "Parameters": {
+                "action": "summarize",
+                "meetingId.$": "$.meetingId",
+                "transcript.$": "$.transcript"
+              },
+              "Next": "ExtractTasks",
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "Next": "NotifyFailure"
+                }
+              ]
+            },
+            "ExtractTasks": {
+              "Type": "Task",
+              "Resource": "${AIProcessingLambda.Arn}",
+              "Parameters": {
+                "action": "extract-tasks",
+                "meetingId.$": "$.meetingId",
+                "transcript.$": "$.transcript",
+                "summary.$": "$.summary"
+              },
+              "Next": "SaveResults",
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "Next": "NotifyFailure"
+                }
+              ]
+            },
+            "SaveResults": {
+              "Type": "Task",
+              "Resource": "${AIProcessingLambda.Arn}",
+              "Parameters": {
+                "action": "save",
+                "meetingId.$": "$.meetingId",
+                "summary.$": "$.summary",
+                "tasks.$": "$.tasks"
+              },
+              "Next": "NotifySuccess"
+            },
+            "NotifySuccess": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+              "Parameters": {
+                "TopicArn": "${NotificationTopic}",
+                "Message": {
+                  "meetingId.$": "$.meetingId",
+                  "status": "COMPLETED",
+                  "message": "Meeting processing completed successfully"
+                }
+              },
+              "End": true
+            },
+            "NotifyFailure": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+              "Parameters": {
+                "TopicArn": "${NotificationTopic}",
+                "Message": {
+                  "meetingId.$": "$.meetingId",
+                  "status": "FAILED",
+                  "error.$": "$.error"
+                }
+              },
+              "End": true
+            }
+          }
+        }
+
+  # ═══════════════════════════════════════════════════════
+  # LAYER 3: EVENT TRIGGER — EVENTBRIDGE + DYNAMODB STREAM
+  # ═══════════════════════════════════════════════════════
+  EventBridgeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "ai-meeting-s3-upload-${Environment}"
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref MeetingStorageBucket
+          object:
+            key:
+              - prefix: "uploads/"
+      Targets:
+        - Id: StepFunctionsTarget
+          Arn: !Ref AIProcessingStateMachine
+          RoleArn: !GetAtt AIStepFunctionRole.Arn
+          InputTransformer:
+            InputPathsMap:
+              key: "$.detail.object.key"
+              bucket: "$.detail.bucket.name"
+              size: "$.detail.object.size"
+            InputTemplate: |
+              {
+                "storageKey": "<key>",
+                "bucket": "<bucket>",
+                "fileSize": <size>,
+                "action": "process-upload"
+              }
+
+  S3UploadEventPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt AIProcessingStateMachine.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventBridgeRule.Arn
+
+  # DynamoDB Stream -> EventBridge Pipes -> SNS
+  DynamoDBStreamTarget:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "ai-meeting-dynamodb-stream-${Environment}"
+      EventPattern:
+        source:
+          - aws.dynamodb
+        detail-type:
+          - DynamoDB Insert
+          - DynamoDB Modify
+        detail:
+          tableName:
+            - !Ref DynamoDBTable
+          eventName:
+            - INSERT
+            - MODIFY
+      Targets:
+        - Id: SNSTarget
+          Arn: !Ref NotificationTopic
+          InputTransformer:
+            InputPathsMap:
+              eventName: "$.detail.eventName"
+              keys: "$.detail.dynamodb.Keys"
+            InputTemplate: |
+              {
+                "source": "dynamodb-stream",
+                "event": <eventName>,
+                "keys": <keys>
+              }
+
+  # ═══════════════════════════════════════════════════════
+  # LAYER 3 & 5: NOTIFICATIONS & MONITORING — SNS + CLOUDWATCH
+  # ═══════════════════════════════════════════════════════
+  NotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "ai-meeting-notifications-${Environment}"
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AdminEmail
+      Tags:
+        - Key: Service
+          Value: ai-meeting-workforce
+
+  AdminEmail:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Value: admin@company.com
+
+  # CloudWatch Alarms
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "ai-meeting-lambda-errors-${Environment}"
+      AlarmDescription: "Lambda function errors"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AIProcessingLambda
+      AlarmActions:
+        - !Ref NotificationTopic
+
+  ApiGateway4xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "ai-meeting-api-4xx-${Environment}"
+      AlarmDescription: "API Gateway 4xx errors"
+      MetricName: 4XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 50
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub "ai-meeting-api-${Environment}"
+      AlarmActions:
+        - !Ref NotificationTopic
+
+  EC2CPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "ai-meeting-ec2-cpu-${Environment}"
+      AlarmDescription: "EC2 CPU utilization"
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 80
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref EC2AutoScalingGroup
+      AlarmActions:
+        - !Ref NotificationTopic
+
+Outputs:
+  ApiGatewayUrl:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+
+  CloudFrontUrl:
+    Description: "CloudFront distribution domain name"
+    Value: !GetAtt CloudFrontDistribution.DomainName
+
+  CognitoUserPoolId:
+    Description: "Cognito User Pool ID"
+    Value: !Ref CognitoUserPool
+
+  CognitoClientId:
+    Description: "Cognito User Pool Client ID"
+    Value: !Ref CognitoUserPoolClient
+
+  DynamoDBTableName:
+    Description: "DynamoDB table name"
+    Value: !Ref DynamoDBTable
+
+  S3BucketName:
+    Description: "S3 bucket for meeting files"
+    Value: !Ref MeetingStorageBucket
+
+  StepFunctionsArn:
+    Description: "AI Processing State Machine ARN"
+    Value: !Ref AIProcessingStateMachine
+
+  ALBDnsName:
+    Description: "ALB DNS name for WebSocket connections"
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+
+  SNSTopicArn:
+    Description: "SNS Topic ARN for notifications"
+    Value: !Ref NotificationTopic

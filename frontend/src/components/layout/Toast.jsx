@@ -10,22 +10,22 @@ const ICONS = {
 
 const COLORS = {
   success: {
-    bg: 'bg-emerald-50 border-emerald-200',
-    icon: 'text-emerald-600',
-    text: 'text-emerald-800',
-    bar: 'bg-emerald-500',
+    bg: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-900/80 dark:border-emerald-800',
+    icon: 'text-emerald-600 dark:text-emerald-400',
+    text: 'text-emerald-800 dark:text-emerald-200',
+    bar: 'bg-emerald-500 dark:bg-emerald-400',
   },
   error: {
-    bg: 'bg-red-50 border-red-200',
-    icon: 'text-red-600',
-    text: 'text-red-800',
-    bar: 'bg-red-500',
+    bg: 'bg-red-50 border-red-200 dark:bg-red-900/80 dark:border-red-800',
+    icon: 'text-red-600 dark:text-red-400',
+    text: 'text-red-800 dark:text-red-200',
+    bar: 'bg-red-500 dark:bg-red-400',
   },
   info: {
-    bg: 'bg-blue-50 border-blue-200',
-    icon: 'text-blue-600',
-    text: 'text-blue-800',
-    bar: 'bg-blue-500',
+    bg: 'bg-blue-50 border-blue-200 dark:bg-blue-900/80 dark:border-blue-800',
+    icon: 'text-blue-600 dark:text-blue-400',
+    text: 'text-blue-800 dark:text-blue-200',
+    bar: 'bg-blue-500 dark:bg-blue-400',
   },
 };
 
@@ -53,7 +53,7 @@ export default function ToastContainer() {
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 80, scale: 0.9 }}
               transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-              className={`pointer-events-auto flex w-80 items-start gap-3 rounded-xl border p-4 shadow-xl shadow-slate-900/10 ${color.bg}`}
+              className={`pointer-events-auto flex w-80 items-start gap-3 rounded-xl border p-4 shadow-xl shadow-slate-900/10 dark:shadow-black/20 ${color.bg}`}
             >
               <Icon className={`mt-0.5 h-5 w-5 flex-shrink-0 ${color.icon}`} />
               <p className={`flex-1 text-sm font-semibold ${color.text}`}>{toast.message}</p>
@@ -64,7 +64,7 @@ export default function ToastContainer() {
                     toast.onAction();
                     dismissToast(toast.id);
                   }}
-                  className={`flex-shrink-0 rounded-lg bg-white/70 px-2.5 py-1 text-xs font-black transition hover:bg-white ${color.text}`}
+                  className={`flex-shrink-0 rounded-lg bg-white/70 px-2.5 py-1 text-xs font-black transition hover:bg-white dark:bg-slate-900/70 dark:hover:bg-slate-900 ${color.text}`}
                 >
                   {toast.actionLabel}
                 </button>
@@ -72,7 +72,7 @@ export default function ToastContainer() {
               <button
                 type="button"
                 onClick={() => dismissToast(toast.id)}
-                className={`flex-shrink-0 rounded-lg p-1 transition hover:bg-white/50 ${color.text}`}
+                className={`flex-shrink-0 rounded-lg p-1 transition hover:bg-white/50 dark:hover:bg-slate-900/50 ${color.text}`}
               >
                 <FiX className="h-3.5 w-3.5" />
               </button>

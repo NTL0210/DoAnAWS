@@ -11,6 +11,7 @@
     "dev:voice": "node ../frontend/server/signaling.js",
     "dev:voice:stop": "node scripts/stop-voice-port.cjs",
     "build": "tsc -p tsconfig.json",
+    "build:lambdas": "node scripts/build-lambdas.mjs",
     "start": "node dist/app/server.js",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
@@ -21,6 +22,7 @@
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.705.0",
     "@aws-sdk/lib-dynamodb": "^3.705.0",
+    "@codegenie/serverless-express": "^4.17.1",
     "cors": "^2.8.5",
     "express": "^5.0.1",
     "helmet": "^8.0.0",
@@ -30,6 +32,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@types/aws-lambda": "^8.10.162",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.2",

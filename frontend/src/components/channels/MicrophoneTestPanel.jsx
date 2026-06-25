@@ -68,19 +68,19 @@ export default function MicrophoneTestPanel({
   const warning = testError || calibrationMessage || micLevelWarning || zeroLevelWarning;
 
   return (
-    <div className="grid gap-3 rounded-xl border border-slate-200 p-4">
+    <div className="grid gap-3 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <FiMic className="h-4 w-4 text-slate-400" />
+          <FiMic className="h-4 w-4 text-slate-400 dark:text-slate-500" />
           <AudioLevelMeter level={audioLevel} speaking={isSpeaking} />
-          <span className="text-xs font-black text-slate-500">{Math.round(audioLevel * 100)}%</span>
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-500">{micStatus}</span>
+          <span className="text-xs font-black text-slate-500 dark:text-slate-400">{Math.round(audioLevel * 100)}%</span>
+          <span className="rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-[10px] font-black text-slate-500 dark:text-slate-400">{micStatus}</span>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={onRefreshDevices} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50">
+          <button type="button" onClick={onRefreshDevices} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-black text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
             <FiRefreshCw className="h-3.5 w-3.5" /> Refresh
           </button>
-          <button type="button" disabled={isCalibrating || !audioInputs.length} onClick={onCalibrateNoise} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+          <button type="button" disabled={isCalibrating || !audioInputs.length} onClick={onCalibrateNoise} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-black text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
             <FiVolume2 className="h-3.5 w-3.5" /> {isCalibrating ? 'Calibrating...' : 'Calibrate background noise'}
           </button>
           {testStream ? (
@@ -95,7 +95,7 @@ export default function MicrophoneTestPanel({
         </div>
       </div>
 
-      <div className="grid gap-1 text-[11px] font-semibold text-slate-400 sm:grid-cols-3">
+      <div className="grid gap-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500 sm:grid-cols-3">
         <span>Selected: {selectedMicLabel}</span>
         <span>Permission: {permissionStatus}</span>
         <span>Track: {trackStatus}</span>

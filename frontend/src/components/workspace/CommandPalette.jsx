@@ -69,35 +69,35 @@ export default function CommandPalette({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/35 px-4 pt-[12vh]" onMouseDown={onClose}>
-      <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
-          <FiSearch className="h-5 w-5 text-slate-400" />
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/35 px-4 pt-[12vh] dark:bg-slate-950/60" onMouseDown={onClose}>
+      <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+          <FiSearch className="h-5 w-5 text-slate-400 dark:text-slate-500" />
           <input
             autoFocus
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search meetings, tasks, members, teams, actions..."
-            className="h-9 min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
+            className="h-9 min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
           />
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-300">
             <FiX className="h-4 w-4" />
           </button>
         </div>
         <div className="max-h-[55vh] overflow-y-auto p-2">
           {filtered.length === 0 ? (
-            <div className="px-4 py-10 text-center text-sm font-semibold text-slate-400">No results</div>
+            <div className="px-4 py-10 text-center text-sm font-semibold text-slate-400 dark:text-slate-500">No results</div>
           ) : (
             filtered.map((item) => {
               const Icon = item.icon;
               return (
-                <button key={item.id} type="button" onClick={() => run(item)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-slate-50 active:scale-[0.99]">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                <button key={item.id} type="button" onClick={() => run(item)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-slate-50 active:scale-[0.99] dark:hover:bg-slate-800/60">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
                     <Icon className="h-4 w-4" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-black text-slate-800">{item.label}</span>
-                    <span className="block text-[11px] font-bold uppercase tracking-wide text-slate-400">{item.group}</span>
+                    <span className="block truncate text-sm font-black text-slate-800 dark:text-slate-100">{item.label}</span>
+                    <span className="block text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">{item.group}</span>
                   </span>
                 </button>
               );

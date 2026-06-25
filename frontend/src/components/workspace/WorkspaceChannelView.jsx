@@ -40,6 +40,7 @@ import VoiceChannelView from '@/components/channels/VoiceChannelView';
 import WorkspaceViewTransition from '@/components/workspace/WorkspaceViewTransition';
 import CommandPalette from '@/components/workspace/CommandPalette';
 import { VALID_WORKSPACE_VIEWS, getQueryView } from '@/lib/workspaceViewUtils';
+import usePresence from '@/hooks/usePresence';
 
 export default function WorkspaceChannelView() {
   const router = useRouter();
@@ -79,8 +80,11 @@ export default function WorkspaceChannelView() {
     showCreateTeam,
     setShowCreateTeam,
     setShowInviteMember,
+    showToast,
   } = useWorkspace();
-  const { voiceLeaveChannel, onlineUsers } = useVoiceConnection();
+  const { voiceLeaveChannel, onlineUsers: voiceOnlineUsers } = useVoiceConnection();
+
+  const { onlineUsers: presenceOnlineUsers, currentStatus } = usePresence();
 
   const [message, setMessage] = useState('');
   const [channelsOpen, setChannelsOpen] = useState(() => loadCollapsedState('channelsOpen', true));
@@ -153,8 +157,14 @@ export default function WorkspaceChannelView() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router.isReady, router.asPath]);
-  // NOTE: We intentionally exclude `activeView` and `router.query.view` from deps
-  // to prevent the loop. `router.asPath` catches ALL URL changes (including query).
+  // NOTE: We intentionally exclude `activeView`, `router.query.view`, `selectChannel`,
+  // `selectTeamChat`, `selectView`, and `activeTeamId` from deps:
+  //   - `router.asPath` catches ALL URL changes (including query), so the effect
+  //     fires on every external navigation already.
+  //   - Adding `activeView`/`selectView` etc. would create a loop: changing state →
+  //     re-render → new `activeView` → effect fires → changes URL → new `asPath` → fires again.
+  //   - The guard `lastSyncedView.current` paired with `openWorkspaceView()` prevents
+  //     double-applying our own internal updates.
 
   /**
    * Navigate to a workspace view.
@@ -218,8 +228,8 @@ export default function WorkspaceChannelView() {
         if (!confirmed) return;
         result = await switchVoiceChannel(channelId, { confirmedTargetRecording: true, confirmedStopRecording: true });
       }
-      if (!result?.ok) return;
-      if (!result.unchanged) {
+      // Nếu join voice thất bại vẫn cho xem UI (có nút Join để click thủ công)
+      if (result?.ok && !result?.unchanged) {
         voiceLeaveChannel();
       }
     }
@@ -308,6 +318,8 @@ export default function WorkspaceChannelView() {
           emptyTitle={`Start the conversation with ${activeTeam.name}`}
           emptySubtitle="Messages here stay inside this team."
           onViewMembers={() => openWorkspaceView('teams')}
+          onOpenSettings={() => openWorkspaceView('settings')}
+          onOpenNotifications={() => showToast('info', '🔔 Notification preferences can be configured in workspace settings.')}
         />
       );
     }
@@ -324,6 +336,8 @@ export default function WorkspaceChannelView() {
           handleSend={handleSendMessage}
           currentUser={currentUser}
           workspaceMembers={workspaceMembers}
+          onOpenSettings={() => openWorkspaceView('settings')}
+          onOpenNotifications={() => showToast('info', '🔔 Notification preferences can be configured in workspace settings.')}
         />
       );
     }
@@ -332,18 +346,18 @@ export default function WorkspaceChannelView() {
   };
 
   return (
-    <div className="workspace-frame workspace-shell flex h-[calc(100dvh-7.5rem)] min-h-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl shadow-slate-300/40 ring-1 ring-white/80">
+    <div className="workspace-frame workspace-shell flex h-[calc(100dvh-7.5rem)] min-h-0 overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-2xl shadow-slate-300/40 dark:shadow-slate-950/60 ring-1 ring-white/80 dark:ring-slate-800/80">
       {/* ═══════ SIDEBAR ═══════ */}
       <aside className="workspace-sidebar-surface flex w-[270px] flex-shrink-0 flex-col border-r">
         {/* ─── Workspace Header ─── */}
-        <div className="border-b border-slate-200 px-4 py-3.5">
+        <div className="border-b border-slate-200 dark:border-slate-800 px-4 py-3.5">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-violet-500 text-xs font-black text-white shadow-lg shadow-blue-500/20">
               {getInitials(activeWorkspace?.name)}
             </div>
             <div className="min-w-0">
-              <h2 className="truncate text-sm font-black text-slate-900">{activeWorkspace?.name || 'Workspace'}</h2>
-              <p className="truncate text-[10px] font-semibold text-slate-400">
+              <h2 className="truncate text-sm font-black text-slate-900 dark:text-slate-100">{activeWorkspace?.name || 'Workspace'}</h2>
+              <p className="truncate text-[10px] font-semibold text-slate-400 dark:text-slate-500">
                 {workspaceRoleLabels[workspaceRole] || 'Member'} · {workspaceMembers.length} members
               </p>
             </div>
@@ -410,7 +424,7 @@ export default function WorkspaceChannelView() {
             {teamsOpen && (
               <>
                 {accessibleTeams.length === 0 ? (
-                  <p className="px-3 py-2 text-[11px] text-slate-400 italic">
+                  <p className="px-3 py-2 text-[11px] text-slate-400 dark:text-slate-500 italic">
                     No teams yet
                   </p>
                 ) : (
@@ -468,8 +482,8 @@ export default function WorkspaceChannelView() {
             {channelsOpen && (
               <>
                 {textChannels.length === 0 && voiceChannels.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-center">
-                    <p className="text-[11px] font-bold text-slate-400">No channels yet</p>
+                  <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-4 text-center">
+                    <p className="text-[11px] font-bold text-slate-400 dark:text-slate-500">No channels yet</p>
                     {canCreateChannels ? (
                       <button
                         type="button"
@@ -495,6 +509,9 @@ export default function WorkspaceChannelView() {
                 ))}
                 {voiceChannels.map((channel) => {
                   const hasAccess = canAccessVoice(channel);
+                  // Ẩn voice channel nếu user ko có quyền (trừ OWNER/VICE_ADMIN)
+                  const isAdmin = workspaceRole === 'OWNER' || workspaceRole === 'VICE_ADMIN';
+                  if (!hasAccess && !isAdmin) return null;
                   return (
                     <SidebarItem
                       key={channel.id}
@@ -508,7 +525,7 @@ export default function WorkspaceChannelView() {
                         connected: channel.id === activeVoiceChannelId,
                         lockTitle: 'You do not have access to this voice channel.',
                         recording: Boolean(activeVoiceRecordings[channel.id]),
-                        participants: voiceParticipants[channel.id] || [],
+                        participants: Object.values(voiceParticipants[channel.id] || {}),
                         workspaceMembers,
                       }}
                     />
@@ -520,15 +537,15 @@ export default function WorkspaceChannelView() {
         </div>
 
         {/* ─── User Profile ─── */}
-        <div className="border-t border-slate-200 p-3">
-          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
+        <div className="border-t border-slate-200 dark:border-slate-800 p-3">
+          <div className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 shadow-sm">
             <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 text-[10px] font-black text-white">
               {getInitials(currentUser?.name)}
-              <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
+              <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white dark:border-slate-800 bg-emerald-500" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-black text-slate-900">{currentUser?.name || 'User'}</p>
-              <p className="truncate text-[10px] font-semibold text-slate-400">
+              <p className="truncate text-sm font-black text-slate-900 dark:text-slate-100">{currentUser?.name || 'User'}</p>
+              <p className="truncate text-[10px] font-semibold text-slate-400 dark:text-slate-500">
                 {workspaceRoleLabels[workspaceRole] || 'Member'}
               </p>
             </div>
@@ -537,7 +554,7 @@ export default function WorkspaceChannelView() {
       </aside>
 
       {/* ═══════ MAIN CONTENT ═══════ */}
-      <main className="workspace-main-surface flex min-w-0 flex-1 bg-white">
+      <main className="workspace-main-surface flex min-w-0 flex-1 bg-white dark:bg-slate-900">
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <WorkspaceViewTransition viewKey={viewKey}>
             {renderContent()}
@@ -546,7 +563,13 @@ export default function WorkspaceChannelView() {
 
         {/* ─── Member Panel (only for channels) ─── */}
         {(currentChannel || (activeView === 'team-chat' && activeTeam && canAccessTeam(activeTeam))) && (
-          <MemberPanel members={workspaceMembers} currentUser={currentUser} roleLabels={workspaceRoleLabels} onlineUsers={onlineUsers} />
+          <MemberPanel
+            members={workspaceMembers}
+            currentUser={currentUser}
+            roleLabels={workspaceRoleLabels}
+            onlineUsers={presenceOnlineUsers}
+            currentStatus={currentStatus}
+          />
         )}
       </main>
 
@@ -581,7 +604,7 @@ function SidebarSection({ title, action, children }) {
   return (
     <section className="mb-1">
       <div className="mb-1 flex items-center justify-between px-2">
-        <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{title}</h3>
+        <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">{title}</h3>
         {action}
       </div>
       <div className="space-y-0.5">{children}</div>
@@ -636,7 +659,7 @@ function SidebarItem({ item, compact = false }) {
                     participant.isSpeaking && !participant.isMuted
                       ? 'border-emerald-400 bg-emerald-500 shadow-sm shadow-emerald-500/50'
                       : participant.isMuted
-                        ? 'border-slate-300 bg-slate-400'
+                        ? 'border-slate-300 bg-slate-400 dark:border-slate-600 dark:bg-slate-500'
                         : 'border-white bg-blue-600'
                   }`}
                   style={{ zIndex: 4 - index }}
@@ -647,7 +670,7 @@ function SidebarItem({ item, compact = false }) {
               );
             })}
             {participants.length > 3 ? (
-              <span className="-ml-1 flex h-5 min-w-5 items-center justify-center rounded-full border border-white bg-slate-200 px-1 text-[9px] font-black text-slate-600">
+              <span className="-ml-1 flex h-5 min-w-5 items-center justify-center rounded-full border border-white bg-slate-200 px-1 text-[9px] font-black text-slate-600 dark:border-slate-700 dark:bg-slate-700 dark:text-slate-300">
                 +{participants.length - 3}
               </span>
             ) : null}
@@ -675,6 +698,8 @@ function TextChannelContent({
   emptyTitle,
   emptySubtitle,
   onViewMembers,
+  onOpenSettings,
+  onOpenNotifications,
 }) {
   const messagesEndRef = useRef(null);
   const [visibleCount, setVisibleCount] = useState(50);
@@ -704,10 +729,10 @@ function TextChannelContent({
   const hasOlderMessages = visibleCount < messages.length;
 
   return (
-    <div className="flex h-full flex-col bg-white">
-      <header className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-3.5">
+    <div className="flex h-full flex-col bg-white dark:bg-slate-900">
+      <header className="flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 px-5 py-3.5">
         <div className="min-w-0">
-          <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
+          <h2 className="flex items-center gap-2 text-sm font-black text-slate-900 dark:text-slate-100">
             {isTeam ? (
               <FiBriefcase className="h-4 w-4 text-blue-600" />
             ) : (
@@ -716,11 +741,11 @@ function TextChannelContent({
             {channel.name}
           </h2>
           {isTeam ? (
-            <p className="mt-0.5 truncate text-[11px] font-medium text-slate-400">
+            <p className="mt-0.5 truncate text-[11px] font-medium text-slate-400 dark:text-slate-500">
               {channel.description || 'Team chat'} · Manager: {channel.managerName || 'Unassigned'} · {channel.memberCount || 0} members
             </p>
           ) : (
-            channel.description && <p className="mt-0.5 truncate text-[11px] font-medium text-slate-400">{channel.description}</p>
+            channel.description && <p className="mt-0.5 truncate text-[11px] font-medium text-slate-400 dark:text-slate-500">{channel.description}</p>
           )}
         </div>
         <div className="flex items-center gap-1">
@@ -728,23 +753,23 @@ function TextChannelContent({
             <button
               type="button"
               onClick={onViewMembers}
-              className="mr-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+              className="mr-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 transition hover:bg-slate-50 dark:hover:bg-slate-700"
             >
               Members
             </button>
           )}
-          <IconButton icon={FiBell} label="Notifications" />
-          <IconButton icon={FiSettings} label="Channel settings" />
+          <IconButton icon={FiBell} label="Notifications" onClick={onOpenNotifications} />
+          <IconButton icon={FiSettings} label="Channel settings" onClick={onOpenSettings} />
         </div>
       </header>
 
       <div className="discord-scroll flex-1 overflow-y-auto px-5 py-4">
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-center">
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-8 py-10">
-              <FiMessageSquare className="mx-auto h-8 w-8 text-slate-300" />
-              <p className="mt-3 text-sm font-black text-slate-600">{emptyTitle || 'No messages yet'}</p>
-              <p className="mt-1 text-xs text-slate-400">{emptySubtitle || `Start the conversation in #${channel.name}.`}</p>
+            <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-8 py-10">
+              <FiMessageSquare className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600" />
+              <p className="mt-3 text-sm font-black text-slate-600 dark:text-slate-300">{emptyTitle || 'No messages yet'}</p>
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{emptySubtitle || `Start the conversation in #${channel.name}.`}</p>
             </div>
           </div>
         ) : (
@@ -754,7 +779,7 @@ function TextChannelContent({
                 <button
                   type="button"
                   onClick={() => setVisibleCount((count) => count + 50)}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-500 transition hover:bg-slate-50"
+                  className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-black text-slate-500 dark:text-slate-400 transition hover:bg-slate-50 dark:hover:bg-slate-700"
                 >
                   Load older messages
                 </button>
@@ -772,14 +797,14 @@ function TextChannelContent({
         {messages.length === 0 && <div ref={messagesEndRef} />}
       </div>
 
-      <footer className="border-t border-slate-200 bg-white p-4">
-        <form onSubmit={handleSend} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2 py-1.5 focus-within:border-blue-200 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-50">
-          <button type="button" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white hover:text-slate-600">
+      <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+        <form onSubmit={handleSend} className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1.5 focus-within:border-blue-200 dark:focus-within:border-blue-800 focus-within:bg-white dark:focus-within:bg-slate-900 focus-within:ring-4 focus-within:ring-blue-50 dark:focus-within:ring-blue-900/20">
+          <button type="button" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 dark:text-slate-500 transition hover:bg-white dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-slate-300">
             <FiPaperclip className="h-4 w-4" />
           </button>
           <input
             type="text"
-            className="h-8 min-w-0 flex-1 bg-transparent px-2 text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400"
+            className="h-8 min-w-0 flex-1 bg-transparent px-2 text-sm font-medium text-slate-900 dark:text-slate-100 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
             placeholder={placeholder || `Message #${channel.name}`}
             value={message}
             onChange={(event) => setMessage(event.target.value)}
@@ -796,20 +821,20 @@ function TextChannelContent({
 
 const MessageItem = memo(function MessageItem({ msg, user }) {
   return (
-    <article className="group flex gap-3 rounded-xl px-3 py-2 transition hover:bg-slate-50">
+    <article className="group flex gap-3 rounded-xl px-3 py-2 transition hover:bg-slate-50 dark:hover:bg-slate-800/60">
       <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 text-[10px] font-black text-white">
         {getInitials(user.name)}
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-2">
-          <span className="text-sm font-black text-slate-900">{user.name || 'Unknown'}</span>
-          <span className="text-[11px] font-medium text-slate-400">{formatTime(msg.createdAt)}</span>
+          <span className="text-sm font-black text-slate-900 dark:text-slate-100">{user.name || 'Unknown'}</span>
+          <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">{formatTime(msg.createdAt)}</span>
         </div>
-        <p className="mt-0.5 whitespace-pre-wrap text-sm leading-6 text-slate-600">{msg.content}</p>
+        <p className="mt-0.5 whitespace-pre-wrap text-sm leading-6 text-slate-600 dark:text-slate-300">{msg.content}</p>
         {msg.attachments?.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
             {msg.attachments.map((attachment) => (
-              <div key={attachment.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 shadow-sm">
+              <div key={attachment.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-bold text-slate-500 dark:text-slate-400 shadow-sm">
                 {attachment.name}
               </div>
             ))}
@@ -826,25 +851,25 @@ function VoiceChannelContent({ channel, workspaceMembers, workspaceRole, can }) 
   const [recording, setRecording] = useState(false);
 
   return (
-    <div className="flex h-full items-center justify-center bg-white p-8">
-      <div className="max-w-md rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center shadow-sm">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+    <div className="flex h-full items-center justify-center bg-white dark:bg-slate-900 p-8">
+      <div className="max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 p-8 text-center shadow-sm">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
           <FiHeadphones className="h-7 w-7" />
         </div>
-        <h2 className="mt-4 text-lg font-black text-slate-900">{channel.name}</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-400">
+        <h2 className="mt-4 text-lg font-black text-slate-900 dark:text-slate-100">{channel.name}</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-400 dark:text-slate-500">
           Voice channel for {workspaceMembers.length} workspace members.
         </p>
-        <div className="mt-4 rounded-2xl border border-white bg-white p-4 text-left shadow-sm">
+        <div className="mt-4 rounded-2xl border border-white dark:border-slate-700 bg-white dark:bg-slate-800 p-4 text-left shadow-sm">
           <div className="flex items-center justify-between text-sm">
-            <span className="font-bold text-slate-500">Status</span>
-            <span className={`rounded-full px-2.5 py-1 text-xs font-black ${joined ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
+            <span className="font-bold text-slate-500 dark:text-slate-400">Status</span>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-black ${joined ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'}`}>
               {joined ? 'Connected' : 'Not joined'}
             </span>
           </div>
           <div className="mt-2 flex items-center justify-between text-sm">
-            <span className="font-bold text-slate-500">Recording</span>
-            <span className={`rounded-full px-2.5 py-1 text-xs font-black ${recording ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-400'}`}>
+            <span className="font-bold text-slate-500 dark:text-slate-400">Recording</span>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-black ${recording ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'}`}>
               {recording ? 'Live' : 'Off'}
             </span>
           </div>
@@ -855,7 +880,7 @@ function VoiceChannelContent({ channel, workspaceMembers, workspaceRole, can }) 
             onClick={() => { setJoined((v) => { if (v) setRecording(false); return !v; }); }}
             className={`rounded-xl px-5 py-3 text-sm font-black shadow-lg transition ${
               joined
-                ? 'bg-slate-900 text-white hover:bg-slate-800'
+                ? 'bg-slate-900 dark:bg-slate-700 text-white hover:bg-slate-800 dark:hover:bg-slate-600'
                 : 'bg-blue-600 text-white shadow-blue-500/20 hover:bg-blue-700'
             }`}
           >
@@ -866,7 +891,7 @@ function VoiceChannelContent({ channel, workspaceMembers, workspaceRole, can }) 
               type="button"
               disabled={!joined}
               onClick={() => setRecording((v) => !v)}
-              className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-3 text-sm font-black text-slate-600 dark:text-slate-300 transition hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {recording ? 'Stop Recording' : 'Start Recording'}
             </button>
@@ -877,37 +902,54 @@ function VoiceChannelContent({ channel, workspaceMembers, workspaceRole, can }) 
   );
 }
 
-function MemberPanel({ members, currentUser, roleLabels, onlineUsers = [] }) {
-  const onlineIds = useMemo(() => new Set((onlineUsers || []).map((user) => user.userId)), [onlineUsers]);
-  const onlineById = useMemo(() => new Map((onlineUsers || []).map((user) => [user.userId, user])), [onlineUsers]);
+function MemberPanel({ members, currentUser, roleLabels, onlineUsers = [], currentStatus }) {
+  // onlineUsers from usePresence: { userId, name, status: 'online'|'idle', lastSeen }
+  const onlineById = useMemo(() => {
+    const map = new Map();
+    (onlineUsers || []).forEach((u) => map.set(u.userId, u));
+    if (currentStatus) map.set(currentStatus.userId, currentStatus);
+    return map;
+  }, [onlineUsers, currentStatus]);
+
   const allMembers = useMemo(() => {
     const byId = new Map();
     members.forEach((member) => byId.set(member.userId, member));
     if (currentUser?.id && !byId.has(currentUser.id)) {
       byId.set(currentUser.id, { userId: currentUser.id, name: currentUser.name, avatar: currentUser.avatar, role: 'OWNER' });
     }
-    onlineUsers.forEach((user) => {
-      if (!byId.has(user.userId)) byId.set(user.userId, user);
+    onlineById.forEach((presence, userId) => {
+      if (!byId.has(userId)) byId.set(userId, { userId, name: presence.name });
     });
     return Array.from(byId.values());
-  }, [currentUser, members, onlineUsers]);
+  }, [currentUser, members, onlineById]);
 
-  const onlineMembers = allMembers.filter((member) => onlineIds.has(member.userId));
-  const offlineMembers = allMembers.filter((member) => !onlineIds.has(member.userId));
+  const onlineMembers = allMembers.filter((member) => onlineById.get(member.userId)?.status === 'online');
+  const idleMembers = allMembers.filter((member) => onlineById.get(member.userId)?.status === 'idle');
+  const offlineMembers = allMembers.filter((member) => {
+    const p = onlineById.get(member.userId);
+    return !p || p.status === 'offline';
+  });
 
-  const renderMember = (member, index, online) => {
+  const renderMember = (member, index, statusType) => {
     const presence = onlineById.get(member.userId) || {};
     const name = member.nickname || member.name || presence.name || (member.userId === currentUser?.id ? currentUser.name : 'Unknown');
     const role = member.role || presence.role || 'Member';
+    const isOnline = statusType === 'online';
+    const isIdle = statusType === 'idle';
     return (
-      <button key={member.userId || index} type="button" className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition hover:bg-white hover:shadow-sm">
-        <span className={`relative flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-black text-white ${online ? 'bg-gradient-to-br from-blue-500 to-cyan-400' : 'bg-slate-300'}`}>
+      <button key={member.userId || index} type="button" className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition hover:bg-white dark:hover:bg-slate-800 hover:shadow-sm">
+        <span className={`relative flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-black text-white ${isOnline ? 'bg-gradient-to-br from-blue-500 to-cyan-400' : isIdle ? 'bg-gradient-to-br from-amber-400 to-orange-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
           {getInitials(name)}
-          <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white ${online ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+          <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white dark:border-slate-900 ${
+            isOnline ? 'bg-emerald-500' : isIdle ? 'bg-amber-400' : 'bg-slate-400 dark:bg-slate-500'
+          }`} />
         </span>
         <span className="min-w-0">
-          <span className={`block truncate text-xs font-black ${online ? 'text-slate-700' : 'text-slate-400'}`}>{name}</span>
-          <span className="block truncate text-[10px] font-semibold text-slate-400">
+          <span className="flex items-center gap-1.5">
+            <span className={`block truncate text-xs font-black ${isOnline ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500'}`}>{name}</span>
+            {isIdle && <span className="text-[9px] font-bold text-amber-500 dark:text-amber-400">Idle</span>}
+          </span>
+          <span className="block truncate text-[10px] font-semibold text-slate-400 dark:text-slate-500">
             {roleLabels[role] || role}
           </span>
         </span>
@@ -916,24 +958,32 @@ function MemberPanel({ members, currentUser, roleLabels, onlineUsers = [] }) {
   };
 
   return (
-    <aside className="hidden w-[220px] flex-shrink-0 border-l border-slate-200 bg-slate-50/60 xl:flex xl:flex-col">
-      <div className="border-b border-slate-200 px-4 py-3.5">
+    <aside className="hidden w-[220px] flex-shrink-0 border-l border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 xl:flex xl:flex-col">
+      <div className="border-b border-slate-200 dark:border-slate-800 px-4 py-3.5">
         <div className="flex items-center justify-between">
-          <h3 className="text-xs font-black text-slate-900">Online</h3>
-          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-600">
+          <h3 className="text-xs font-black text-slate-900 dark:text-slate-100">Online</h3>
+          <span className="rounded-full bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 text-[10px] font-black text-emerald-600 dark:text-emerald-400">
             {onlineMembers.length}
           </span>
         </div>
       </div>
       <div className="discord-scroll flex-1 overflow-y-auto p-3">
         <div className="space-y-0.5">
-          {onlineMembers.map((member, index) => renderMember(member, index, true))}
-          {offlineMembers.length > 0 ? (
-            <div className="px-2 pb-1 pt-3 text-[10px] font-black uppercase text-slate-400">
-              Offline - {offlineMembers.length}
+          {onlineMembers.map((member, index) => renderMember(member, index, 'online'))}
+
+          {idleMembers.length > 0 ? (
+            <div className="px-2 pb-1 pt-3 text-[10px] font-black uppercase text-slate-400 dark:text-slate-500">
+              Idle — {idleMembers.length}
             </div>
           ) : null}
-          {offlineMembers.map((member, index) => renderMember(member, index, false))}
+          {idleMembers.map((member, index) => renderMember(member, index, 'idle'))}
+
+          {offlineMembers.length > 0 ? (
+            <div className="px-2 pb-1 pt-3 text-[10px] font-black uppercase text-slate-400 dark:text-slate-500">
+              Offline — {offlineMembers.length}
+            </div>
+          ) : null}
+          {offlineMembers.map((member, index) => renderMember(member, index, 'offline'))}
         </div>
       </div>
     </aside>
@@ -942,19 +992,19 @@ function MemberPanel({ members, currentUser, roleLabels, onlineUsers = [] }) {
 
 function PermissionState({ title, message }) {
   return (
-    <div className="flex h-full items-center justify-center bg-white p-8 text-center">
-      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-8 py-10">
-        <FiUserCheck className="mx-auto h-8 w-8 text-slate-300" />
-        <p className="mt-3 text-sm font-black text-slate-700">{title}</p>
-        <p className="mt-1 text-xs text-slate-400">{message}</p>
+    <div className="flex h-full items-center justify-center bg-white dark:bg-slate-900 p-8 text-center">
+      <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-8 py-10">
+        <FiUserCheck className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600" />
+        <p className="mt-3 text-sm font-black text-slate-700 dark:text-slate-300">{title}</p>
+        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{message}</p>
       </div>
     </div>
   );
 }
 
-function IconButton({ icon: Icon, label }) {
+function IconButton({ icon: Icon, label, onClick }) {
   return (
-    <button type="button" title={label} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
+    <button type="button" title={label} onClick={onClick} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 dark:text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-slate-300">
       <Icon className="h-4 w-4" />
     </button>
   );

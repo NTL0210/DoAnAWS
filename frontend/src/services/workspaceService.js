@@ -168,6 +168,7 @@ export function createCleanWorkspaceStructure(workspaceData, ownerId, options = 
     iconColor: workspaceData?.iconColor || 'blue',
     workspaceType: workspaceData?.workspaceType || 'blank',
     visibility: workspaceData?.visibility || 'private',
+    billingPlanId: workspaceData?.billingPlanId || 'free',
     slug: generateWorkspaceSlug(name),
     ownerId,
     memberIds: [ownerId],

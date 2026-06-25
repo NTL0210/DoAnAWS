@@ -3,18 +3,22 @@ import {
   GetCommand,
   PutCommand,
   QueryCommand,
-  UpdateCommand
+  UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { ddb } from "../../infrastructure/aws/dynamodb-client.js";
 import { env } from "../../config/env.js";
-import { ConflictError } from "../../shared/errors/app-error.js";
 import {
-  decodeNextToken,
-  encodeNextToken
-} from "../../shared/pagination/token.js";
+  text,
+  textArray,
+  num,
+  nullableText,
+  isConditionalFailure,
+} from "../../infrastructure/aws/dynamodb-utils.js";
+import { ConflictError } from "../../shared/errors/app-error.js";
+import { decodeNextToken, encodeNextToken } from "../../shared/pagination/token.js";
 import type { PaginatedResult } from "../../shared/types/pagination.js";
 import type { MeetingRepository } from "./meeting.repository.js";
-import type { Meeting } from "./meeting.types.js";
+import type { Meeting, SuggestedTask } from "./meeting.types.js";
 
 const entityType = "MEETING";
 
@@ -26,63 +30,40 @@ function sk(meetingId: string): string {
   return `MEETING#${meetingId}`;
 }
 
-type MeetingItem = Meeting & {
-  PK: string;
-  SK: string;
-  entityType: typeof entityType;
-  GSI1PK: string;
-  GSI1SK: string;
-};
-
-function toItem(meeting: Meeting): MeetingItem {
+function toItem(meeting: Meeting): Record<string, unknown> {
   return {
     PK: pk(meeting.workspaceId),
     SK: sk(meeting.id),
     entityType,
     GSI1PK: `WORKSPACE#${meeting.workspaceId}#MEETINGS`,
     GSI1SK: `${meeting.createdAt}#${meeting.id}`,
-    ...meeting
+    ...meeting,
   };
-}
-
-function text(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
 }
 
 function fromItem(item: Record<string, unknown>): Meeting {
   return {
     id: text(item.id),
     workspaceId: text(item.workspaceId),
-    teamId: item.teamId ? text(item.teamId) : null,
+    teamId: nullableText(item.teamId),
     title: text(item.title),
-    status: item.status as Meeting["status"],
+    status: text(item.status, "UPLOADED") as Meeting["status"],
     transcriptText: text(item.transcriptText),
     summary: text(item.summary),
-    keyDecisions: Array.isArray(item.keyDecisions) ? item.keyDecisions.map(String) : [],
-    risks: Array.isArray(item.risks) ? item.risks.map(String) : [],
-    actionItems: Array.isArray(item.actionItems) ? item.actionItems.map(String) : [],
+    keyDecisions: textArray(item.keyDecisions),
+    risks: textArray(item.risks),
+    actionItems: textArray(item.actionItems),
     suggestedTasks: Array.isArray(item.suggestedTasks)
-      ? (item.suggestedTasks as Meeting["suggestedTasks"])
+      ? (item.suggestedTasks as SuggestedTask[])
       : [],
-    generatedTaskIds: Array.isArray(item.generatedTaskIds)
-      ? item.generatedTaskIds.map(String)
-      : [],
-    storageRef: item.storageRef ? text(item.storageRef) : null,
+    generatedTaskIds: textArray(item.generatedTaskIds),
+    storageRef: nullableText(item.storageRef),
     expiresAt: typeof item.expiresAt === "number" ? item.expiresAt : undefined,
-    version: Number(item.version),
-    createdBy: item.createdBy ? text(item.createdBy) : null,
+    version: num(item.version, 1),
+    createdBy: nullableText(item.createdBy),
     createdAt: text(item.createdAt),
-    updatedAt: text(item.updatedAt)
+    updatedAt: text(item.updatedAt),
   };
-}
-
-function isConditionalFailure(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "name" in error &&
-    error.name === "ConditionalCheckFailedException"
-  );
 }
 
 export class DynamoMeetingRepository implements MeetingRepository {
@@ -93,7 +74,7 @@ export class DynamoMeetingRepository implements MeetingRepository {
     const result = await ddb.send(
       new GetCommand({
         TableName: env.DYNAMODB_TABLE_MAIN,
-        Key: { PK: pk(params.workspaceId), SK: sk(params.meetingId) }
+        Key: { PK: pk(params.workspaceId), SK: sk(params.meetingId) },
       }),
     );
     return result.Item ? fromItem(result.Item) : null;
@@ -110,16 +91,16 @@ export class DynamoMeetingRepository implements MeetingRepository {
         IndexName: "GSI1",
         KeyConditionExpression: "GSI1PK = :pk",
         ExpressionAttributeValues: {
-          ":pk": `WORKSPACE#${params.workspaceId}#MEETINGS`
+          ":pk": `WORKSPACE#${params.workspaceId}#MEETINGS`,
         },
         ScanIndexForward: false,
         Limit: params.limit,
-        ExclusiveStartKey: decodeNextToken(params.nextToken)
+        ExclusiveStartKey: decodeNextToken(params.nextToken),
       }),
     );
     return {
       items: (result.Items ?? []).map(fromItem),
-      nextToken: encodeNextToken(result.LastEvaluatedKey)
+      nextToken: encodeNextToken(result.LastEvaluatedKey),
     };
   }
 
@@ -129,7 +110,7 @@ export class DynamoMeetingRepository implements MeetingRepository {
         new PutCommand({
           TableName: env.DYNAMODB_TABLE_MAIN,
           Item: toItem(meeting),
-          ConditionExpression: "attribute_not_exists(PK)"
+          ConditionExpression: "attribute_not_exists(PK)",
         }),
       );
     } catch (error) {
@@ -148,7 +129,7 @@ export class DynamoMeetingRepository implements MeetingRepository {
           Item: toItem(meeting),
           ConditionExpression: "#version = :expectedVersion",
           ExpressionAttributeNames: { "#version": "version" },
-          ExpressionAttributeValues: { ":expectedVersion": expectedVersion }
+          ExpressionAttributeValues: { ":expectedVersion": expectedVersion },
         }),
       );
     } catch (error) {
@@ -165,16 +146,16 @@ export class DynamoMeetingRepository implements MeetingRepository {
   }): Promise<Meeting[]> {
     let keys = params.meetingIds.map((id) => ({
       PK: pk(params.workspaceId),
-      SK: sk(id)
+      SK: sk(id),
     }));
     const items: Meeting[] = [];
 
-    for (let attempt = 0; keys.length > 0 && attempt < 5; attempt += 1) {
+    for (let attempt = 0; keys.length > 0 && attempt < 5; attempt++) {
       const result = await ddb.send(
         new BatchGetCommand({
           RequestItems: {
-            [env.DYNAMODB_TABLE_MAIN]: { Keys: keys }
-          }
+            [env.DYNAMODB_TABLE_MAIN]: { Keys: keys },
+          },
         }),
       );
       items.push(
@@ -183,7 +164,7 @@ export class DynamoMeetingRepository implements MeetingRepository {
       keys =
         result.UnprocessedKeys?.[env.DYNAMODB_TABLE_MAIN]?.Keys?.map((key) => ({
           PK: String(key.PK),
-          SK: String(key.SK)
+          SK: String(key.SK),
         })) ?? [];
     }
     return items;
@@ -199,7 +180,7 @@ export class DynamoMeetingRepository implements MeetingRepository {
         TableName: env.DYNAMODB_TABLE_MAIN,
         Key: { PK: pk(params.workspaceId), SK: sk(params.meetingId) },
         UpdateExpression: "SET expiresAt = :expiresAt",
-        ExpressionAttributeValues: { ":expiresAt": params.expiresAt }
+        ExpressionAttributeValues: { ":expiresAt": params.expiresAt },
       }),
     );
   }

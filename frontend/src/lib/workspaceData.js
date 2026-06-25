@@ -308,7 +308,7 @@ export const mockMessages = {
       channelId: 'ch-general',
       workspaceId: 'ws-1',
       userId: 'user-1',
-      content: 'Chào mọi người! Chào mừng đến với workspace **Acme Corp** 🎉',
+      content: 'Hi everyone! Welcome to the **Acme Corp** workspace.',
       attachments: [],
       createdAt: '2026-06-01T09:00:00Z',
       updatedAt: null,
@@ -318,7 +318,7 @@ export const mockMessages = {
       channelId: 'ch-general',
       workspaceId: 'ws-1',
       userId: 'user-2',
-      content: 'Chào anh! Rất vui được tham gia. Em đã xem qua các kênh rồi, workspace nhìn chuyên nghiệp quá! 👋',
+      content: 'Hi Alex! Happy to join. I reviewed the channels, and the workspace already feels organized.',
       attachments: [],
       createdAt: '2026-06-01T09:05:00Z',
       updatedAt: null,
@@ -328,7 +328,7 @@ export const mockMessages = {
       channelId: 'ch-general',
       workspaceId: 'ws-1',
       userId: 'user-3',
-      content: 'Chào mọi người! Em là thành viên mới, mong được học hỏi nhiều từ anh chị ạ. 😊',
+      content: 'Hi everyone, I am the new member. Looking forward to learning from the team.',
       attachments: [],
       createdAt: '2026-06-01T09:10:00Z',
       updatedAt: null,
@@ -338,7 +338,7 @@ export const mockMessages = {
       channelId: 'ch-general',
       workspaceId: 'ws-1',
       userId: 'user-1',
-      content: 'Chào mừng em! Tuần này chúng ta có một số task cần hoàn thành:\n1. Hoàn thiện giao diện login\n2. Setup CI/CD pipeline\n3. Viết API documentation\n\nMọi người xem và phân bổ thời gian nhé!',
+      content: 'Welcome. This week we need to finish:\n1. Polish the login interface\n2. Set up the CI/CD pipeline\n3. Write API documentation\n\nPlease review the list and plan your time.',
       attachments: [],
       createdAt: '2026-06-02T08:00:00Z',
       updatedAt: null,
@@ -348,7 +348,7 @@ export const mockMessages = {
       channelId: 'ch-general',
       workspaceId: 'ws-1',
       userId: 'user-2',
-      content: 'Dạ vâng anh, em sẽ lo phần CI/CD và API documentation ạ. Còn giao diện login để bạn John phụ trách nhé?',
+      content: 'Got it. I will take CI/CD and API documentation. Can John own the login interface?',
       attachments: [],
       createdAt: '2026-06-02T08:15:00Z',
       updatedAt: null,
@@ -358,7 +358,7 @@ export const mockMessages = {
       channelId: 'ch-general',
       workspaceId: 'ws-1',
       userId: 'user-3',
-      content: 'Em có thể hỗ trợ phần giao diện login ạ. Em đã có kinh nghiệm với React và Tailwind CSS. Anh cho em xin task nhé?',
+      content: 'I can help with the login interface. I have React and Tailwind CSS experience. Please assign that task to me.',
       attachments: [],
       createdAt: '2026-06-02T08:30:00Z',
       updatedAt: null,
@@ -370,7 +370,7 @@ export const mockMessages = {
       channelId: 'ch-dev',
       workspaceId: 'ws-1',
       userId: 'user-1',
-      content: 'Mọi người ơi, mình cần thảo luận về kiến trúc mới.',
+      content: 'Team, we need to discuss the new architecture.',
       attachments: [],
       createdAt: '2026-06-03T10:00:00Z',
       updatedAt: null,
@@ -380,7 +380,7 @@ export const mockMessages = {
       channelId: 'ch-dev',
       workspaceId: 'ws-1',
       userId: 'user-2',
-      content: 'Theo em thấy App Router có support React Server Components và streaming. Nếu có thời gian, em nghĩ nên migrate dần ạ.',
+      content: 'App Router supports React Server Components and streaming. If we have time, we should migrate gradually.',
       attachments: [],
       createdAt: '2026-06-03T10:30:00Z',
       updatedAt: null,
@@ -392,7 +392,7 @@ export const mockMessages = {
       channelId: 'ch-marketing',
       workspaceId: 'ws-1',
       userId: 'user-2',
-      content: 'Mọi người ơi, tuần này mình cần chuẩn bị content cho blog post về tính năng mới.',
+      content: 'Team, this week we need to prepare content for the blog post about the new feature.',
       attachments: [],
       createdAt: '2026-06-04T14:00:00Z',
       updatedAt: null,
@@ -404,7 +404,7 @@ export const mockMessages = {
       channelId: 'ch-announcements',
       workspaceId: 'ws-1',
       userId: 'user-1',
-      content: '📢 **THÔNG BÁO QUAN TRỌNG**\n\nKể từ tháng 7, công ty sẽ triển khai chính sách làm việc hybrid mới.',
+      content: '**IMPORTANT ANNOUNCEMENT**\n\nStarting in July, the company will roll out a new hybrid work policy.',
       attachments: [
         { id: 'att-1', name: 'Hybrid_Policy_2026.pdf', type: 'file', size: '245 KB' },
       ],
@@ -610,7 +610,7 @@ export function generateId() {
  * @returns {string}
  */
 export function generateWorkspaceSlug(name) {
-  return name
+  return String(name || 'workspace')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
@@ -739,7 +739,9 @@ export function getDefaultPermissionsForRole(role) {
  * @param {string} ownerId
  * @returns {Object}
  */
-export function createDefaultWorkspaceStructure(name, ownerId) {
+export function createDefaultWorkspaceStructure(input, ownerId) {
+  const config = typeof input === 'object' && input !== null ? input : { name: input };
+  const name = String(config.name || 'Workspace').trim() || 'Workspace';
   const wsId = 'ws-' + generateId();
   const slug = generateWorkspaceSlug(name);
   const now = new Date().toISOString();
@@ -783,8 +785,12 @@ export function createDefaultWorkspaceStructure(name, ownerId) {
 
   return {
     id: wsId,
-    name: name.trim(),
+    name,
     slug,
+    description: config.description || '',
+    iconColor: config.iconColor || 'blue',
+    workspaceType: config.workspaceType || 'blank',
+    visibility: config.visibility || 'private',
     ownerId,
     channels: [...textChannels, ...voiceChannels],
     teams,

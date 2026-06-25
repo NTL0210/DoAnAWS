@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import CreateWorkspaceModal from '@/components/workspace/CreateWorkspaceModal';
+import { AnimatedThemeToggler } from '@/components/ui/animated-theme-toggler';
 import {
   FiActivity,
   FiBarChart2,
@@ -34,39 +35,39 @@ const roleMeta = {
   ADMIN: {
     label: 'Admin',
     nav: [
-      { label: 'Dashboard', href: '/admin/dashboard', icon: FiGrid, anim: 'float' },
+      { label: 'Dashboard', href: '/dashboard', icon: FiGrid, anim: 'float' },
       { label: 'Workspace', href: '/workspace', icon: FiLayers, anim: 'pulse' },
       { label: 'Meetings', href: '/workspace?view=meetings', icon: FiFileText, anim: 'bob' },
       { label: 'Upload', href: '/workspace?view=meetings&tab=upload', icon: FiUploadCloud, anim: 'spin' },
-      { label: 'Departments', href: '/admin/departments', icon: FiBriefcase, anim: 'pulse' },
-      { label: 'Users', href: '/admin/users', icon: FiUsers, anim: 'bob' },
+      { label: 'Departments', href: '/departments', icon: FiBriefcase, anim: 'pulse' },
+      { label: 'Users', href: '/users', icon: FiUsers, anim: 'bob' },
       { label: 'All Tasks', href: '/workspace?view=tasks', icon: FiCheckCircle, anim: 'float' },
       { label: 'Analytics', href: '/workspace?view=analytics', icon: FiBarChart2, anim: 'pulse' },
-      { label: 'Logs', href: '/admin/logs', icon: FiActivity, anim: 'bob' },
-      { label: 'Settings', href: '/admin/settings', icon: FiSettings, anim: 'spin' },
+      { label: 'Logs', href: '/logs', icon: FiActivity, anim: 'bob' },
+      { label: 'Settings', href: '/settings', icon: FiSettings, anim: 'spin' },
     ],
   },
   MANAGER: {
     label: 'Manager',
     nav: [
-      { label: 'Dashboard', href: '/manager/dashboard', icon: FiHome, anim: 'float' },
+      { label: 'Dashboard', href: '/dashboard', icon: FiHome, anim: 'float' },
       { label: 'Workspace', href: '/workspace', icon: FiLayers, anim: 'pulse' },
       { label: 'Meetings', href: '/workspace?view=meetings', icon: FiFileText, anim: 'bob' },
       { label: 'Upload', href: '/workspace?view=meetings&tab=upload', icon: FiUploadCloud, anim: 'spin' },
       { label: 'Team Tasks', href: '/workspace?view=tasks', icon: FiCheckCircle, anim: 'float' },
-      { label: 'Employees', href: '/manager/employees', icon: FiUsers, anim: 'bob' },
+      { label: 'Employees', href: '/employees', icon: FiUsers, anim: 'bob' },
       { label: 'Analytics', href: '/workspace?view=analytics', icon: FiBarChart2, anim: 'pulse' },
     ],
   },
   EMPLOYEE: {
     label: 'Employee',
     nav: [
-      { label: 'Dashboard', href: '/employee/dashboard', icon: FiHome, anim: 'float' },
+      { label: 'Dashboard', href: '/dashboard', icon: FiHome, anim: 'float' },
       { label: 'Workspace', href: '/workspace', icon: FiLayers, anim: 'pulse' },
       { label: 'Meetings', href: '/workspace?view=meetings', icon: FiFileText, anim: 'bob' },
       { label: 'My Tasks', href: '/workspace?view=tasks', icon: FiCheckCircle, anim: 'float' },
-      { label: 'Notifications', href: '/employee/notifications', icon: FiBell, anim: 'pulse' },
-      { label: 'Profile', href: '/employee/profile', icon: FiUser, anim: 'spin' },
+      { label: 'Notifications', href: '/notifications', icon: FiBell, anim: 'pulse' },
+      { label: 'Profile', href: '/profile', icon: FiUser, anim: 'spin' },
     ],
   },
 };
@@ -86,9 +87,9 @@ const iconAnimClass = {
 };
 
 /* ============================================
-   APP SHELL â€” MAIN LAYOUT (dark narrow sidebar)
+   APP SHELL — MAIN LAYOUT (dark narrow sidebar)
    ============================================ */
-export default function AppShell({ user, children, eyebrow, title, description, actions }) {
+export default function AppShell({ user, children, eyebrow, title, description, actions, showWorkspaceSwitcher = true }) {
   const router = useRouter();
   const {
     currentUser,
@@ -113,12 +114,16 @@ export default function AppShell({ user, children, eyebrow, title, description, 
     );
   }, [currentUser, workspaces]);
 
-  const effectiveRole = normalizeWorkspaceRole(workspaceRole) || user?.role || 'EMPLOYEE';
+  const shellUser = useMemo(() => (
+    currentUser ? { ...(user || {}), ...currentUser } : user
+  ), [currentUser, user]);
+
+  const effectiveRole = normalizeWorkspaceRole(workspaceRole) || shellUser?.role || 'EMPLOYEE';
   const meta = roleMeta[effectiveRole] || roleMeta.EMPLOYEE;
-  const initials = getInitials(user?.name || meta.label);
-  const department = departmentNames[user?.departmentId] || 'Company workspace';
+  const initials = getInitials(shellUser?.name || meta.label);
+  const department = departmentNames[shellUser?.departmentId] || 'Company workspace';
   const dashboardHref = getDashboardHref(effectiveRole);
-  const profileHref = effectiveRole === 'EMPLOYEE' ? '/employee/profile' : dashboardHref;
+  const profileHref = '/profile';
   const notifications = aiNotifications || [];
 
   const [notifOpen, setNotifOpen] = useState(false);
@@ -186,10 +191,10 @@ export default function AppShell({ user, children, eyebrow, title, description, 
   );
 
   return (
-    <div className="min-h-screen bg-[#eef3f8] text-slate-900">
+    <div className="min-h-screen bg-background text-foreground dark:bg-slate-950 dark:text-slate-50">
       {/* ========== DARK NARROW SIDEBAR ========== */}
       <aside className="app-sidebar-rail fixed inset-y-0 left-0 z-30 hidden w-[76px] flex-col items-center border-r border-slate-950 bg-[#111214] py-4 text-slate-400 shadow-2xl lg:flex">
-        {/* Brand icon â€” static (icon web) */}
+        {/* Brand icon — static (icon web) */}
         <span
           className="mb-6 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500 to-blue-500 font-bold shadow-lg shadow-blue-500/20"
           title="AI Meeting Platform"
@@ -201,7 +206,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
         <div className="sidebar-orb sidebar-orb-1 !opacity-10" />
         <div className="sidebar-orb sidebar-orb-2 !opacity-10" />
 
-        {/* Navigation â€” all items are clickable links */}
+        {/* Navigation — all items are clickable links */}
         <nav className="app-sidebar-nav relative z-10 flex flex-1 flex-col gap-2 px-2 overflow-y-auto overflow-x-hidden">
           {meta.nav.map((item) => {
             const active = isActive(item.href);
@@ -214,7 +219,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                 }}
                 className={`nav-item-3d group relative flex h-11 w-11 items-center justify-center rounded-xl transition ${
                   active
-                    ? 'is-active bg-white text-slate-700 shadow-xl shadow-black/30'
+                    ? 'is-active bg-white text-slate-700 shadow-xl shadow-black/30 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700'
                     : 'text-slate-400 hover:bg-white/10 hover:text-white'
                 }`}
                 title={item.label}
@@ -241,10 +246,10 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                 if (router.asPath !== profileHref) router.push(profileHref);
               }}
               className="h-9 w-9 overflow-hidden rounded-lg border border-white/10 transition hover:opacity-80"
-              title={user?.name}
+              title={shellUser?.name}
             >
-              {user?.avatar ? (
-                <img src={user.avatar} alt={user.name} className="h-full w-full object-cover" />
+              {shellUser?.avatar ? (
+                <img src={shellUser.avatar} alt={shellUser.name} className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center bg-primary-600 text-xs font-bold">
                   {initials}
@@ -252,7 +257,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
               )}
             </button>
             <span className="pointer-events-none absolute left-12 bottom-0 z-40 hidden whitespace-nowrap rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white shadow-xl group-hover:block animate-[slideDown_0.2s_ease-out]">
-              {user?.name || meta.label}
+              {shellUser?.name || meta.label}
               <span className="block text-[10px] font-normal text-slate-400">{meta.label}</span>
             </span>
           </div>
@@ -275,7 +280,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
       {/* ========== MAIN AREA ========== */}
       <div className="lg:pl-[76px]">
         {/* ========== TOPBAR ========== */}
-        <header className="topbar-glass sticky top-0 z-20 border-b border-slate-200/80 bg-white/90">
+        <header className="topbar-glass sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 dark:bg-slate-950/90 dark:border-slate-800/80">
           <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
             {/* Brand */}
             <Link
@@ -291,31 +296,32 @@ export default function AppShell({ user, children, eyebrow, title, description, 
               <span className="text-xl font-black text-blue-600">
                 AI Meeting
               </span>
-              <span className="hidden rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500 md:inline-flex">
+              <span className="hidden rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-400 md:inline-flex">
                 {meta.label} in workspace
               </span>
             </Link>
 
+            {showWorkspaceSwitcher ? (
             <div className="relative hidden min-w-[220px] md:block" ref={workspaceRef}>
               <button
                 type="button"
                 onClick={() => setWorkspaceOpen((value) => !value)}
-                className="flex h-10 w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 text-left shadow-sm transition hover:border-blue-200 hover:shadow-md"
+                className="flex h-10 w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 text-left shadow-sm transition hover:border-blue-200 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-400"
               >
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-violet-500 text-[10px] font-black text-white">
                     {getInitials(activeWorkspace?.name || 'AI')}
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-black text-slate-900">
-                      {activeWorkspace?.name || 'No workspace'}
+                    <span className="block truncate text-sm font-black text-slate-900 dark:text-slate-100">
+                      {activeWorkspace?.name || 'Select workspace'}
                     </span>
-                    <span className="block truncate text-[11px] font-bold text-slate-400">
-                      {meta.label} access
+                    <span className="block truncate text-[11px] font-bold text-slate-400 dark:text-slate-500">
+                      {meta.label}
                     </span>
                   </span>
                 </span>
-                <FiChevronDown className={`h-4 w-4 flex-shrink-0 text-slate-400 transition ${workspaceOpen ? 'rotate-180' : ''}`} />
+                <FiChevronDown className={`h-4 w-4 flex-shrink-0 text-slate-400 dark:text-slate-500 transition ${workspaceOpen ? 'rotate-180' : ''}`} />
               </button>
 
               <AnimatePresence>
@@ -325,11 +331,11 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -8, scale: 0.98 }}
                     transition={{ duration: 0.16 }}
-                    className="absolute left-0 top-12 z-50 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10"
+                    className="absolute left-0 top-12 z-50 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-900"
                   >
-                    <div className="border-b border-slate-100 px-4 py-3">
-                      <p className="text-xs font-black uppercase tracking-wide text-slate-400">Switch workspace</p>
-                      <p className="mt-1 text-xs text-slate-500">Dashboard and role follow the selected workspace.</p>
+                    <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+                      <p className="text-xs font-black uppercase tracking-wide text-slate-400 dark:text-slate-500">Switch workspace</p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Dashboard and role follow the selected workspace.</p>
                     </div>
                     <div className="max-h-72 overflow-y-auto p-2">
                       {accessibleWorkspaces.length > 0 ? (
@@ -343,8 +349,8 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                               onClick={() => handleWorkspaceSelect(workspace.id)}
                               className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
                                 selected
-                                  ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100'
-                                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
+                                  ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:ring-blue-900'
+                                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100'
                               }`}
                             >
                               <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-violet-500 text-xs font-black text-white">
@@ -352,7 +358,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                               </span>
                               <span className="min-w-0 flex-1">
                                 <span className="block truncate text-sm font-black">{workspace.name}</span>
-                                <span className="block text-[11px] font-bold text-slate-400">
+                                <span className="block text-[11px] font-bold text-slate-400 dark:text-slate-500">
                                   {normalizeWorkspaceRole(member?.role) || 'Member'}
                                 </span>
                               </span>
@@ -361,13 +367,14 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                           );
                         })
                       ) : (
-                        <div className="rounded-xl bg-slate-50 px-4 py-5 text-center">
-                          <p className="text-sm font-bold text-slate-700">No workspace yet</p>
-                          <p className="mt-1 text-xs text-slate-500">Create or accept an invite to start.</p>
+                        <div className="rounded-xl bg-slate-50 px-4 py-5 text-center dark:bg-slate-800">
+                          <p className="text-sm font-bold text-slate-700 dark:text-slate-200">No workspace yet</p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Create or accept an invite to start.</p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Create or accept an invite to start.</p>
                         </div>
                       )}
                     </div>
-                    <div className="border-t border-slate-100 p-2">
+                    <div className="border-t border-slate-100 p-2 dark:border-slate-800">
                       <button
                         type="button"
                         onClick={() => {
@@ -390,13 +397,14 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                 )}
               </AnimatePresence>
             </div>
+            ) : null}
 
             {/* Search bar */}
             <div
               className={`search-glow hidden max-w-md flex-1 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all md:flex ${
                 searchFocused
-                  ? 'border-primary-300 bg-white'
-                  : 'border-slate-200 bg-[#eef3f8]'
+                  ? 'border-primary-300 bg-white dark:border-primary-700 dark:bg-slate-900'
+                  : 'border-slate-200 bg-[#eef3f8] dark:border-slate-700 dark:bg-slate-800'
               }`}
             >
               <FiSearch
@@ -411,13 +419,13 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setSearchFocused(false)}
-                className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-200 dark:placeholder:text-slate-500"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-300 text-[10px] text-white hover:bg-slate-400"
+                  className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-300 text-[10px] text-white hover:bg-slate-400 dark:bg-slate-600 dark:hover:bg-slate-500"
                 >
                   &times;
                 </button>
@@ -426,15 +434,17 @@ export default function AppShell({ user, children, eyebrow, title, description, 
 
             {/* Right actions */}
             <div className="ml-auto flex items-center gap-3">
+              <AnimatedThemeToggler className="theme-toggler-button border border-slate-200 bg-[#fbfcfe] shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" variant="circle" duration={400} />
+
               {/* Notification bell */}
               <div className="relative" ref={notifRef}>
                 <button
                   type="button"
                   onClick={toggleNotif}
-                  className={`relative flex h-10 w-10 items-center justify-center rounded-lg border text-slate-500 transition hover:bg-white hover:shadow-sm active:scale-95 ${
+                  className={`relative flex h-10 w-10 items-center justify-center rounded-lg border text-slate-500 transition hover:bg-white hover:shadow-sm active:scale-95 dark:text-slate-400 dark:hover:bg-slate-800 ${
                     notifOpen
-                      ? 'border-primary-200 bg-primary-50 text-primary-600'
-                      : 'border-slate-200 bg-[#fbfcfe]'
+                      ? 'border-primary-200 bg-primary-50 text-primary-600 dark:border-primary-900 dark:bg-primary-900/20 dark:text-primary-400'
+                      : 'border-slate-200 bg-[#fbfcfe] dark:border-slate-700 dark:bg-slate-900'
                   }`}
                   title="Notifications"
                 >
@@ -454,24 +464,24 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: -8, scale: 0.96 }}
                       transition={{ duration: 0.18, ease: 'easeOut' }}
-                      className="absolute right-0 top-12 z-40 w-80 rounded-xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10"
+                      className="absolute right-0 top-12 z-40 w-80 rounded-xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-900"
                     >
-                      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-                        <h3 className="text-sm font-bold text-slate-900">
+                      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                           Notifications
                         </h3>
                         {notifCount > 0 && (
                           <button
                             type="button"
                             onClick={markAllNotificationsRead}
-                            className="text-xs font-semibold text-primary-600 hover:text-primary-700"
+                            className="text-xs font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
                           >
                             Mark all read
                           </button>
                         )}
                       </div>
-                      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
-                        <span className="text-xs font-semibold text-slate-500">
+                      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5 dark:border-slate-800">
+                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                           {activeWorkspace?.name || 'Workspace'} chat alerts
                         </span>
                         <button
@@ -479,8 +489,8 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                           onClick={() => toggleWorkspaceNotifications(activeWorkspaceId)}
                           className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-black transition ${
                             workspaceNotificationsEnabled
-                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                              : 'border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100'
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-400 dark:hover:bg-emerald-900/30'
+                              : 'border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
                           }`}
                         >
                           {workspaceNotificationsEnabled ? <FiVolume2 className="h-3.5 w-3.5" /> : <FiVolumeX className="h-3.5 w-3.5" />}
@@ -490,41 +500,41 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                       <div className="max-h-72 overflow-y-auto">
                         {notifications.length === 0 ? (
                           <div className="px-4 py-8 text-center">
-                            <FiBell className="mx-auto h-7 w-7 text-slate-300" />
-                            <p className="mt-2 text-sm font-bold text-slate-600">No notifications yet</p>
-                            <p className="mt-1 text-xs text-slate-400">Workspace chat alerts will appear here.</p>
+                            <FiBell className="mx-auto h-7 w-7 text-slate-300 dark:text-slate-600" />
+                            <p className="mt-2 text-sm font-bold text-slate-600 dark:text-slate-300">No notifications yet</p>
+                            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Workspace chat alerts will appear here.</p>
                           </div>
                         ) : notifications.map((n) => (
                           <button
                             key={n.id}
                             type="button"
                             onClick={() => markNotificationRead(n.id)}
-                            className={`flex w-full gap-3 px-4 py-3 text-left transition hover:bg-slate-50 ${
-                              (n.unread || n.isRead === false) ? 'bg-primary-50/50' : ''
+                            className={`flex w-full gap-3 px-4 py-3 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800 ${
+                              (n.unread || n.isRead === false) ? 'bg-primary-50/50 dark:bg-primary-900/20' : ''
                             }`}
                           >
                             <div
                               className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${
                                 (n.unread || n.isRead === false)
-                                  ? 'bg-primary-100 text-primary-600'
-                                  : 'bg-slate-100 text-slate-500'
+                                  ? 'bg-primary-100 text-primary-600 dark:bg-primary-900/40 dark:text-primary-400'
+                                  : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
                               }`}
                             >
                               <FiBell className="h-3.5 w-3.5" />
                             </div>
                             <div className="min-w-0">
-                              <p className="text-sm font-semibold text-slate-900">{n.title}</p>
-                              <p className="truncate text-xs text-slate-500">{n.message}</p>
-                              <p className="mt-0.5 text-[11px] text-slate-400">{n.time || formatNotificationTime(n.createdAt)}</p>
+                              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{n.title}</p>
+                              <p className="truncate text-xs text-slate-500 dark:text-slate-400">{n.message}</p>
+                              <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">{n.time || formatNotificationTime(n.createdAt)}</p>
                             </div>
                             {(n.unread || n.isRead === false) && <span className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-primary-500" />}
                           </button>
                         ))}
                       </div>
-                      <div className="border-t border-slate-200 px-4 py-2.5">
+                      <div className="border-t border-slate-200 px-4 py-2.5 dark:border-slate-800">
                         <Link
-                          href="/employee/notifications"
-                          className="block text-center text-xs font-semibold text-primary-600 hover:text-primary-700"
+                          href="/notifications"
+                          className="block text-center text-xs font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
                           onClick={() => setNotifOpen(false)}
                         >
                           View all notifications
@@ -538,16 +548,16 @@ export default function AppShell({ user, children, eyebrow, title, description, 
 
               {/* User info (desktop) */}
               <div className="hidden items-center gap-3 sm:flex">
-                {user?.avatar ? (
-                  <img src={user.avatar} alt={user.name} className="h-9 w-9 rounded-lg border border-slate-200 object-cover" />
+                {shellUser?.avatar ? (
+                  <img src={shellUser.avatar} alt={shellUser.name} className="h-9 w-9 rounded-lg border border-slate-200 object-cover dark:border-slate-700" />
                 ) : (
                   <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600 text-sm font-bold text-white">
                     {initials}
                   </div>
                 )}
                 <div className="hidden md:block">
-                  <p className="text-sm font-bold text-slate-900">{user?.name}</p>
-                  <p className="text-xs text-slate-500">{meta.label} &middot; {department}</p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{shellUser?.name}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{meta.label} &middot; {department}</p>
                 </div>
               </div>
             </div>
@@ -563,19 +573,19 @@ export default function AppShell({ user, children, eyebrow, title, description, 
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35, ease: 'easeOut' }}
-              className="mb-6 flex flex-col gap-4 rounded-lg border border-slate-200/80 bg-[#fbfcfe] p-5 shadow-sm shadow-slate-200/70 sm:flex-row sm:items-end sm:justify-between"
+              className="mb-6 flex flex-col gap-4 rounded-lg border border-slate-200/80 bg-[#fbfcfe] p-5 shadow-sm shadow-slate-200/70 sm:flex-row sm:items-end sm:justify-between dark:border-slate-700/80 dark:bg-slate-900 dark:shadow-slate-950/70"
             >
               <div className="min-w-0">
                 {eyebrow && (
-                  <p className="text-xs font-bold uppercase tracking-wide text-primary-600">{eyebrow}</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-primary-600 dark:text-primary-400">{eyebrow}</p>
                 )}
                 {title && (
-                  <h1 className="mt-1 text-2xl font-bold tracking-normal text-slate-900 sm:text-3xl">
+                  <h1 className="mt-1 text-2xl font-bold tracking-normal text-slate-900 sm:text-3xl dark:text-slate-100">
                     {title}
                   </h1>
                 )}
                 {description && (
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{description}</p>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">{description}</p>
                 )}
               </div>
               {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
@@ -616,13 +626,13 @@ export function StatCard({ label, value, detail, icon: Icon, tone = 'blue' }) {
     <motion.div
       whileHover={{ y: -4, scale: 1.01 }}
       transition={{ type: 'spring', stiffness: 300, damping: 18 }}
-      className="rounded-lg border border-slate-200/80 bg-[#fbfcfe] p-5 shadow-sm shadow-slate-200/60 transition-shadow hover:shadow-md"
+      className="rounded-lg border border-slate-200/80 bg-[#fbfcfe] p-5 shadow-sm shadow-slate-200/60 transition-shadow hover:shadow-md dark:border-slate-700/80 dark:bg-slate-900 dark:shadow-slate-950/60 dark:hover:shadow-slate-950/80"
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-slate-500">{label}</p>
-          <p className="mt-2 text-3xl font-bold tracking-normal text-slate-900">{value}</p>
-          {detail && <p className="mt-2 text-xs font-medium text-slate-500">{detail}</p>}
+          <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{label}</p>
+          <p className="mt-2 text-3xl font-bold tracking-normal text-slate-900 dark:text-slate-100">{value}</p>
+          {detail && <p className="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">{detail}</p>}
         </div>
         {Icon && (
           <div className={`flex h-11 w-11 items-center justify-center rounded-lg ring-1 ${tones[tone]} float-card`}>
@@ -643,13 +653,13 @@ export function Panel({ title, description, action, children, className = '' }) 
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className={`rounded-lg border border-slate-200/80 bg-[#fbfcfe] shadow-sm shadow-slate-200/60 ${className}`}
+      className={`rounded-lg border border-slate-200/80 bg-[#fbfcfe] shadow-sm shadow-slate-200/60 dark:border-slate-700/80 dark:bg-slate-900 dark:shadow-slate-950/60 ${className}`}
     >
       {(title || description || action) && (
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200/80 px-5 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200/80 px-5 py-4 dark:border-slate-800">
           <div>
-            {title && <h2 className="text-base font-bold text-slate-900">{title}</h2>}
-            {description && <p className="mt-1 text-sm text-slate-600">{description}</p>}
+            {title && <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">{title}</h2>}
+            {description && <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{description}</p>}
           </div>
           {action}
         </div>
@@ -686,7 +696,7 @@ export function LoadingState({ label = 'Loading...' }) {
     <div className="flex min-h-[400px] items-center justify-center">
       <div className="text-center">
         <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-primary-200 border-t-primary-600" />
-        <p className="mt-4 text-sm font-semibold text-slate-500">{label}</p>
+        <p className="mt-4 text-sm font-semibold text-slate-500 dark:text-slate-400">{label}</p>
       </div>
     </div>
   );
@@ -697,10 +707,10 @@ export function LoadingState({ label = 'Loading...' }) {
    ============================================ */
 export function EmptyState({ icon: Icon, title, description, action }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-[#f4f7fb] p-10 text-center">
-      {Icon && <Icon className="mx-auto h-10 w-10 text-slate-400" />}
-      <h3 className="mt-4 text-base font-bold text-slate-900">{title}</h3>
-      {description && <p className="mt-2 max-w-sm text-sm text-slate-500">{description}</p>}
+    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-[#f4f7fb] p-10 text-center dark:border-slate-700 dark:bg-slate-800">
+      {Icon && <Icon className="mx-auto h-10 w-10 text-slate-400 dark:text-slate-500" />}
+      <h3 className="mt-4 text-base font-bold text-slate-900 dark:text-slate-100">{title}</h3>
+      {description && <p className="mt-2 max-w-sm text-sm text-slate-500 dark:text-slate-400">{description}</p>}
       {action && <div className="mt-5">{action}</div>}
     </div>
   );
@@ -718,9 +728,7 @@ function getInitials(name) {
 }
 
 function getDashboardHref(role) {
-  if (role === 'EMPLOYEE') return '/employee/dashboard';
-  if (role === 'MANAGER') return '/manager/dashboard';
-  return '/admin/dashboard';
+  return '/dashboard';
 }
 
 function normalizeWorkspaceRole(role) {

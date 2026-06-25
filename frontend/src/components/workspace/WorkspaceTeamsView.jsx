@@ -120,8 +120,8 @@ export default function WorkspaceTeamsView() {
     <div className="h-full overflow-y-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Teams</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Teams</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             {visibleTeams.length} {visibleTeams.length === 1 ? 'team' : 'teams'} in this workspace
           </p>
         </div>
@@ -142,11 +142,11 @@ export default function WorkspaceTeamsView() {
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col items-center justify-center py-20 text-center"
         >
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
-            <FiUsers className="h-8 w-8 text-slate-400" />
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800">
+            <FiUsers className="h-8 w-8 text-slate-400 dark:text-slate-500" />
           </div>
-          <h2 className="text-lg font-bold text-slate-900 mb-2">No teams yet</h2>
-          <p className="text-sm text-slate-500 max-w-sm mb-6">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">No teams yet</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm mb-6">
             Create your first team to organize members by function or project.
           </p>
           {canCreateTeam && (
@@ -168,20 +168,20 @@ export default function WorkspaceTeamsView() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className="group rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-all"
+                className="group rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-5 shadow-sm hover:shadow-md dark:hover:shadow-slate-950/50 transition-all"
               >
                 {editingTeam === team.id ? (
                   /* ─── Edit Mode ─── */
                   <div className="space-y-3">
                     <input
                       type="text"
-                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:border-primary-500"
+                      className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm font-bold text-slate-900 dark:text-slate-100 outline-none focus:border-primary-500"
                       value={editForm.name}
                       onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                       autoFocus
                     />
                     <textarea
-                      className="w-full min-h-[50px] resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 outline-none focus:border-primary-500"
+                      className="w-full min-h-[50px] resize-none rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-xs text-slate-600 dark:text-slate-400 outline-none focus:border-primary-500"
                       value={editForm.description}
                       onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                       rows={2}
@@ -195,7 +195,7 @@ export default function WorkspaceTeamsView() {
                       </button>
                       <button
                         onClick={() => setEditingTeam(null)}
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
+                        className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
                       >
                         Cancel
                       </button>
@@ -210,22 +210,22 @@ export default function WorkspaceTeamsView() {
                           {getInitials(team.name)}
                         </div>
                         <div>
-                          <h3 className="font-bold text-slate-900">{team.name}</h3>
-                          <p className="text-xs text-slate-400">{team.memberIds?.length || 0} members</p>
+                          <h3 className="font-bold text-slate-900 dark:text-slate-100">{team.name}</h3>
+                          <p className="text-xs text-slate-400 dark:text-slate-500">{team.memberIds?.length || 0} members</p>
                         </div>
                       </div>
                       {canManageTeam && (
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
                           <button
                             onClick={() => handleStartEdit(team)}
-                            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                            className="rounded-lg p-1.5 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-slate-300"
                             title="Edit"
                           >
                             <FiEdit2 className="h-3.5 w-3.5" />
                           </button>
                           <button
                             onClick={() => handleDeleteTeam(team.id)}
-                            className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500"
+                            className="rounded-lg p-1.5 text-slate-400 dark:text-slate-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 dark:hover:text-red-400"
                             title="Delete"
                           >
                             <FiTrash2 className="h-3.5 w-3.5" />
@@ -236,11 +236,11 @@ export default function WorkspaceTeamsView() {
 
                     {/* ─── Description ─── */}
                     {team.description && (
-                      <p className="text-xs text-slate-500 mb-4 line-clamp-2">{team.description}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 line-clamp-2">{team.description}</p>
                     )}
 
                     {/* ─── Manager ─── */}
-                    <div className="flex items-center gap-2 mb-4 text-xs text-slate-500">
+                    <div className="flex items-center gap-2 mb-4 text-xs text-slate-500 dark:text-slate-400">
                       <FiStar className="h-3 w-3 text-amber-400" />
                       <span className="font-medium">Manager:</span> {getManagerName(team)}
                     </div>
@@ -253,7 +253,7 @@ export default function WorkspaceTeamsView() {
                           return (
                             <div
                               key={uid}
-                              className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-primary-100 text-[9px] font-bold text-primary-700"
+                              className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white dark:border-slate-800 bg-primary-100 dark:bg-primary-900/40 text-[9px] font-bold text-primary-700 dark:text-primary-300"
                               title={name}
                             >
                               {getInitials(name)}
@@ -262,14 +262,14 @@ export default function WorkspaceTeamsView() {
                         })}
                       </div>
                       {(team.memberIds?.length || 0) > 5 && (
-                        <span className="text-[10px] font-semibold text-slate-400 ml-1">
+                        <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 ml-1">
                           +{team.memberIds.length - 5}
                         </span>
                       )}
                     </div>
 
                     {/* ─── Stats ─── */}
-                    <div className="flex gap-4 text-xs text-slate-400 border-t border-slate-100 pt-3">
+                    <div className="flex gap-4 text-xs text-slate-400 dark:text-slate-500 border-t border-slate-100 dark:border-slate-700 pt-3">
                       <span className="flex items-center gap-1">
                         <FiCheckCircle className="h-3 w-3" />
                         {teamTasks[team.id] || 0} tasks
@@ -281,7 +281,7 @@ export default function WorkspaceTeamsView() {
                     </div>
 
                     {canManageTeam ? (
-                      <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
+                      <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 dark:border-slate-700 pt-3">
                         <button
                           type="button"
                           onClick={() => {
@@ -299,7 +299,7 @@ export default function WorkspaceTeamsView() {
                             setManagingTeam(managingTeam === team.id ? null : team.id);
                             setAddingTeam(null);
                           }}
-                          className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+                          className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 transition hover:bg-slate-50 dark:hover:bg-slate-700"
                         >
                           <FiMoreHorizontal className="h-3.5 w-3.5" />
                           Manage
@@ -308,19 +308,19 @@ export default function WorkspaceTeamsView() {
                     ) : null}
 
                     {addingTeam === team.id && (
-                      <div className="mt-3 rounded-xl border border-primary-100 bg-primary-50 p-3">
+                      <div className="mt-3 rounded-xl border border-primary-100 dark:border-primary-800 bg-primary-50 dark:bg-primary-900/20 p-3">
                         <div className="mb-2 flex items-center justify-between gap-2">
-                          <p className="text-[10px] font-bold uppercase tracking-wide text-primary-700">Add member to {team.name}</p>
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-primary-700 dark:text-primary-300">Add member to {team.name}</p>
                           <button
                             type="button"
                             onClick={() => setAddingTeam(null)}
-                            className="rounded-md p-1 text-primary-400 hover:bg-white hover:text-primary-600"
+                            className="rounded-md p-1 text-primary-400 hover:bg-white dark:hover:bg-slate-800 hover:text-primary-600 dark:hover:text-primary-300"
                           >
                             <FiX className="h-3.5 w-3.5" />
                           </button>
                         </div>
                         <select
-                          className="w-full rounded-lg border border-primary-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-primary-500"
+                          className="w-full rounded-lg border border-primary-200 dark:border-primary-800 bg-white dark:bg-slate-900 px-2.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-primary-500"
                           defaultValue=""
                           onChange={(e) => handleAddTeamMember(team, e.target.value)}
                         >
@@ -334,17 +334,17 @@ export default function WorkspaceTeamsView() {
                             ))}
                         </select>
                         {workspaceMembers.every((member) => (team.memberIds || []).includes(member.userId)) && (
-                          <p className="mt-2 text-xs font-medium text-primary-500">All workspace members are already in this team.</p>
+                          <p className="mt-2 text-xs font-medium text-primary-500 dark:text-primary-400">All workspace members are already in this team.</p>
                         )}
                       </div>
                     )}
 
                     {managingTeam === team.id && (
-                      <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <div className="mt-4 space-y-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
                         <div>
-                          <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wide text-slate-400">Manager</label>
+                          <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Manager</label>
                           <select
-                            className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-primary-500"
+                            className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-primary-500"
                             value={team.managerId || ''}
                             onChange={(e) => assignTeamManager(activeWorkspace?.id, team.id, e.target.value)}
                           >
@@ -358,11 +358,11 @@ export default function WorkspaceTeamsView() {
                         </div>
 
                         <div>
-                          <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">Current Members</p>
+                          <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Current Members</p>
                           <div className="space-y-1">
                             {(team.memberIds || []).map((userId) => (
-                              <div key={userId} className="flex items-center justify-between gap-2 rounded-lg bg-white px-2.5 py-2 text-xs">
-                                <span className="min-w-0 truncate font-semibold text-slate-600">
+                              <div key={userId} className="flex items-center justify-between gap-2 rounded-lg bg-white dark:bg-slate-800 px-2.5 py-2 text-xs">
+                                <span className="min-w-0 truncate font-semibold text-slate-600 dark:text-slate-300">
                                   {getMemberName(userId)}
                                   {team.managerId === userId ? ' · Manager' : ''}
                                   {currentUser?.id === userId ? ' · You' : ''}
@@ -371,7 +371,7 @@ export default function WorkspaceTeamsView() {
                                   type="button"
                                   onClick={() => handleRemoveTeamMember(team, userId)}
                                   disabled={team.managerId === userId}
-                                  className="rounded-md px-2 py-1 font-bold text-red-500 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                                  className="rounded-md px-2 py-1 font-bold text-red-500 dark:text-red-400 transition hover:bg-red-50 dark:hover:bg-red-900/20 disabled:cursor-not-allowed disabled:text-slate-300 dark:disabled:text-slate-600"
                                 >
                                   Remove
                                 </button>
