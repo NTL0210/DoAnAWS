@@ -9,7 +9,7 @@ export const taskStatusSchema = z.enum([
 export const taskPrioritySchema = z.enum(["LOW", "MEDIUM", "HIGH"]);
 
 export const createTaskSchema = z.object({
-  workspaceId: z.string().min(1),
+  workspaceId: z.string().min(1).optional(),
   meetingId: z.string().min(1).optional(),
   title: z.string().min(1).max(200),
   description: z.string().max(5000).optional(),
@@ -28,7 +28,7 @@ export const updateTaskSchema = z.object({
 });
 
 export const listTasksSchema = z.object({
-  workspaceId: z.string().min(1),
+  workspaceId: z.string().min(1).optional(),
   assigneeId: z.string().min(1).optional(),
   meetingId: z.string().min(1).optional(),
   limit: z.coerce.number().int().positive().max(100).default(20),

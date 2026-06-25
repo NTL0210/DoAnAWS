@@ -3,15 +3,21 @@ import {
   GetCommand,
   PutCommand,
   QueryCommand,
-  TransactWriteCommand
+  TransactWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { env } from "../../config/env.js";
 import { ddb } from "../../infrastructure/aws/dynamodb-client.js";
-import { ConflictError } from "../../shared/errors/app-error.js";
 import {
-  decodeNextToken,
-  encodeNextToken
-} from "../../shared/pagination/token.js";
+  text,
+  num,
+  bool,
+  nullableText,
+  nullableNum,
+  isConditionalFailure,
+  isTransactionCanceled,
+} from "../../infrastructure/aws/dynamodb-utils.js";
+import { ConflictError } from "../../shared/errors/app-error.js";
+import { decodeNextToken, encodeNextToken } from "../../shared/pagination/token.js";
 import type { PaginatedResult } from "../../shared/types/pagination.js";
 import type { TaskRepository } from "./task.repository.js";
 import type { Task } from "./task.types.js";
@@ -26,64 +32,44 @@ function sk(taskId: string): string {
   return `TASK#${taskId}`;
 }
 
-type TaskItem = Task & {
-  PK: string;
-  SK: string;
-  entityType: typeof entityType;
-  GSI1PK: string;
-  GSI1SK: string;
-  GSI2PK?: string | undefined;
-  GSI2SK?: string | undefined;
-};
-
-function toItem(task: Task): TaskItem {
-  return {
+function toItem(task: Task): Record<string, unknown> {
+  const item: Record<string, unknown> = {
     PK: pk(task.workspaceId),
     SK: sk(task.id),
     entityType,
     GSI1PK: `WORKSPACE#${task.workspaceId}#TASKS`,
     GSI1SK: `${task.createdAt}#${task.id}`,
-    GSI2PK: task.assigneeId
-      ? `WORKSPACE#${task.workspaceId}#ASSIGNEE#${task.assigneeId}`
-      : undefined,
-    GSI2SK: `${task.deadline ?? "NO_DEADLINE"}#${task.id}`,
-    ...task
+    ...task,
   };
-}
 
-function text(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
+  if (task.assigneeId) {
+    item.GSI2PK = `WORKSPACE#${task.workspaceId}#ASSIGNEE#${task.assigneeId}`;
+    item.GSI2SK = `${task.deadline ?? "NO_DEADLINE"}#${task.id}`;
+  }
+
+  return item;
 }
 
 function fromItem(item: Record<string, unknown>): Task {
   return {
     id: text(item.id),
     workspaceId: text(item.workspaceId),
-    meetingId: item.meetingId ? text(item.meetingId) : null,
-    sourceMeetingId: item.sourceMeetingId ? text(item.sourceMeetingId) : null,
+    meetingId: nullableText(item.meetingId),
+    sourceMeetingId: nullableText(item.sourceMeetingId),
     title: text(item.title),
     description: text(item.description),
-    assigneeId: item.assigneeId ? text(item.assigneeId) : null,
-    createdBy: item.createdBy ? text(item.createdBy) : null,
-    priority: item.priority as Task["priority"],
-    status: item.status as Task["status"],
-    progress: Number(item.progress),
-    deadline: item.deadline ? text(item.deadline) : null,
-    generatedFromAI: Boolean(item.generatedFromAI),
-    aiConfidence: typeof item.aiConfidence === "number" ? item.aiConfidence : null,
-    version: Number(item.version),
+    assigneeId: nullableText(item.assigneeId),
+    createdBy: nullableText(item.createdBy),
+    priority: text(item.priority, "MEDIUM") as Task["priority"],
+    status: text(item.status, "PENDING") as Task["status"],
+    progress: num(item.progress, 0),
+    deadline: nullableText(item.deadline),
+    generatedFromAI: bool(item.generatedFromAI),
+    aiConfidence: nullableNum(item.aiConfidence),
+    version: num(item.version, 1),
     createdAt: text(item.createdAt),
-    updatedAt: text(item.updatedAt)
+    updatedAt: text(item.updatedAt),
   };
-}
-
-function isConditionalFailure(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "name" in error &&
-    error.name === "ConditionalCheckFailedException"
-  );
 }
 
 export class DynamoTaskRepository implements TaskRepository {
@@ -94,7 +80,7 @@ export class DynamoTaskRepository implements TaskRepository {
     const result = await ddb.send(
       new GetCommand({
         TableName: env.DYNAMODB_TABLE_MAIN,
-        Key: { PK: pk(params.workspaceId), SK: sk(params.taskId) }
+        Key: { PK: pk(params.workspaceId), SK: sk(params.taskId) },
       }),
     );
     return result.Item ? fromItem(result.Item) : null;
@@ -114,15 +100,15 @@ export class DynamoTaskRepository implements TaskRepository {
           IndexName: "GSI2",
           KeyConditionExpression: "GSI2PK = :pk",
           ExpressionAttributeValues: {
-            ":pk": `WORKSPACE#${params.workspaceId}#ASSIGNEE#${params.assigneeId}`
+            ":pk": `WORKSPACE#${params.workspaceId}#ASSIGNEE#${params.assigneeId}`,
           },
           Limit: params.limit,
-          ExclusiveStartKey: decodeNextToken(params.nextToken)
+          ExclusiveStartKey: decodeNextToken(params.nextToken),
         }),
       );
       return {
         items: (result.Items ?? []).map(fromItem),
-        nextToken: encodeNextToken(result.LastEvaluatedKey)
+        nextToken: encodeNextToken(result.LastEvaluatedKey),
       };
     }
 
@@ -134,16 +120,16 @@ export class DynamoTaskRepository implements TaskRepository {
         FilterExpression: params.meetingId ? "sourceMeetingId = :meetingId" : undefined,
         ExpressionAttributeValues: {
           ":pk": `WORKSPACE#${params.workspaceId}#TASKS`,
-          ...(params.meetingId ? { ":meetingId": params.meetingId } : {})
+          ...(params.meetingId ? { ":meetingId": params.meetingId } : {}),
         },
         ScanIndexForward: false,
         Limit: params.limit,
-        ExclusiveStartKey: decodeNextToken(params.nextToken)
+        ExclusiveStartKey: decodeNextToken(params.nextToken),
       }),
     );
     return {
       items: (result.Items ?? []).map(fromItem),
-      nextToken: encodeNextToken(result.LastEvaluatedKey)
+      nextToken: encodeNextToken(result.LastEvaluatedKey),
     };
   }
 
@@ -153,7 +139,7 @@ export class DynamoTaskRepository implements TaskRepository {
         new PutCommand({
           TableName: env.DYNAMODB_TABLE_MAIN,
           Item: toItem(task),
-          ConditionExpression: "attribute_not_exists(PK)"
+          ConditionExpression: "attribute_not_exists(PK)",
         }),
       );
     } catch (error) {
@@ -170,7 +156,7 @@ export class DynamoTaskRepository implements TaskRepository {
           Item: toItem(task),
           ConditionExpression: "#version = :expectedVersion",
           ExpressionAttributeNames: { "#version": "version" },
-          ExpressionAttributeValues: { ":expectedVersion": expectedVersion }
+          ExpressionAttributeValues: { ":expectedVersion": expectedVersion },
         }),
       );
     } catch (error) {
@@ -183,15 +169,15 @@ export class DynamoTaskRepository implements TaskRepository {
     let writeRequests: NonNullable<
       ConstructorParameters<typeof BatchWriteCommand>[0]["RequestItems"]
     >[string] = tasks.map((task) => ({
-      PutRequest: { Item: toItem(task) }
+      PutRequest: { Item: toItem(task) },
     }));
 
-    for (let attempt = 0; writeRequests.length > 0 && attempt < 5; attempt += 1) {
+    for (let attempt = 0; writeRequests.length > 0 && attempt < 5; attempt++) {
       const result = await ddb.send(
         new BatchWriteCommand({
           RequestItems: {
-            [env.DYNAMODB_TABLE_MAIN]: writeRequests
-          }
+            [env.DYNAMODB_TABLE_MAIN]: writeRequests,
+          },
         }),
       );
       writeRequests = result.UnprocessedItems?.[env.DYNAMODB_TABLE_MAIN] ?? [];
@@ -213,26 +199,21 @@ export class DynamoTaskRepository implements TaskRepository {
                 Key: { PK: pk(params.workspaceId), SK: `MEETING#${params.meetingId}` },
                 UpdateExpression: "SET updatedAt = :now",
                 ConditionExpression: "attribute_exists(PK)",
-                ExpressionAttributeValues: { ":now": new Date().toISOString() }
-              }
+                ExpressionAttributeValues: { ":now": new Date().toISOString() },
+              },
             },
             ...params.tasks.map((task) => ({
               Put: {
                 TableName: env.DYNAMODB_TABLE_MAIN,
                 Item: toItem(task),
-                ConditionExpression: "attribute_not_exists(PK)"
-              }
-            }))
-          ]
+                ConditionExpression: "attribute_not_exists(PK)",
+              },
+            })),
+          ],
         }),
       );
     } catch (error) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "name" in error &&
-        error.name === "TransactionCanceledException"
-      ) {
+      if (isTransactionCanceled(error)) {
         throw new ConflictError("Could not create tasks for meeting atomically");
       }
       throw error;

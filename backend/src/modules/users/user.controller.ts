@@ -4,12 +4,26 @@ import {
   createUserSchema,
   emailQuerySchema,
   idParamsSchema,
-  updateUserSchema
+  updateUserSchema,
 } from "./user.schemas.js";
 import type { UserService } from "./user.service.js";
 
 export class UserController {
   constructor(private readonly service: UserService) {}
+
+  /** Returns the currently authenticated user from the JWT token. */
+  getMe = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ message: "Not authenticated" });
+        return;
+      }
+      const user = await this.service.getById(req.user.userId);
+      res.status(200).json(toUserResponse(user));
+    } catch (error) {
+      next(error);
+    }
+  };
 
   list = async (_req: Request, res: Response, next: NextFunction) => {
     try {
@@ -64,7 +78,7 @@ export class UserController {
       const patch = updateUserSchema.parse(req.body);
       const user = await this.service.update({
         id: params.id,
-        patch
+        patch,
       });
       res.status(200).json(toUserResponse(user));
     } catch (error) {

@@ -9,7 +9,7 @@ export const meetingStatusSchema = z.enum([
 ]);
 
 export const createMeetingSchema = z.object({
-  workspaceId: z.string().min(1),
+  workspaceId: z.string().min(1).optional(),
   teamId: z.string().min(1).optional(),
   title: z.string().min(1).max(200),
   transcriptText: z.string().max(200_000).optional(),
@@ -25,7 +25,7 @@ export const updateMeetingSchema = z.object({
 });
 
 export const listMeetingsSchema = z.object({
-  workspaceId: z.string().min(1),
+  workspaceId: z.string().min(1).optional(),
   limit: z.coerce.number().int().positive().max(100).default(20),
   nextToken: z.string().optional()
 });
