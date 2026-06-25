@@ -68,6 +68,6 @@ export class UserService {
 
   private stripPassword(user: User): User {
     const { password: _, ...rest } = user;
-    return rest as User;
+    return rest;
   }
 }

@@ -4,6 +4,7 @@ import express from "express";
 import helmet from "helmet";
 import { ddb } from "../infrastructure/aws/dynamodb-client.js";
 import { logger } from "../infrastructure/observability/logger.js";
+import { authenticate } from "../modules/auth/auth.middleware.js";
 import { requestIdMiddleware } from "../shared/http/request-id.js";
 import { errorHandler } from "./error-handler.js";
 import { buildRepositories, type Repositories } from "./repositories.js";
@@ -35,6 +36,7 @@ export function createApp(repositories: Repositories = buildRepositories()) {
   app.use(requestIdMiddleware);
   app.use(accessLogMiddleware);
 
+  // Public endpoints — must register before global auth middleware
   app.get("/healthz", (_req, res) => {
     res.status(200).json({ status: "ok" });
   });
@@ -43,6 +45,9 @@ export function createApp(repositories: Repositories = buildRepositories()) {
     void ddb;
     res.status(200).json({ status: "ready" });
   });
+
+  // Global auth — every route after this requires a valid JWT
+  app.use(authenticate);
 
   app.use("/api/v1", buildApiRouter(repositories));
   app.use(errorHandler);
