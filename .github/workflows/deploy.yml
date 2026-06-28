@@ -30,6 +30,7 @@ jobs:
       - name: Install
         run: npm ci
 
+        
       - name: Build Frontend
         run: npm run build:frontend
         env:
