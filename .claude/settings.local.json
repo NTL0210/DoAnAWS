@@ -7,7 +7,10 @@
       "Bash(aws iam *)",
       "Bash(npm run *)",
       "Bash(npm install *)",
-      "Bash(npm ls *)"
+      "Bash(npm ls *)",
+      "Bash(npm query *)",
+      "Bash(cp -r /e/ai-meeting-workforce-platform/node_modules/@aws-amplify node_modules/@aws-amplify)",
+      "Bash(cp -r /e/ai-meeting-workforce-platform/node_modules/aws-amplify node_modules/aws-amplify)"
     ]
   }
 }
