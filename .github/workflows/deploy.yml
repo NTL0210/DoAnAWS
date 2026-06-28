@@ -28,7 +28,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install
-        run: npm ci
+        run: npm ci --install-strategy=copy --include=optional
 
         
       - name: Build Frontend
@@ -37,6 +37,7 @@ jobs:
           NEXT_PUBLIC_APP_MODE: cloud
           NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ secrets.COGNITO_USER_POOL_ID }}
           NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ secrets.COGNITO_CLIENT_ID }}
+          NEXT_PUBLIC_API_GATEWAY_URL: ${{ secrets.NEXT_PUBLIC_API_GATEWAY_URL }}
 
       - name: AWS Login
         uses: aws-actions/configure-aws-credentials@v4
