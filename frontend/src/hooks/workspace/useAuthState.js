@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { signIn, signUp, signOut, getCurrentUser, fetchAuthSession } from 'aws-amplify/auth';
 import { loginUser, registerUser } from '@/services/userService';
-import { isMockMode } from '@/services/apiClient';
+import { isMockMode, isCloudMode, setAuthToken } from '@/services/apiClient';
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -44,11 +45,50 @@ export default function useAuthState() {
   const [loading, setLoading] = useState(true);
 
   const login = useCallback(async (email, password) => {
+    if (isCloudMode()) {
+      // Cognito sign in
+      await signIn({ username: email, password });
+
+      // Store access token for API Gateway calls
+      const session = await fetchAuthSession();
+      const token = session.tokens?.accessToken?.toString();
+      if (token) setAuthToken(token);
+
+      // Build user object from Cognito response
+      const cognitoUser = await getCurrentUser();
+      return {
+        id: cognitoUser.userId,
+        email: cognitoUser.signInDetails?.loginId || email,
+        name: email.split('@')[0],
+        avatar: null,
+        role: 'EMPLOYEE',
+        departmentId: null,
+        createdAt: new Date().toISOString(),
+      };
+    }
+
     await delay(800);
     return loginUser(email, password);
   }, []);
 
   const register = useCallback(async (name, email, password) => {
+    if (isCloudMode()) {
+      await signUp({
+        username: email,
+        password,
+        attributes: { email, name, preferred_username: name },
+      });
+      return {
+        id: email,
+        email,
+        name: name || email.split('@')[0],
+        avatar: null,
+        role: 'EMPLOYEE',
+        departmentId: null,
+        createdAt: new Date().toISOString(),
+      };
+    }
+
     await delay(800);
     return registerUser(name, email, password);
   }, []);
@@ -90,6 +130,11 @@ export default function useAuthState() {
   }, []);
 
   const logout = useCallback(() => {
+    // Cognito sign out in cloud mode
+    if (isCloudMode()) {
+      signOut();
+    }
+
     setCurrentUser(null);
     localStorage.removeItem('meetingAppUser');
     localStorage.removeItem('user');

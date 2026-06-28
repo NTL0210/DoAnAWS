@@ -2,6 +2,9 @@ import '../styles/globals.css';
 import Head from 'next/head';
 import { WorkspaceProvider } from '@/context/WorkspaceContext';
 
+// Initialize Cognito Amplify Auth
+import '@/lib/cognito';
+
 export default function MyApp({ Component, pageProps }) {
   return (
     <WorkspaceProvider>
