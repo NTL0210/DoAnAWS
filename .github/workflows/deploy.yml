@@ -28,7 +28,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install
-        run: npm install --workspace frontend
+        run: npm install --workspace frontend --include=optional
 
       - name: Build Frontend
         run: npm run build:frontend
