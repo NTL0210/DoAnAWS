@@ -4,6 +4,13 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef, us
 import useSocket from '@/hooks/useSocket';
 import useWebRTC from '@/hooks/useWebRTC';
 
+// ─── Global socket ref for modules that need to emit ———————————
+// Set by VoiceConnectionProvider whenever the socket connects.
+// Other hooks (e.g., useInvitationsState) can use this to emit events
+// without needing a direct dependency on the context.
+let _globalSocket = null;
+export function getGlobalSocket() { return _globalSocket; }
+
 /**
  * VoiceConnectionContext — real-time voice state (WebRTC + Socket.IO).
  *
@@ -103,6 +110,35 @@ export function VoiceConnectionProvider({ children, currentUser, workspaceId, wo
       socket.socket?.off('workspace:presence:update', handleWorkspacePresence);
     };
   }, [currentUser, socket.connected, socket.socket, workspaceId]);
+
+  // ─── Global socket + invitation relay ───────────────────
+  useEffect(() => {
+    const sock = socket.socket;
+    if (!sock || !socket.connected) return;
+    // Expose socket globally so useInvitationsState can emit events
+    _globalSocket = sock;
+    // Announce user presence for real-time messaging (invites, etc.)
+    if (currentUser?.id) {
+      sock.emit('user:online', {
+        userId: currentUser.id,
+        email: currentUser.email,
+      });
+    }
+    // Relay invitation events from signaling server → window events
+    const handleInvitationNew = (invitation) => {
+      window.dispatchEvent(new CustomEvent('invitation:new', { detail: invitation }));
+    };
+    const handleInvitationAccepted = (data) => {
+      window.dispatchEvent(new CustomEvent('invitation:accepted', { detail: data }));
+    };
+    sock.on('invitation:new', handleInvitationNew);
+    sock.on('invitation:accepted', handleInvitationAccepted);
+    return () => {
+      _globalSocket = null;
+      sock.off('invitation:new', handleInvitationNew);
+      sock.off('invitation:accepted', handleInvitationAccepted);
+    };
+  }, [currentUser?.id, socket.connected, socket.socket]);
 
   // ─── Join voice channel (WebRTC + signaling) ─────────────
   const voiceJoinChannel = useCallback(async (channelId, options = {}) => {

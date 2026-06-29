@@ -755,6 +755,45 @@ Resources:
       SubnetId: !Ref PublicSubnet
       RouteTableId: !Ref PublicRouteTable
 
+  # NAT Gateway — allows private subnet (EC2) to reach internet for Docker pulls
+  NatEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "ai-meeting-nat-eip-${Environment}"
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEIP.AllocationId
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub "ai-meeting-nat-${Environment}"
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "ai-meeting-private-rt-${Environment}"
+
+  PrivateRouteToNat:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -797,12 +836,28 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref ALBTargetGroup
 
+  # HTTP listener (port 80) — works without a domain/certificate.
+  # Use the ALB DNS as NEXT_PUBLIC_VOICE_SERVER_URL during initial setup.
+  ALBHttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for ALB
       VpcId: !Ref VPC
       SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: "0.0.0.0/0"
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
@@ -886,8 +941,46 @@ Resources:
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
-            cd /home/ec2-user/app
-            node dist/app/server.js
+            set -euo pipefail
+
+            # ─── Install Docker ───────────────────────────────
+            dnf install -y docker
+            systemctl enable docker
+            systemctl start docker
+
+            # ─── Clone signaling server ────────────────────────
+            # Replace with your repo URL / branch if different
+            REPO_URL="https://github.com/${AWS::AccountId}/ai-meeting-workforce-platform.git"
+            BRANCH="main"
+            SIGNALING_DIR="/home/ec2-user/signaling"
+
+            if [ ! -d "$SIGNALING_DIR" ]; then
+              dnf install -y git
+              git clone --branch "$BRANCH" --depth 1 "$REPO_URL" /home/ec2-user/repo
+              mkdir -p "$SIGNALING_DIR"
+              cp -r /home/ec2-user/repo/frontend/server/* "$SIGNALING_DIR/"
+              rm -rf /home/ec2-user/repo
+            fi
+
+            # ─── Build & run Docker container ─────────────────
+            cd "$SIGNALING_DIR"
+            docker build -t voice-signaling-server .
+            docker rm -f signaling 2>/dev/null || true
+            docker run -d \
+              --name signaling \
+              --restart unless-stopped \
+              -p 3001:3001 \
+              -e VOICE_SIGNALING_PORT=3001 \
+              -e NODE_ENV=production \
+              voice-signaling-server
+
+            # ─── Health check ─────────────────────────────────
+            sleep 2
+            if curl -sf http://localhost:3001/healthz > /dev/null 2>&1; then
+              echo "[OK] Signaling server is running"
+            else
+              echo "[WARN] Health check failed — check docker logs signaling" >&2
+            fi
 
   # AMI lookup
   LatestAMIRA:
@@ -1223,8 +1316,12 @@ Outputs:
     Value: !Ref AIProcessingStateMachine
 
   ALBDnsName:
-    Description: "ALB DNS name for WebSocket connections"
-    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Description: "ALB DNS name for WebSocket connections (use as NEXT_PUBLIC_VOICE_SERVER_URL)"
+    Value: !Sub "http://${ApplicationLoadBalancer.DNSName}"
+
+  SignalingServerUrl:
+    Description: "WebSocket URL for the signaling server (set this as NEXT_PUBLIC_VOICE_SERVER_URL in deploy.yml)"
+    Value: !Sub "http://${ApplicationLoadBalancer.DNSName}"
 
   SNSTopicArn:
     Description: "SNS Topic ARN for notifications"

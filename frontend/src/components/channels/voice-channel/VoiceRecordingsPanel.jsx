@@ -299,21 +299,20 @@ export default function VoiceRecordingsPanel({
                   </button>
                 )}
 
-                {/* Send to AI */}
+                {/* Send to AI — auto-transcribe + summarize */}
                 <button
                   type="button"
                   disabled={tooLargeForAI || record.aiStatus === 'SENT_TO_AI'}
                   onClick={() => onSendToAI?.(record.id)}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  title="Automatically transcribe speech-to-text and analyze with AI"
                 >
                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
                   </svg>
                   {record.aiStatus === 'SENT_TO_AI'
                     ? 'Sent to AI'
-                    : mp3Ready
-                    ? 'Send MP3 to AI'
-                    : 'Send Original to AI'}
+                    : 'Auto-transcribe & Analyze'}
                 </button>
 
                 {/* Delete */}

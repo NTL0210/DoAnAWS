@@ -1,8 +1,35 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { generateId } from '@/lib/workspaceData';
 import { getWorkspacePlan, getWorkspaceUsageSnapshot, validateWorkspaceCapacity } from '@/services/billingService';
+import { getGlobalSocket } from '@/context/VoiceConnectionContext';
+
+const INVITATIONS_STORAGE_KEY = 'meetingAppInvitations';
+
+/**
+ * Load all invitations from localStorage (shared global store).
+ * Returns an empty array when no stored data or on parse failure.
+ */
+function loadStoredInvitations() {
+  try {
+    const raw = localStorage.getItem(INVITATIONS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Persist invitations array to localStorage.
+ */
+function persistInvitations(invitations) {
+  try {
+    localStorage.setItem(INVITATIONS_STORAGE_KEY, JSON.stringify(invitations));
+  } catch {
+    // Storage is best-effort
+  }
+}
 
 /**
  * useInvitationsState — manages invitations state and actions.
@@ -41,11 +68,65 @@ export default function useInvitationsState({
   addActivity,
   showToast,
 }) {
-  const [invitations, setInvitations] = useState([]);
+  const [invitations, setInvitations] = useState(() => loadStoredInvitations());
 
+  // ─── Cross-tab sync via storage events ─────────────────
+  useEffect(() => {
+    const handler = (event) => {
+      if (event.key === INVITATIONS_STORAGE_KEY) {
+        setInvitations(loadStoredInvitations());
+      }
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, []);
+
+  // ─── Real-time invitation relay via signaling server ────
+  // VoiceConnectionProvider relays socket events as window CustomEvents,
+  // so any module can respond without a direct socket dependency.
+  useEffect(() => {
+    const handleNew = (event) => {
+      const invitation = event.detail;
+      if (!invitation || !invitation.id) return;
+      setInvitations((prev) => {
+        // Avoid duplicates (same ID already exists)
+        if (prev.some((i) => i.id === invitation.id)) return prev;
+        return [...prev, invitation];
+      });
+    };
+    const handleAccepted = (event) => {
+      const { invitation, acceptedBy } = event.detail || {};
+      if (!invitation?.id || !acceptedBy) return;
+      // Mark invitation as accepted so sender's UI reflects the change
+      setInvitations((prev) =>
+        prev.map((i) =>
+          i.id === invitation.id ? { ...i, status: 'ACCEPTED' } : i
+        )
+      );
+    };
+    window.addEventListener('invitation:new', handleNew);
+    window.addEventListener('invitation:accepted', handleAccepted);
+    return () => {
+      window.removeEventListener('invitation:new', handleNew);
+      window.removeEventListener('invitation:accepted', handleAccepted);
+    };
+  }, []);
+
+  // ─── Persist whenever invitations change ───────────────
+  useEffect(() => {
+    persistInvitations(invitations);
+  }, [invitations]);
+
+  /**
+   * Invitations addressed to the current user (by email).
+   * In mock mode, all users share localStorage on the same machine,
+   * so the inviteeEmail field acts as the routing key.
+   */
   const userInvitations = useMemo(() => {
-    if (!currentUser) return [];
-    return invitations.filter((inv) => inv.status === 'PENDING');
+    if (!currentUser?.email) return [];
+    return invitations.filter(
+      (inv) => inv.inviteeEmail === currentUser.email && inv.status === 'PENDING'
+    );
   }, [invitations, currentUser]);
 
   // ─── Invitation Actions ────────────────────────────────
@@ -88,6 +169,16 @@ export default function useInvitationsState({
     setInvitations((prev) => [...prev, newInv]);
     addActivity('invitation_sent', 'Invitation sent to ' + inviteeEmail);
     showToast('success', teamIds?.length ? 'Invitation sent and assigned to selected teams.' : 'Invitation sent to ' + inviteeEmail);
+
+    // Relay invitation via signaling server if connected (real-time cross-user)
+    const sock = getGlobalSocket();
+    if (sock?.connected) {
+      sock.emit('invitation:send', {
+        inviteeEmail,
+        invitation: newInv,
+      });
+    }
+
     return newInv;
   }, [currentUser, workspaces, workspaceMeetings, addActivity, showToast]);
 
@@ -98,6 +189,15 @@ export default function useInvitationsState({
     setInvitations((prev) =>
       prev.map((i) => (i.id === invitationId ? { ...i, status: 'ACCEPTED' } : i))
     );
+
+    // Notify the original sender in real time via signaling server
+    const sock = getGlobalSocket();
+    if (sock?.connected && currentUser?.id) {
+      sock.emit('invitation:accept', {
+        fromUserId: currentUser.id,
+        invitation: inv,
+      });
+    }
 
     // Add user as workspace member
     setWorkspaces((prev) =>

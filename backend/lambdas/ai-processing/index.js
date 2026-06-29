@@ -28,6 +28,7 @@ import {
   UpdateItemCommand,
   GetItemCommand,
 } from '@aws-sdk/client-dynamodb';
+import { notifyParticipants } from '../shared/summaryNotification.js';
 
 const {
   TABLE_NAME,
@@ -85,11 +86,19 @@ export async function handler(event) {
  * Step 1: Transcribe audio file to text.
  *
  * Starts an Amazon Transcribe job, or returns stored transcript
- * if the file is already a text transcript.
+ * if transcript text is already provided or the file is a text file.
+ *
+ * In this hybrid architecture, ASR is handled locally via Sherpa.
+ * Amazon Transcribe is available as a cloud fallback (set vi-VN for Vietnamese).
  */
 async function handleTranscribe(meetingId, storageKey, bucket) {
+  // If transcript text is already provided (e.g. uploaded from Sherpa local ASR)
+  if (event?.transcriptText) {
+    return { meetingId, transcript: event.transcriptText, status: 'TRANSCRIBED' };
+  }
+
   if (!storageKey) {
-    throw new Error('storageKey is required for transcription');
+    throw new Error('storageKey is required for cloud transcription');
   }
 
   // Check if it's already a text file
@@ -105,17 +114,16 @@ async function handleTranscribe(meetingId, storageKey, bucket) {
 
   await transcribe.send(new StartTranscriptionJobCommand({
     TranscriptionJobName: jobName,
-    LanguageCode: 'en-US',
+    LanguageCode: 'vi-VN',
     MediaFormat: mediaFormat,
     Media: {
       MediaFileUri: `s3://${bucket}/${storageKey}`,
     },
-    OutputBucketName: TRANSCRIBE_OUTPUT_BUCKER || bucket,
+    OutputBucketName: TRANSCRIBE_OUTPUT_BUCKET || bucket,
     OutputKey: `transcripts/${meetingId}.json`,
     Settings: {
       ShowSpeakerLabels: true,
       MaxSpeakerLabels: 10,
-      VocabularyFilterMethod: 'remove',
     },
   }));
 
@@ -195,23 +203,52 @@ async function handleExtractTasks(meetingId, transcript, summary) {
 }
 
 /**
- * Step 4: Save results to DynamoDB.
+ * Step 4: Save results to DynamoDB and notify participants.
  */
 async function handleSave(meetingId, summary, tasks) {
   const taskList = Array.isArray(tasks) ? tasks : [];
 
   await updateMeetingInDynamoDB(meetingId, {
-    status: 'COMPLETED',
+    status: 'AI_REVIEW_READY',
     summary: typeof summary === 'string' ? summary : JSON.stringify(summary),
     suggestedTasks: taskList,
     updatedAt: new Date().toISOString(),
   });
 
+  // Notify participants — fetch meeting details
+  try {
+    const meetingKey = {
+      PK: { S: `MEETING#${meetingId}` },
+      SK: { S: `META#${meetingId}` },
+    };
+    const meetingData = await ddb.send(new GetItemCommand({
+      TableName: TABLE_NAME,
+      Key: meetingKey,
+    }));
+
+    const meeting = meetingData.Item;
+    if (meeting) {
+      const participantIds = meeting.participantIds?.S
+        ? JSON.parse(meeting.participantIds.S)
+        : [];
+
+      await notifyParticipants({
+        meetingId,
+        meetingTitle: meeting.title?.S || 'Untitled meeting',
+        participantIds: Array.isArray(participantIds) ? participantIds : [],
+        summary: typeof summary === 'string' ? summary : summary?.summary || '',
+      });
+    }
+  } catch (notifErr) {
+    console.error(`[AI Processing] Failed to send notifications for ${meetingId}:`, notifErr);
+    // Non-fatal — don't fail the whole save
+  }
+
   return {
     meetingId,
-    status: 'COMPLETED',
+    status: 'AI_REVIEW_READY',
     tasksCreated: taskList.length,
-    message: 'Meeting processing completed successfully',
+    message: 'Meeting analysis complete. Review suggested tasks.',
   };
 }
 
@@ -227,16 +264,18 @@ async function callBedrockForSummary(transcript) {
 
   const client = new BedrockRuntimeClient({ region: AWS_REGION || 'ap-southeast-1' });
 
-  const prompt = `Summarize the following meeting transcript. Include:
-1. Main discussion points
-2. Key decisions made
-3. Action items
-4. Risks or blockers mentioned
+  const prompt = `You are an AI assistant specialized in Vietnamese meeting analysis. Analyze the following Vietnamese meeting transcript. Include:
+
+1. IMPORTANT CONTENT FILTER — Only keep the important discussion points, remove filler words, small talk, and repeated information
+2. Key decisions made (các quyết định đã đưa ra)
+3. Action items / công việc cần làm
+4. Risks or blockers (rủi ro hoặc vấn đề)
+5. A short Vietnamese summary (tóm tắt ngắn gọn bằng tiếng Việt)
 
 Transcript:
 ${transcript.slice(0, 30000)}
 
-Summary:`;
+Analysis:`;
 
   const command = new InvokeModelCommand({
     ModelId: process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-haiku-20240307-v1:0',

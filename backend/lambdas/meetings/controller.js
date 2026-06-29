@@ -14,8 +14,10 @@
 import * as db from '../../src/dynamodb/client.js';
 import { ENTITY, pk, sk, gsi1 } from '../../src/dynamodb/entityTypes.js';
 import { success, created, noContent, notFound, badRequest } from '../shared/router.js';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 
 const TABLE_NAME = db.getTableName();
+const lambda = new LambdaClient({ region: process.env.AWS_REGION || 'ap-southeast-1' });
 
 // ─── Helpers ──────────────────────────────────────────
 
@@ -238,7 +240,7 @@ export async function deleteMeeting(event) {
 }
 
 /**
- * POST /meetings/{id}/process — Trigger AI processing via Step Functions.
+ * POST /meetings/{id}/process — Trigger AI processing.
  */
 export async function postProcess(event) {
   const { resourceId, authUser } = event;
@@ -275,18 +277,80 @@ export async function postProcess(event) {
     GSI2SK: `MEETING#${meeting.createdAt}`,
   });
 
-  // In a real environment, this would invoke Step Functions:
-  // const sf = new SFNClient({});
-  // await sf.send(new StartExecutionCommand({
-  //   stateMachineArn: process.env.STATE_MACHINE_ARN,
-  //   input: JSON.stringify({ meetingId: resourceId, storageKey: meeting.storageKey }),
-  // }));
+  // Invoke ai-processing Lambda for summarization + task extraction
+  const AI_PROCESSING_FN = process.env.AI_PROCESSING_FUNCTION_NAME || 'ai-meeting-processing';
+
+  const payload = {
+    action: 'summarize',
+    meetingId: resourceId,
+    transcript: meeting.transcriptText || '',
+    storageKey: meeting.storageKey,
+    bucket: meeting.bucket || process.env.AUDIO_BUCKET,
+  };
+
+  // Fire-and-forget: invoke async, don't wait for result
+  lambda.send(new InvokeCommand({
+    FunctionName: AI_PROCESSING_FN,
+    InvocationType: 'Event',
+    Payload: new TextEncoder().encode(JSON.stringify(payload)),
+  })).catch((err) => {
+    console.error(`[Meetings] Failed to invoke AI processing for ${resourceId}:`, err);
+    // Don't throw — processing can be retried later
+  });
 
   return success({
     meetingId: resourceId,
     status: 'PROCESSING',
-    message: 'Meeting queued for AI processing',
+    message: 'AI processing started. The meeting will be updated when analysis completes.',
   }, 202);
 }
 
-export default { list, create, get, update, deleteMeeting, postProcess };
+export default { list, create, get, update, deleteMeeting, uploadTranscript, postProcess, POST_process: postProcess, POST_transcript: uploadTranscript };
+
+/**
+ * POST /meetings/{id}/transcript — Upload transcript text for a meeting.
+ *
+ * Used after local ASR processing (e.g. Sherpa Vietnamese ASR).
+ * Sets meeting status back to UPLOADED so postProcess can be called.
+ */
+export async function uploadTranscript(event) {
+  const { resourceId, parsedBody, authUser } = event;
+
+  if (!resourceId) {
+    return badRequest('Meeting ID is required');
+  }
+
+  if (!parsedBody || !parsedBody.transcriptText) {
+    return badRequest('transcriptText is required');
+  }
+
+  if (authUser.role === 'EMPLOYEE') {
+    return badRequest('Only managers and admins can update transcripts', 'FORBIDDEN');
+  }
+
+  const record = await db.getItem({
+    PK: pk(ENTITY.MEETING, resourceId),
+    SK: sk('META', resourceId),
+  });
+  const meeting = recordToMeeting(record);
+
+  if (!meeting) {
+    return notFound('Meeting not found');
+  }
+
+  const now = new Date().toISOString();
+  const key = { PK: pk(ENTITY.MEETING, resourceId), SK: sk('META', resourceId) };
+  const updated = await db.updateItem(key, {
+    transcriptText: parsedBody.transcriptText,
+    status: 'UPLOADED',
+    updatedAt: now,
+    version: (meeting.version || 1) + 1,
+    GSI2PK: 'STATUS#UPLOADED',
+    GSI2SK: `MEETING#${meeting.createdAt}`,
+  });
+
+  return success({
+    meeting: recordToMeeting(updated),
+    message: 'Transcript uploaded. Call POST /meetings/{id}/process to start AI analysis.',
+  });
+}
