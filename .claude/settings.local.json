@@ -10,7 +10,8 @@
       "Bash(npm ls *)",
       "Bash(npm query *)",
       "Bash(cp -r /e/ai-meeting-workforce-platform/node_modules/@aws-amplify node_modules/@aws-amplify)",
-      "Bash(cp -r /e/ai-meeting-workforce-platform/node_modules/aws-amplify node_modules/aws-amplify)"
+      "Bash(cp -r /e/ai-meeting-workforce-platform/node_modules/aws-amplify node_modules/aws-amplify)",
+      "Bash(gh run *)"
     ]
   }
 }

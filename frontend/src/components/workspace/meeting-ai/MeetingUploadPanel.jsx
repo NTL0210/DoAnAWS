@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { FiAlertTriangle, FiDollarSign, FiFileText, FiLoader, FiUploadCloud, FiX, FiZap } from 'react-icons/fi';
+import { FiAlertTriangle, FiDollarSign, FiFileText, FiInfo, FiLoader, FiUploadCloud, FiX, FiZap } from 'react-icons/fi';
 import {
   MAX_AI_AUDIO_SIZE_BYTES,
   WARNING_AI_AUDIO_SIZE_BYTES,
@@ -138,6 +138,22 @@ export default function MeetingUploadPanel({
       <div className="mb-4">
         <p className="text-xs font-black uppercase tracking-wide text-slate-400 dark:text-slate-500">Input</p>
         <h2 className="text-lg font-black text-slate-950 dark:text-slate-100">Upload meeting</h2>
+      </div>
+
+      {/* Auto ASR flow hint */}
+      <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+        <div className="flex items-start gap-3">
+          <FiInfo className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
+          <div className="text-xs leading-6 text-slate-600 dark:text-slate-400">
+            <p className="font-black text-blue-800 dark:text-blue-300">Automatic speech-to-text:</p>
+            <ol className="mt-1 list-inside list-decimal space-y-1 font-medium">
+              <li>Upload audio file (MP3, WAV, M4A, WebM) or paste a transcript</li>
+              <li>Click <strong>Analyze with AI</strong></li>
+              <li>System automatically transcribes audio (AWS Transcribe) and processes with AI</li>
+              <li>Review generated summary, key decisions, and suggested tasks</li>
+            </ol>
+          </div>
+        </div>
       </div>
 
       {!canManageMeetings ? (

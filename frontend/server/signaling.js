@@ -15,7 +15,17 @@ const DEV_ALLOWED_ORIGINS = [
   /^http:\/\/172\.(1[6-9]|2\d|3[01])\.\d+\.\d+:\d+$/,
 ];
 
-const httpServer = http.createServer();
+const httpServer = http.createServer((req, res) => {
+  // Health check endpoint for ALB target group
+  if (req.url === '/healthz' || req.url === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok', uptime: process.uptime() }));
+    return;
+  }
+  // All other HTTP requests return 404
+  res.writeHead(404);
+  res.end();
+});
 const io = new Server(httpServer, {
   cors: {
     origin(origin, callback) {
@@ -49,6 +59,12 @@ const workspaceOnlinePresence = new Map();
 const socketVoiceState = new Map();
 // Map<socketId, { workspaceId, userId }>
 const socketWorkspaceState = new Map();
+// Map<socketId, userId> — user presence for real-time messaging (invites, etc.)
+const socketUserMap = new Map();
+// Map<userId, Set<socketId>> — all sockets for a user (multi-tab)
+const userSocketsMap = new Map();
+// Map<email, userId> — email → userId lookup for invitation routing
+const userEmailMap = new Map();
 
 function workspaceRoom(workspaceId) {
   return `workspace:${workspaceId}`;
@@ -108,6 +124,40 @@ function broadcastOnlinePresence(workspaceId) {
     workspaceId,
     onlineUsers: serializeOnlineWorkspace(workspaceId),
   });
+}
+
+// ─── User room helpers (for real-time messaging) ───────────
+function userRoom(userId) {
+  return `user:${userId}`;
+}
+
+function registerUserSocket(socket, userId, email) {
+  // Join the user's personal room
+  socket.join(userRoom(userId));
+  // Track the mapping
+  socketUserMap.set(socket.id, userId);
+  if (!userSocketsMap.has(userId)) userSocketsMap.set(userId, new Set());
+  userSocketsMap.get(userId).add(socket.id);
+  // Map email → userId for invitation routing
+  if (email) userEmailMap.set(email.toLowerCase(), userId);
+}
+
+function unregisterUserSocket(socket) {
+  const userId = socketUserMap.get(socket.id);
+  if (!userId) return;
+  socket.leave(userRoom(userId));
+  socketUserMap.delete(socket.id);
+  const sockets = userSocketsMap.get(userId);
+  if (sockets) {
+    sockets.delete(socket.id);
+    if (sockets.size === 0) {
+      userSocketsMap.delete(userId);
+      // Clean up email mapping — no more sockets for this user
+      for (const [email, uid] of userEmailMap) {
+        if (uid === userId) userEmailMap.delete(email);
+      }
+    }
+  }
 }
 
 function removeSocketFromWorkspace(socket, reason = 'left') {
@@ -261,6 +311,54 @@ io.on('connection', (socket) => {
     });
   });
 
+  // ─── User presence (for real-time messaging) ───────────
+  socket.on('user:online', ({ userId, email } = {}) => {
+    if (!userId) return;
+    registerUserSocket(socket, userId, email);
+  });
+
+  /**
+   * Relay an invitation to a specific user in real time.
+   * Payload: {
+   *   toUserId?: string,       // recipient's user ID (optional if inviteeEmail provided)
+   *   inviteeEmail?: string,   // recipient's email (used to look up userId)
+   *   invitation: object       // full invitation object
+   * }
+   * The signaling server forwards `invitation:new` to all of the
+   * recipient's connected sockets (multi-tab support).
+   */
+  socket.on('invitation:send', ({ toUserId, inviteeEmail, invitation } = {}) => {
+    if (!invitation) return;
+    // Resolve target: use toUserId directly, or look up from email mapping
+    const targetId = toUserId || (inviteeEmail && userEmailMap.get(inviteeEmail.toLowerCase()));
+    if (!targetId) {
+      console.log(`[Signaling] Invitation relay skipped — ${inviteeEmail || 'unknown'} is offline`);
+      return;
+    }
+    const senderId = socketUserMap.get(socket.id);
+    console.log(`[Signaling] Invitation relay: ${senderId} → ${targetId}`);
+    io.to(userRoom(targetId)).emit('invitation:new', invitation);
+  });
+
+  /**
+   * Notify the sender that their invitation was accepted.
+   * Payload: {
+   *   fromUserId: string,      // original invitee's user ID
+   *   invitation: object       // the accepted invitation
+   * }
+   */
+  socket.on('invitation:accept', ({ fromUserId, invitation } = {}) => {
+    if (!fromUserId || !invitation) return;
+    console.log(`[Signaling] Invitation accepted: ${fromUserId} accepted invite to ${invitation.workspaceName}`);
+    // Notify the original sender (the one who created the invitation)
+    if (invitation.invitedByUserId) {
+      io.to(userRoom(invitation.invitedByUserId)).emit('invitation:accepted', {
+        invitation,
+        acceptedBy: fromUserId,
+      });
+    }
+  });
+
   socket.on('voice:join', (payload = {}) => upsertParticipant(socket, payload));
 
   socket.on('join-room', (payload = {}) => {
@@ -330,6 +428,7 @@ io.on('connection', (socket) => {
     console.log(`[Signaling] Client disconnected: ${socket.id} (${reason})`);
     removeSocketFromVoice(socket, reason);
     removeSocketFromWorkspace(socket, reason);
+    unregisterUserSocket(socket);
   });
 });
 

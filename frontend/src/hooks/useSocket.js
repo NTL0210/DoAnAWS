@@ -3,11 +3,29 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { io } from 'socket.io-client';
 
+/**
+ * Return true if no signaling URL is explicitly configured.
+ * When the app is in mock mode without a configured signaling server,
+ * there is no server to connect to, so we skip WebSocket entirely.
+ */
+function isMockModeNoSignalingUrl() {
+  if (process.env.NEXT_PUBLIC_VOICE_SERVER_URL) return false;
+  if (process.env.NEXT_PUBLIC_SIGNALING_URL) return false;
+  if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_APP_MODE === 'mock') return true;
+  return false;
+}
+
 function getDefaultSignalingUrl() {
+  // Explicit env vars take priority
   if (process.env.NEXT_PUBLIC_VOICE_SERVER_URL) return process.env.NEXT_PUBLIC_VOICE_SERVER_URL;
   if (process.env.NEXT_PUBLIC_SIGNALING_URL) return process.env.NEXT_PUBLIC_SIGNALING_URL;
   if (typeof window === 'undefined') return 'http://localhost:3001';
+
   const { hostname, port } = window.location;
+
+  // Mock mode without an explicit signaling URL — no server to connect to.
+  // Return empty so the caller can skip the WebSocket attempt.
+  if (isMockModeNoSignalingUrl()) return '';
 
   // Local dev — connect to the signaling server on the same machine
   if (hostname === 'localhost' || hostname === '127.0.0.1') return 'http://localhost:3001';
@@ -23,6 +41,12 @@ function getDefaultSignalingUrl() {
   ) {
     return 'http://localhost:3001';
   }
+
+  // CloudFront / CDN deployments — the CDN origin only serves the app on
+  // standard ports (443/80), NOT port 3001 where the signaling server would
+  // run.  Without an explicit signaling URL there is no way to find the
+  // signaling server, so bail out.
+  if (hostname.endsWith('.cloudfront.net')) return '';
 
   // Same host, different port (e.g. bare IP address or custom domain)
   if (port) return `//${hostname}:3001`;   // protocol-relative URL
@@ -70,12 +94,14 @@ export default function useSocket(options = {}) {
 
   const connect = useCallback(() => {
     if (socketRef.current?.connected) return;
+    // No signaling URL available — skip connection (e.g. mock mode, CloudFront)
+    if (!url) return;
 
     const socket = io(url, {
       transports: ['websocket', 'polling'],
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
+      reconnectionAttempts: url ? Infinity : 0,
+      reconnectionDelay: 5000,
+      reconnectionDelayMax: 30000,
       timeout: 20000,
     });
 
