@@ -48,16 +48,37 @@ jobs:
         working-directory: backend
 
       - name: SAM Build & Deploy
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SNS_NOTIFY_EMAIL: ${{ secrets.SNS_NOTIFY_EMAIL }}
+          TABLE_NAME: ${{ secrets.TABLE_NAME }}
         run: |
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "::error::Missing required GitHub secret GEMINI_API_KEY"
+            exit 1
+          fi
+          if [ -z "$TABLE_NAME" ]; then
+            echo "::error::Missing required GitHub secret TABLE_NAME"
+            exit 1
+          fi
+
+          PARAMETER_OVERRIDES=(
+            "GeminiApiKey=$GEMINI_API_KEY"
+            "GeminiModel=gemini-2.5-flash"
+            "ExistingTableName=$TABLE_NAME"
+          )
+
+          if [ -n "$SNS_NOTIFY_EMAIL" ]; then
+            PARAMETER_OVERRIDES+=("NotifyEmail=$SNS_NOTIFY_EMAIL")
+          else
+            echo "::notice::SNS_NOTIFY_EMAIL is not set; deploying without an email SNS subscription."
+          fi
+
           sam build --template template-ai-pipeline.yml
           sam deploy \
             --stack-name ${{ env.STACK_NAME }} \
             --region ${{ env.AWS_REGION }} \
             --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
             --no-fail-on-empty-changeset \
-            --parameter-overrides \
-              GeminiApiKey=${{ secrets.GEMINI_API_KEY }} \
-              GeminiModel=gemini-2.5-flash \
-              NotifyEmail=${{ secrets.SNS_NOTIFY_EMAIL }} \
-              ExistingTableName=${{ secrets.TABLE_NAME }}
+            --parameter-overrides "${PARAMETER_OVERRIDES[@]}"
         working-directory: backend

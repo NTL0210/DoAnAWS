@@ -12,10 +12,14 @@ Parameters:
     Default: gemini-2.5-flash
   NotifyEmail:
     Type: String
+    Default: ""
     Description: Email nhận thông báo khi pipeline hoàn thành
   ExistingTableName:
     Type: String
     Description: Tên DynamoDB table có sẵn (ai-meeting-workforce-dev từ main-stack)
+
+Conditions:
+  HasNotifyEmail: !Not [!Equals [!Ref NotifyEmail, ""]]
 
 Globals:
   Function:
@@ -50,6 +54,7 @@ Resources:
 
   NotifySubscription:
     Type: AWS::SNS::Subscription
+    Condition: HasNotifyEmail
     Properties:
       TopicArn: !Ref NotifyTopic
       Protocol: email
