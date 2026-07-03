@@ -2,73 +2,209 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "CloudFormationPipeline",
+      "Sid": "CloudFormationSamDeploy",
       "Effect": "Allow",
       "Action": [
+        "cloudformation:CreateChangeSet",
         "cloudformation:CreateStack",
-        "cloudformation:UpdateStack",
+        "cloudformation:DeleteChangeSet",
         "cloudformation:DeleteStack",
+        "cloudformation:DescribeChangeSet",
+        "cloudformation:DescribeStackEvents",
+        "cloudformation:DescribeStackResource",
+        "cloudformation:DescribeStackResources",
         "cloudformation:DescribeStacks",
-        "cloudformation:DescribeStackEvents"
+        "cloudformation:ExecuteChangeSet",
+        "cloudformation:ListChangeSets",
+        "cloudformation:UpdateStack"
       ],
-      "Resource": "arn:aws:cloudformation:ap-southeast-1:YOUR_ACCOUNT_ID:stack/ai-pipeline*"
+      "Resource": [
+        "arn:aws:cloudformation:ap-southeast-1:YOUR_ACCOUNT_ID:stack/ai-pipeline*/*",
+        "arn:aws:cloudformation:ap-southeast-1:YOUR_ACCOUNT_ID:changeSet/*/*"
+      ]
     },
     {
-      "Sid": "S3Pipeline",
+      "Sid": "CallerIdentityCheck",
+      "Effect": "Allow",
+      "Action": [
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CloudFormationTemplateValidation",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:GetTemplateSummary",
+        "cloudformation:ValidateTemplate"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SamArtifactBucketObjects",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": "arn:aws:s3:::YOUR_SAM_ARTIFACT_BUCKET/*"
+    },
+    {
+      "Sid": "SamArtifactBucketRead",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:ListBucket"
+      ],
+      "Resource": "arn:aws:s3:::YOUR_SAM_ARTIFACT_BUCKET"
+    },
+    {
+      "Sid": "AudioBucketDeploy",
       "Effect": "Allow",
       "Action": [
         "s3:CreateBucket",
+        "s3:DeleteBucket",
+        "s3:GetBucketLocation",
+        "s3:GetBucketNotification",
+        "s3:GetBucketPolicy",
+        "s3:GetLifecycleConfiguration",
+        "s3:ListBucket",
         "s3:PutBucketNotification",
-        "s3:PutBucketLifecycle",
         "s3:PutBucketPolicy",
-        "s3:GetBucketNotification"
+        "s3:PutLifecycleConfiguration"
       ],
       "Resource": "arn:aws:s3:::ai-meeting-audio-*"
     },
     {
-      "Sid": "StepFunctions",
+      "Sid": "AudioBucketObjectDeploy",
       "Effect": "Allow",
       "Action": [
-        "states:CreateStateMachine",
-        "states:UpdateStateMachine",
-        "states:TagResource"
+        "s3:DeleteObject",
+        "s3:GetObject",
+        "s3:PutObject"
       ],
-      "Resource": "arn:aws:states:ap-southeast-1:YOUR_ACCOUNT_ID:stateMachine:ai-meeting-pipeline*"
+      "Resource": "arn:aws:s3:::ai-meeting-audio-*/*"
     },
     {
-      "Sid": "IAMPassRole",
+      "Sid": "DynamoDbEarlyValidation",
       "Effect": "Allow",
       "Action": [
-        "iam:PassRole",
-        "iam:CreateRole",
-        "iam:PutRolePolicy",
-        "iam:GetRole"
+        "dynamodb:DescribeTable"
       ],
-      "Resource": "arn:aws:iam::YOUR_ACCOUNT_ID:role/ai-pipeline*"
-    },
-    {
-      "Sid": "SNSPipeline",
-      "Effect": "Allow",
-      "Action": [
-        "sns:CreateTopic",
-        "sns:Subscribe",
-        "sns:GetTopicAttributes"
-      ],
-      "Resource": "arn:aws:sns:ap-southeast-1:YOUR_ACCOUNT_ID:ai-pipeline*"
+      "Resource": "arn:aws:dynamodb:ap-southeast-1:YOUR_ACCOUNT_ID:table/*"
     },
     {
       "Sid": "LambdaPipeline",
       "Effect": "Allow",
       "Action": [
-        "lambda:CreateFunction",
-        "lambda:UpdateFunctionCode",
-        "lambda:UpdateFunctionConfiguration",
-        "lambda:InvokeFunction",
-        "lambda:GetFunction",
         "lambda:AddPermission",
-        "lambda:TagResource"
+        "lambda:CreateFunction",
+        "lambda:DeleteFunction",
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:ListTags",
+        "lambda:RemovePermission",
+        "lambda:TagResource",
+        "lambda:UntagResource",
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration"
       ],
       "Resource": "arn:aws:lambda:ap-southeast-1:YOUR_ACCOUNT_ID:function:ai-pipeline*"
+    },
+    {
+      "Sid": "StepFunctionsPipeline",
+      "Effect": "Allow",
+      "Action": [
+        "states:CreateStateMachine",
+        "states:DeleteStateMachine",
+        "states:DescribeStateMachine",
+        "states:TagResource",
+        "states:UntagResource",
+        "states:UpdateStateMachine"
+      ],
+      "Resource": "arn:aws:states:ap-southeast-1:YOUR_ACCOUNT_ID:stateMachine:ai-meeting-pipeline*"
+    },
+    {
+      "Sid": "IamPipelineRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:AttachRolePolicy",
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:DeleteRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:GetRole",
+        "iam:GetRolePolicy",
+        "iam:PassRole",
+        "iam:PutRolePolicy",
+        "iam:TagRole",
+        "iam:UntagRole"
+      ],
+      "Resource": "arn:aws:iam::YOUR_ACCOUNT_ID:role/ai-pipeline*"
+    },
+    {
+      "Sid": "SnsPipeline",
+      "Effect": "Allow",
+      "Action": [
+        "sns:CreateTopic",
+        "sns:DeleteTopic",
+        "sns:GetSubscriptionAttributes",
+        "sns:GetTopicAttributes",
+        "sns:ListSubscriptionsByTopic",
+        "sns:SetSubscriptionAttributes",
+        "sns:SetTopicAttributes",
+        "sns:Subscribe",
+        "sns:TagResource",
+        "sns:Unsubscribe",
+        "sns:UntagResource"
+      ],
+      "Resource": "arn:aws:sns:ap-southeast-1:YOUR_ACCOUNT_ID:ai-pipeline*"
+    },
+    {
+      "Sid": "EventBridgePipeline",
+      "Effect": "Allow",
+      "Action": [
+        "events:DeleteRule",
+        "events:DescribeRule",
+        "events:ListTargetsByRule",
+        "events:PutRule",
+        "events:PutTargets",
+        "events:RemoveTargets",
+        "events:TagResource",
+        "events:UntagResource"
+      ],
+      "Resource": "arn:aws:events:ap-southeast-1:YOUR_ACCOUNT_ID:rule/ai-pipeline*"
+    },
+    {
+      "Sid": "LogsPipeline",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogDelivery",
+        "logs:CreateLogGroup",
+        "logs:DeleteLogDelivery",
+        "logs:DeleteLogGroup",
+        "logs:DescribeLogGroups",
+        "logs:DescribeResourcePolicies",
+        "logs:GetLogDelivery",
+        "logs:ListLogDeliveries",
+        "logs:PutResourcePolicy",
+        "logs:PutRetentionPolicy",
+        "logs:TagResource",
+        "logs:UntagResource",
+        "logs:UpdateLogDelivery"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CloudWatchAlarmPipeline",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:DeleteAlarms",
+        "cloudwatch:DescribeAlarms",
+        "cloudwatch:PutMetricAlarm"
+      ],
+      "Resource": "arn:aws:cloudwatch:ap-southeast-1:YOUR_ACCOUNT_ID:alarm:ai-pipeline*"
     }
   ]
 }

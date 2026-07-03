@@ -60,30 +60,58 @@ jobs:
             printf '%s' "$1" | tr -d '\r\n[:space:]'
           }
 
+          require_secret() {
+            if [ -z "$2" ]; then
+              echo "::error::Missing required GitHub secret $1"
+              exit 1
+            fi
+          }
+
+          describe_failed_changeset() {
+            local stack_name="$1"
+            local change_set_id
+
+            change_set_id=$(aws cloudformation list-change-sets \
+              --stack-name "$stack_name" \
+              --region "$AWS_REGION" \
+              --query 'reverse(sort_by(Summaries,&CreationTime))[0].ChangeSetId' \
+              --output text 2>/dev/null || true)
+
+            if [ -n "$change_set_id" ] && [ "$change_set_id" != "None" ]; then
+              aws cloudformation describe-change-set \
+                --change-set-name "$change_set_id" \
+                --stack-name "$stack_name" \
+                --region "$AWS_REGION" || true
+            fi
+
+            aws cloudformation describe-stack-events \
+              --stack-name "$stack_name" \
+              --region "$AWS_REGION" \
+              --max-items 20 || true
+          }
+
           GEMINI_API_KEY=$(normalize_secret "$GEMINI_API_KEY")
           TABLE_NAME=$(normalize_secret "$TABLE_NAME")
           SNS_NOTIFY_EMAIL=$(normalize_secret "$SNS_NOTIFY_EMAIL")
           S3_BUCKET=$(normalize_secret "$S3_BUCKET")
 
-          if [ -z "$GEMINI_API_KEY" ]; then
-            echo "::error::Missing required GitHub secret GEMINI_API_KEY"
-            exit 1
-          fi
-          if [ -z "$TABLE_NAME" ]; then
-            echo "::error::Missing required GitHub secret TABLE_NAME"
-            exit 1
-          fi
-          if [ -z "$SNS_NOTIFY_EMAIL" ]; then
-            echo "::error::Missing required GitHub secret SNS_NOTIFY_EMAIL"
-            exit 1
-          fi
-          if [ -z "$S3_BUCKET" ]; then
-            echo "::error::Missing required GitHub secret S3_BUCKET"
-            exit 1
-          fi
+          require_secret GEMINI_API_KEY "$GEMINI_API_KEY"
+          require_secret TABLE_NAME "$TABLE_NAME"
+          require_secret SNS_NOTIFY_EMAIL "$SNS_NOTIFY_EMAIL"
+          require_secret S3_BUCKET "$S3_BUCKET"
 
           if ! printf '%s' "$TABLE_NAME" | grep -Eq '^[A-Za-z0-9_.-]{3,255}$'; then
             echo "::error::TABLE_NAME has an invalid DynamoDB table-name format after normalization"
+            exit 1
+          fi
+
+          aws sts get-caller-identity >/dev/null
+
+          if ! aws dynamodb describe-table \
+            --table-name "$TABLE_NAME" \
+            --region "$AWS_REGION" \
+            >/dev/null; then
+            echo "::error::Cannot describe DynamoDB table '$TABLE_NAME' in $AWS_REGION. The table must exist in this region and the GitHub AWS user must allow dynamodb:DescribeTable. Apply backend/infra/iam/pipeline-github-actions-policy.json to the GitHub deploy user."
             exit 1
           fi
 
@@ -98,8 +126,8 @@ jobs:
 
           set +e
           sam deploy \
-            --stack-name ${{ env.STACK_NAME }} \
-            --region ${{ env.AWS_REGION }} \
+            --stack-name "$STACK_NAME" \
+            --region "$AWS_REGION" \
             --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
             --s3-bucket "$S3_BUCKET" \
             --s3-prefix "sam-artifacts/$STACK_NAME" \
@@ -110,23 +138,7 @@ jobs:
           set -e
 
           if [ "$deploy_status" -ne 0 ]; then
-            change_set_id=$(aws cloudformation list-change-sets \
-              --stack-name "$STACK_NAME" \
-              --region "$AWS_REGION" \
-              --query 'reverse(sort_by(Summaries,&CreationTime))[0].ChangeSetId' \
-              --output text 2>/dev/null || true)
-
-            if [ -n "$change_set_id" ] && [ "$change_set_id" != "None" ]; then
-              aws cloudformation describe-change-set \
-                --change-set-name "$change_set_id" \
-                --stack-name "$STACK_NAME" \
-                --region "$AWS_REGION" || true
-            fi
-
-            aws cloudformation describe-stack-events \
-              --stack-name "$STACK_NAME" \
-              --region "$AWS_REGION" \
-              --max-items 20 || true
+            describe_failed_changeset "$STACK_NAME"
             exit "$deploy_status"
           fi
         working-directory: backend

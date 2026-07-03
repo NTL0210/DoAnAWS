@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: AI Processing Pipeline (audio → Gemini → DynamoDB → SNS)
+Description: AI Processing Pipeline (audio -> Gemini -> DynamoDB -> SNS)
 
 Parameters:
   GeminiApiKey:
@@ -13,10 +13,11 @@ Parameters:
   NotifyEmail:
     Type: String
     Default: ""
-    Description: Email nhận thông báo khi pipeline hoàn thành
+    Description: Email address for pipeline completion notifications
   ExistingTableName:
     Type: String
-    Description: Tên DynamoDB table có sẵn (ai-meeting-workforce-dev từ main-stack)
+    Description: Existing DynamoDB table name from the main backend stack
+    AllowedPattern: '^[A-Za-z0-9_.-]{3,255}$'
 
 Conditions:
   HasNotifyEmail: !Not [!Equals [!Ref NotifyEmail, ""]]
@@ -29,11 +30,12 @@ Globals:
     Architectures: [arm64]
 
 Resources:
-  # ─── S3 bucket cho audio ───────────────────────────
   AudioBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub "ai-meeting-audio-${AWS::AccountId}"
+      BucketName: !Sub "ai-meeting-audio-${AWS::AccountId}-${AWS::StackName}"
       NotificationConfiguration:
         EventBridgeConfiguration:
           EventBridgeEnabled: true
@@ -46,11 +48,8 @@ Resources:
               - StorageClass: GLACIER
                 TransitionInDays: 30
 
-  # ─── SNS topic ─────────────────────────────────────
   NotifyTopic:
     Type: AWS::SNS::Topic
-    Properties:
-      TopicName: !Sub "${AWS::StackName}-notify"
 
   NotifySubscription:
     Type: AWS::SNS::Subscription
@@ -60,36 +59,32 @@ Resources:
       Protocol: email
       Endpoint: !Ref NotifyEmail
 
-  # ─── Lambda: AI Process (Gemini transcribe + analyze) ──
   AiLambda:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub "${AWS::StackName}-ai-process"
       CodeUri: lambdas/ai-processing/
       Handler: index.handler
       Environment:
         Variables:
           GEMINI_API_KEY: !Ref GeminiApiKey
           GEMINI_MODEL: !Ref GeminiModel
-          AWS_REGION: ap-southeast-1
+          AWS_REGION: !Ref AWS::Region
       Policies:
         - Statement:
             - Effect: Allow
               Action:
                 - s3:GetObject
-              Resource: !Sub "arn:aws:s3:::ai-meeting-audio-*/*"
+              Resource: !Sub "${AudioBucket.Arn}/*"
 
-  # ─── Lambda: Save results + notify ────────────────
   SaveLambda:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub "${AWS::StackName}-save"
       CodeUri: lambdas/ai-processing/
       Handler: save.handler
       Environment:
         Variables:
           TABLE_NAME: !Ref ExistingTableName
-          AWS_REGION: ap-southeast-1
+          AWS_REGION: !Ref AWS::Region
       Policies:
         - Statement:
             - Effect: Allow
@@ -98,23 +93,31 @@ Resources:
                 - dynamodb:PutItem
                 - dynamodb:UpdateItem
                 - dynamodb:BatchWriteItem
-              Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/*"
+              Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ExistingTableName}"
             - Effect: Allow
               Action:
                 - s3:GetObject
                 - s3:DeleteObject
-              Resource: !Sub "arn:aws:s3:::ai-meeting-audio-*/*"
+              Resource: !Sub "${AudioBucket.Arn}/*"
             - Effect: Allow
               Action:
                 - s3:ListBucket
-              Resource: !Sub "arn:aws:s3:::ai-meeting-audio-*"
+              Resource: !GetAtt AudioBucket.Arn
 
-  # ─── Step Functions ────────────────────────────────
+  PipelineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
 
   PipelineStateMachine:
     Type: AWS::Serverless::StateMachine
+    DependsOn:
+      - AiLambda
+      - SaveLambda
+      - NotifyTopic
+      - PipelineLogGroup
     Properties:
-      Name: ai-meeting-pipeline
+      Name: !Sub "ai-meeting-pipeline-${AWS::StackName}"
       DefinitionUri: statemachine/pipeline.asl.json
       DefinitionSubstitutions:
         PromptLambdaArn: !GetAtt AiLambda.Arn
@@ -125,17 +128,58 @@ Resources:
             - Effect: Allow
               Action:
                 - lambda:InvokeFunction
-              Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-*"
+              Resource:
+                - !GetAtt AiLambda.Arn
+                - !GetAtt SaveLambda.Arn
             - Effect: Allow
               Action:
                 - sns:Publish
-              Resource: !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-*"
+              Resource: !Ref NotifyTopic
+            - Sid: CloudWatchLogsDelivery
+              Effect: Allow
+              Action:
+                - logs:CreateLogDelivery
+                - logs:GetLogDelivery
+                - logs:UpdateLogDelivery
+                - logs:DeleteLogDelivery
+                - logs:ListLogDeliveries
+                - logs:PutResourcePolicy
+                - logs:DescribeResourcePolicies
+                - logs:DescribeLogGroups
+              Resource: "*"
+      Logging:
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !Sub "${PipelineLogGroup.Arn}:*"
+        Level: ALL
+        IncludeExecutionData: true
       Tracing:
         Enabled: true
 
-  # ─── EventBridge: S3 upload → Step Functions ──────
+  EventBridgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StartSfn
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: states:StartExecution
+                Resource: !Ref PipelineStateMachine
+
   StartPipelineRule:
     Type: AWS::Events::Rule
+    DependsOn:
+      - PipelineStateMachine
+      - EventBridgeRole
     Properties:
       EventPattern:
         source: [aws.s3]
@@ -161,26 +205,29 @@ Resources:
                 "meetingId": "<key>"
               }
 
-  EventBridgeRole:
-    Type: AWS::IAM::Role
+  PipelineFailAlarm:
+    Type: AWS::CloudWatch::Alarm
     Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: events.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: StartSfn
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: states:StartExecution
-                Resource: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:ai-meeting-pipeline*"
+      Namespace: AWS/States
+      MetricName: ExecutionsFailed
+      Dimensions:
+        - Name: StateMachineArn
+          Value: !Ref PipelineStateMachine
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions: [!Ref NotifyTopic]
 
 Outputs:
-  AudioBucketName: { Value: !Ref AudioBucket }
-  StateMachineArn: { Value: !Ref PipelineStateMachine }
-  AiLambdaName: { Value: !Ref AiLambda }
+  AudioBucketName:
+    Value: !Ref AudioBucket
+  StateMachineArn:
+    Value: !Ref PipelineStateMachine
+  AiLambdaName:
+    Value: !Ref AiLambda
+  SaveLambdaName:
+    Value: !Ref SaveLambda
+  NotifyTopicArn:
+    Value: !Ref NotifyTopic
