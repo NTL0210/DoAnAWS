@@ -87,13 +87,6 @@ jobs:
             exit 1
           fi
 
-          aws dynamodb describe-table \
-            --table-name "$TABLE_NAME" \
-            --region "$AWS_REGION" \
-            >/dev/null
-
-          aws s3api head-bucket --bucket "$S3_BUCKET"
-
           PARAMETER_OVERRIDES=(
             "GeminiApiKey=$GEMINI_API_KEY"
             "GeminiModel=gemini-2.5-flash"
