@@ -95,6 +95,8 @@ jobs:
           )
 
           sam build --template template-ai-pipeline.yml
+
+          set +e
           sam deploy \
             --stack-name ${{ env.STACK_NAME }} \
             --region ${{ env.AWS_REGION }} \
@@ -104,4 +106,14 @@ jobs:
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
             --parameter-overrides "${PARAMETER_OVERRIDES[@]}"
+          deploy_status=$?
+          set -e
+
+          if [ "$deploy_status" -ne 0 ]; then
+            aws cloudformation describe-stack-events \
+              --stack-name "$STACK_NAME" \
+              --region "$AWS_REGION" \
+              --max-items 20 || true
+            exit "$deploy_status"
+          fi
         working-directory: backend
