@@ -39,7 +39,7 @@ jobs:
 
           echo "Current stack status: $STACK_STATUS"
 
-          if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ] || [ "$STACK_STATUS" = "ROLLBACK_FAILED" ]; then
+          if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ] || [ "$STACK_STATUS" = "ROLLBACK_FAILED" ] || [ "$STACK_STATUS" = "REVIEW_IN_PROGRESS" ]; then
             echo "::warning::Stack ${{ env.STACK_NAME }} is in $STACK_STATUS. Deleting before re-deploy..."
             aws cloudformation delete-stack \
               --stack-name ${{ env.STACK_NAME }} \
@@ -72,8 +72,8 @@ jobs:
 
           echo "Bucket found. Stack status: $STACK_STATUS"
 
-          if [ "$STACK_STATUS" != "ROLLBACK_COMPLETE" ] && [ "$STACK_STATUS" != "NOT_FOUND" ]; then
-            echo "Stack status is '$STACK_STATUS', not 'ROLLBACK_COMPLETE' or 'NOT_FOUND'. Skipping bucket deletion to protect data."
+          if [ "$STACK_STATUS" != "ROLLBACK_COMPLETE" ] && [ "$STACK_STATUS" != "REVIEW_IN_PROGRESS" ] && [ "$STACK_STATUS" != "NOT_FOUND" ]; then
+            echo "Stack status is '$STACK_STATUS', not 'ROLLBACK_COMPLETE', 'REVIEW_IN_PROGRESS', or 'NOT_FOUND'. Skipping bucket deletion to protect data."
             exit 0
           fi
 
@@ -90,7 +90,7 @@ jobs:
           fi
 
           # Step 4: both conditions met — safe to delete
-          echo "::warning::Stack is ROLLBACK_COMPLETE and bucket is empty. Deleting orphaned bucket..."
+          echo "::warning::Stack ($STACK_STATUS) and bucket is empty. Deleting orphaned bucket..."
           aws s3api delete-bucket --bucket "$BUCKET" --region ${{ env.AWS_REGION }}
           echo "Bucket deleted."
 
