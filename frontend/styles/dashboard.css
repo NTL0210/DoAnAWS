@@ -1,0 +1,51 @@
+.dashboard-hero-main {
+  background:
+    linear-gradient(135deg, #7c3aed, #ec4899 52%, #0ea5e9);
+}
+
+.dashboard-hero-main > div {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.97), rgba(255, 247, 251, 0.94) 48%, rgba(239, 246, 255, 0.94)),
+    linear-gradient(90deg, rgba(59, 130, 246, 0.055) 1px, transparent 1px),
+    linear-gradient(rgba(59, 130, 246, 0.045) 1px, transparent 1px);
+  background-size: auto, 52px 52px, 52px 52px;
+}
+
+.dashboard-hero-main > div::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 84% 16%, rgba(59, 130, 246, 0.13), transparent 24%),
+    radial-gradient(circle at 18% 0%, rgba(236, 72, 153, 0.10), transparent 28%),
+    radial-gradient(circle at 70% 96%, rgba(14, 165, 233, 0.12), transparent 26%);
+}
+
+.dashboard-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboard-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-120%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.38), transparent);
+  animation: dashboard-shimmer 3.6s ease-in-out infinite;
+}
+
+.float-action {
+  animation: float-action 5.5s ease-in-out infinite;
+}
+
+@keyframes dashboard-shimmer {
+  0%, 52% { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
+}
+
+@keyframes float-action {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}

@@ -1,0 +1,155 @@
+/* ─── Chat message styles ─── */
+.chat-message {
+  display: flex;
+  padding: 2px 16px;
+  gap: 12px;
+  margin-top: 1px;
+  transition: background 0.1s;
+}
+
+.chat-message:hover {
+  background-color: #2e3035;
+}
+
+.chat-message .avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.chat-message .msg-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.chat-message .username {
+  font-size: 14px;
+  font-weight: 500;
+  color: #dbdee1;
+}
+
+.chat-message .username:hover {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.chat-message .timestamp {
+  font-size: 11px;
+  color: #949ba4;
+}
+
+.chat-message .msg-content {
+  font-size: 14px;
+  line-height: 1.4;
+  color: #dbdee1;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+/* ─── Message input area ─── */
+.chat-input-wrapper {
+  background-color: #383a40;
+  border-radius: 8px;
+  padding: 0 16px;
+  margin: 0 16px 24px;
+}
+
+.chat-input-wrapper:focus-within {
+  outline: 2px solid #5865F2;
+  outline-offset: -2px;
+}
+
+.chat-input {
+  background: transparent;
+  border: none;
+  color: #dbdee1;
+  font-size: 14px;
+  width: 100%;
+  padding: 11px 0;
+  outline: none;
+}
+
+.chat-input::placeholder {
+  color: #6d6f78;
+}
+
+/* ─── Text channel welcome ─── */
+.channel-welcome {
+  padding: 16px 16px 8px;
+  border-bottom: 1px solid #1f2022;
+  margin-bottom: 8px;
+}
+
+.channel-welcome .welcome-hash {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.channel-welcome h2 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #dbdee1;
+  margin-bottom: 4px;
+}
+
+.channel-welcome p {
+  font-size: 14px;
+  color: #949ba4;
+}
+
+/* ─── Attachment in chat ─── */
+.msg-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #2b2d31;
+  border: 1px solid #393b41;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: #dbdee1;
+}
+
+/* ─── Empty state for channels ─── */
+.chat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #949ba4;
+  text-align: center;
+  padding: 40px;
+}
+
+.chat-empty h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #dbdee1;
+  margin-bottom: 8px;
+}
+
+.chat-empty p {
+  font-size: 14px;
+  color: #949ba4;
+  max-width: 400px;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 768px) {
+  .channel-sidebar {
+    width: 100% !important;
+    position: fixed !important;
+    z-index: 50;
+    transition: transform 0.2s;
+  }
+  .channel-sidebar.hidden-mobile {
+    transform: translateX(-100%);
+  }
+}
