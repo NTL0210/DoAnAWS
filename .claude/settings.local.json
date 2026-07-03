@@ -16,7 +16,11 @@
       "PowerShell(git -C \"E:\\\\ai-meeting-workforce-platform\" remote add upstream https://github.com/NTL0210/DoAnAWS.git 2>&1)",
       "PowerShell(git -C \"E:\\\\ai-meeting-workforce-platform\" remote -v)",
       "PowerShell(git -C \"E:\\\\ai-meeting-workforce-platform\" fetch upstream 2>&1)",
-      "PowerShell(git -C \"E:\\\\ai-meeting-workforce-platform\" merge upstream/main --no-edit 2>&1)"
+      "PowerShell(git -C \"E:\\\\ai-meeting-workforce-platform\" merge upstream/main --no-edit 2>&1)",
+      "PowerShell(npm run build:frontend 2>&1)",
+      "PowerShell(npm run lint 2>&1)",
+      "PowerShell(npm install 2>&1)",
+      "PowerShell(npm run build:backend 2>&1)"
     ]
   }
 }
