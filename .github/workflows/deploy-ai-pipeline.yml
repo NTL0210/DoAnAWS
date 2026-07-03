@@ -61,18 +61,17 @@ jobs:
             echo "::error::Missing required GitHub secret TABLE_NAME"
             exit 1
           fi
+          if [ -z "$SNS_NOTIFY_EMAIL" ]; then
+            echo "::error::Missing required GitHub secret SNS_NOTIFY_EMAIL"
+            exit 1
+          fi
 
           PARAMETER_OVERRIDES=(
             "GeminiApiKey=$GEMINI_API_KEY"
             "GeminiModel=gemini-2.5-flash"
+            "NotifyEmail=$SNS_NOTIFY_EMAIL"
             "ExistingTableName=$TABLE_NAME"
           )
-
-          if [ -n "$SNS_NOTIFY_EMAIL" ]; then
-            PARAMETER_OVERRIDES+=("NotifyEmail=$SNS_NOTIFY_EMAIL")
-          else
-            echo "::notice::SNS_NOTIFY_EMAIL is not set; deploying without an email SNS subscription."
-          fi
 
           sam build --template template-ai-pipeline.yml
           sam deploy \
