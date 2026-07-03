@@ -4,11 +4,13 @@ on:
   push:
     branches: [main]
     paths:
+      - '.github/workflows/deploy-ai-pipeline.yml'
       - 'backend/lambdas/ai-processing/**'
       - 'backend/lambdas/shared/**'
       - 'backend/src/dynamodb/**'
       - 'backend/template-ai-pipeline.yml'
       - 'backend/statemachine/**'
+  workflow_dispatch:
 
 env:
   AWS_REGION: ap-southeast-1
