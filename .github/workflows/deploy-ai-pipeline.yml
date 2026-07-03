@@ -52,6 +52,28 @@ jobs:
             echo "Stack is clean or does not exist. Proceeding."
           fi
 
+      - name: Clean up orphaned AudioBucket from failed deploys
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text --region ${{ env.AWS_REGION }})
+          BUCKET="ai-meeting-audio-${ACCOUNT_ID}-${{ env.STACK_NAME }}"
+          if aws s3api head-bucket --bucket "$BUCKET" --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            STACK_STATUS=$(aws cloudformation describe-stacks \
+              --stack-name ${{ env.STACK_NAME }} \
+              --region ${{ env.AWS_REGION }} \
+              --query 'Stacks[0].StackStatus' \
+              --output text 2>/dev/null || echo "NOT_FOUND")
+            if [ "$STACK_STATUS" != "CREATE_COMPLETE" ] && [ "$STACK_STATUS" != "UPDATE_COMPLETE" ]; then
+              echo "::warning::Deleting orphaned bucket $BUCKET..."
+              aws s3 rm "s3://$BUCKET" --recursive --region ${{ env.AWS_REGION }}
+              aws s3api delete-bucket --bucket "$BUCKET" --region ${{ env.AWS_REGION }}
+              echo "Bucket deleted."
+            else
+              echo "Bucket belongs to a healthy stack. Skipping."
+            fi
+          else
+            echo "No orphaned bucket found. Proceeding."
+          fi
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
