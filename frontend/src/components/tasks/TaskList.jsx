@@ -11,6 +11,7 @@ export default function TaskList({ filters = {}, compact = false }) {
   const [localStatus, setLocalStatus] = useState('all');
   const [sortBy, setSortBy] = useState('deadline');
   const [visibleCount, setVisibleCount] = useState(50);
+  const [expandedTaskId, setExpandedTaskId] = useState(null);
 
   useEffect(() => {
     const loadTasks = async () => {
@@ -46,6 +47,7 @@ export default function TaskList({ filters = {}, compact = false }) {
 
   useEffect(() => {
     setVisibleCount(50);
+    setExpandedTaskId(null);
   }, [filters, localStatus, sortBy]);
 
   const renderedTasks = useMemo(() => visibleTasks.slice(0, visibleCount), [visibleTasks, visibleCount]);
@@ -116,7 +118,9 @@ export default function TaskList({ filters = {}, compact = false }) {
                     {overdue && <StatusPill tone="red">OVERDUE</StatusPill>}
                   </div>
                   <h3 className="mt-3 text-base font-bold text-slate-900 dark:text-slate-100">{task.title}</h3>
-                  <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{task.description}</p>
+                  <p className={`${expandedTaskId === task.id ? '' : 'line-clamp-2'} mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400`}>
+                    {task.description || 'No description provided.'}
+                  </p>
 
                   <div className="mt-4 grid gap-3 text-xs font-semibold text-slate-500 sm:grid-cols-3 dark:text-slate-400">
                     <span className="inline-flex items-center gap-2">
@@ -132,6 +136,16 @@ export default function TaskList({ filters = {}, compact = false }) {
                       {task.progress || 0}% progress
                     </span>
                   </div>
+                  {expandedTaskId === task.id && (
+                    <div className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <span>Task ID: {task.id}</span>
+                        <span>Meeting: {task.meetingId || task.sourceMeetingId || 'Not linked'}</span>
+                        <span>Assignee: {assignee?.name || 'Unassigned'}</span>
+                        <span>Deadline: {task.deadline ? new Date(task.deadline).toLocaleDateString() : 'No deadline'}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="w-full lg:w-48">
@@ -147,10 +161,12 @@ export default function TaskList({ filters = {}, compact = false }) {
                   </div>
                   <button
                     type="button"
+                    onClick={() => setExpandedTaskId((current) => current === task.id ? null : task.id)}
+                    aria-expanded={expandedTaskId === task.id}
                     className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-[#fbfcfe] text-sm font-bold text-slate-700 hover:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                   >
                     <FiEye className="h-4 w-4" />
-                    Details
+                    {expandedTaskId === task.id ? 'Hide details' : 'Details'}
                   </button>
                 </div>
               </div>

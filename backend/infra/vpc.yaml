@@ -1,0 +1,227 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: VPC networking layer — 2 AZ, 2 NAT Gateway (HA), Gateway Endpoints S3/DynamoDB
+
+Parameters:
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+  Az1:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: ap-southeast-1a
+  Az2:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: ap-southeast-1b
+
+Resources:
+  # ─── VPC ────────────────────────────────────────────────
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: app-vpc
+
+  # ─── Internet Gateway ──────────────────────────────────
+  Igw:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: app-igw
+
+  IgwAttach:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref Igw
+
+  # ─── 4 Subnets (2 Public + 2 Private) ─────────────────
+  PublicA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone: !Ref Az1
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: subnet-public-a
+
+  PublicB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Ref Az2
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: subnet-public-b
+
+  PrivateA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.0.10.0/24
+      AvailabilityZone: !Ref Az1
+      Tags:
+        - Key: Name
+          Value: subnet-private-a
+
+  PrivateB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.0.11.0/24
+      AvailabilityZone: !Ref Az2
+      Tags:
+        - Key: Name
+          Value: subnet-private-b
+
+  # ─── 2 NAT Gateway (HA — mỗi AZ 1 cái) ───────────────
+  EipA:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: nat-eip-a
+
+  EipB:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: nat-eip-b
+
+  NatA:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EipA.AllocationId
+      SubnetId: !Ref PublicA
+      Tags:
+        - Key: Name
+          Value: nat-a
+
+  NatB:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EipB.AllocationId
+      SubnetId: !Ref PublicB
+      Tags:
+        - Key: Name
+          Value: nat-b
+
+  # ─── Route Table Public ───────────────────────────────
+  RtPublic:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: rt-public
+
+  RtPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IgwAttach
+    Properties:
+      RouteTableId: !Ref RtPublic
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref Igw
+
+  AssocPubA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicA
+      RouteTableId: !Ref RtPublic
+
+  AssocPubB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicB
+      RouteTableId: !Ref RtPublic
+
+  # ─── Route Table Private A ────────────────────────────
+  RtPrivateA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: rt-private-a
+
+  RtPrivateARoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RtPrivateA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatA
+
+  AssocPrvA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateA
+      RouteTableId: !Ref RtPrivateA
+
+  # ─── Route Table Private B ────────────────────────────
+  RtPrivateB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: rt-private-b
+
+  RtPrivateBRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RtPrivateB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatB
+
+  AssocPrvB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateB
+      RouteTableId: !Ref RtPrivateB
+
+  # ─── VPC Endpoints (Gateway — miễn phí) ──────────────
+  S3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref RtPrivateA
+        - !Ref RtPrivateB
+
+  DynamoEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.dynamodb
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref RtPrivateA
+        - !Ref RtPrivateB
+
+Outputs:
+  VpcId:
+    Value: !Ref Vpc
+    Export:
+      Name: app-VpcId
+  PublicSubnetIds:
+    Value: !Sub '${PublicA},${PublicB}'
+    Export:
+      Name: app-PublicSubnets
+  PrivateSubnetIds:
+    Value: !Sub '${PrivateA},${PrivateB}'
+    Export:
+      Name: app-PrivateSubnets
+  NatGatewayIds:
+    Value: !Sub '${NatA},${NatB}'

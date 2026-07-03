@@ -45,9 +45,8 @@ export default function WorkspaceMembersView() {
     if (!inviteEmail.trim()) return;
 
     setSendingInvite(true);
-    await new Promise((r) => setTimeout(r, 400));
 
-    sendInvitation(activeWorkspace?.id, inviteEmail.trim(), inviteRole, selectedTeamIds);
+    await sendInvitation(activeWorkspace?.id, inviteEmail.trim(), inviteRole, selectedTeamIds);
     setInviteEmail('');
     setSelectedTeamIds([]);
     setSendingInvite(false);

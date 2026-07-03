@@ -1,0 +1,56 @@
+name: Deploy VPC Infrastructure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/infra/vpc.yaml'
+      - '.github/workflows/deploy-vpc.yml'
+
+env:
+  AWS_REGION: ap-southeast-1
+  STACK_NAME: app-vpc
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate CloudFormation template
+        run: |
+          aws cloudformation validate-template \
+            --template-body file://backend/infra/vpc.yaml \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Deploy VPC stack
+        run: |
+          aws cloudformation deploy \
+            --stack-name ${{ env.STACK_NAME }} \
+            --template-file backend/infra/vpc.yaml \
+            --region ${{ env.AWS_REGION }} \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              VpcCidr=10.0.0.0/16 \
+              Az1=ap-southeast-1a \
+              Az2=ap-southeast-1b
+
+      - name: Assert 2 NAT Gateways exist
+        run: |
+          COUNT=$(aws ec2 describe-nat-gateways \
+            --filter "Name=tag:Name,Values=nat-a,nat-b" "Name=state,Values=available" \
+            --query 'length(NatGateways)' --output text \
+            --region ${{ env.AWS_REGION }})
+          echo "Found $COUNT NAT Gateways"
+          if [ "$COUNT" -ne 2 ]; then
+            echo "::error::Expected 2 NAT Gateways (HA), found $COUNT"
+            exit 1
+          fi

@@ -1,0 +1,63 @@
+{
+  "Comment": "Layer 3 AI Pipeline: Audio → Gemini (transcribe+analyze) → Save → SNS",
+  "StartAt": "PromptAnalyzeAudio",
+  "States": {
+    "PromptAnalyzeAudio": {
+      "Type": "Task",
+      "Resource": "${PromptLambdaArn}",
+      "Parameters": {
+        "action": "process-audio",
+        "meetingId.$": "$.meetingId",
+        "bucket.$": "$.bucket",
+        "storageKey.$": "$.storageKey"
+      },
+      "ResultPath": "$.analysisResult",
+      "Next": "SaveResults",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.analysisError",
+          "Next": "SaveResults"
+        }
+      ]
+    },
+    "SaveResults": {
+      "Type": "Task",
+      "Resource": "${SaveLambdaArn}",
+      "Parameters": {
+        "meetingId.$": "$.meetingId",
+        "summary.$": "$.analysisResult.summary",
+        "transcript.$": "$.analysisResult.transcript",
+        "keyDecisions.$": "$.analysisResult.keyDecisions",
+        "tasks.$": "$.analysisResult.tasks",
+        "risks.$": "$.analysisResult.risks",
+        "bucket.$": "$.bucket"
+      },
+      "ResultPath": "$.saveResult",
+      "Next": "PublishToSNS"
+    },
+    "PublishToSNS": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "${NotifyTopicArn}",
+        "Message": {
+          "meetingId.$": "$.meetingId",
+          "status": "COMPLETED",
+          "tasksCreated.$": "$.saveResult.tasksCreated",
+          "message": "AI analysis ready. View in dashboard."
+        },
+        "Subject": "AI Analysis Complete — Meeting Ready"
+      },
+      "End": true
+    }
+  }
+}

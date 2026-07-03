@@ -86,6 +86,34 @@ export default function WorkspaceChannelView() {
 
   const { onlineUsers: presenceOnlineUsers, currentStatus } = usePresence();
 
+  // Merge presence sources: Socket.IO (real cross-user) takes priority,
+  // BroadcastChannel (same-browser) is fallback.
+  const socketOnlineUsers = useMemo(() => {
+    // Convert voiceOnlineUsers format to presence format
+    // voiceOnlineUsers: [{ userId, name, avatar, role, online, connectedAt, lastSeenAt }]
+    // presenceOnlineUsers: [{ userId, name, status: 'online'|'idle', lastSeen }]
+    if (!voiceOnlineUsers || voiceOnlineUsers.length === 0) return presenceOnlineUsers;
+
+    const socketMap = new Map();
+    voiceOnlineUsers.forEach((u) => {
+      socketMap.set(u.userId, {
+        userId: u.userId,
+        name: u.name || u.userId,
+        status: u.online ? 'online' : 'offline',
+        lastSeen: u.lastSeenAt || u.connectedAt || new Date().toISOString(),
+      });
+    });
+
+    // Merge with BroadcastChannel data — socket data takes priority
+    const result = Array.from(socketMap.values());
+    (presenceOnlineUsers || []).forEach((u) => {
+      if (!socketMap.has(u.userId)) {
+        result.push(u);
+      }
+    });
+    return result;
+  }, [voiceOnlineUsers, presenceOnlineUsers]);
+
   const [message, setMessage] = useState('');
   const [channelsOpen, setChannelsOpen] = useState(() => loadCollapsedState('channelsOpen', true));
   const [teamsOpen, setTeamsOpen] = useState(() => loadCollapsedState('teamsOpen', true));
@@ -187,6 +215,14 @@ export default function WorkspaceChannelView() {
     }
   }, [activeView, selectView, selectChannel, router]);
 
+  // Navigate to Members view when Invite Member is triggered from Home/onboarding
+  useEffect(() => {
+    if (showInviteMember && activeView !== 'members') {
+      openWorkspaceView('members');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showInviteMember]);
+
   useEffect(() => {
     localStorage.setItem('workspaceSidebar_channelsOpen', String(channelsOpen));
   }, [channelsOpen]);
@@ -276,6 +312,18 @@ export default function WorkspaceChannelView() {
     setMessage('');
   };
 
+  const handleAttachChannelFile = useCallback((channelId, file) => {
+    if (!channelId || !file) return;
+    sendMessage(channelId, `Attached ${file.name}`, [createMessageAttachment(file)]);
+    showToast('success', `Attached ${file.name}`);
+  }, [sendMessage, showToast]);
+
+  const handleAttachTeamFile = useCallback((teamId, file) => {
+    if (!teamId || !file) return;
+    sendTeamMessage(teamId, `Attached ${file.name}`, [createMessageAttachment(file)]);
+    showToast('success', `Attached ${file.name}`);
+  }, [sendTeamMessage, showToast]);
+
   // ─── Render current view ───
   const renderContent = () => {
     const contentMap = {
@@ -319,6 +367,7 @@ export default function WorkspaceChannelView() {
           emptySubtitle="Messages here stay inside this team."
           onViewMembers={() => openWorkspaceView('teams')}
           onOpenSettings={() => openWorkspaceView('settings')}
+          onAttachFile={(file) => handleAttachTeamFile(activeTeamId, file)}
           onOpenNotifications={() => showToast('info', '🔔 Notification preferences can be configured in workspace settings.')}
         />
       );
@@ -336,6 +385,7 @@ export default function WorkspaceChannelView() {
           handleSend={handleSendMessage}
           currentUser={currentUser}
           workspaceMembers={workspaceMembers}
+          onAttachFile={(file) => handleAttachChannelFile(currentChannel.id, file)}
           onOpenSettings={() => openWorkspaceView('settings')}
           onOpenNotifications={() => showToast('info', '🔔 Notification preferences can be configured in workspace settings.')}
         />
@@ -562,12 +612,12 @@ export default function WorkspaceChannelView() {
         </div>
 
         {/* ─── Member Panel (only for channels) ─── */}
-        {(currentChannel || (activeView === 'team-chat' && activeTeam && canAccessTeam(activeTeam))) && (
+          {(currentChannel || (activeView === 'team-chat' && activeTeam && canAccessTeam(activeTeam))) && (
           <MemberPanel
             members={workspaceMembers}
             currentUser={currentUser}
             roleLabels={workspaceRoleLabels}
-            onlineUsers={presenceOnlineUsers}
+            onlineUsers={socketOnlineUsers}
             currentStatus={currentStatus}
           />
         )}
@@ -700,8 +750,10 @@ function TextChannelContent({
   onViewMembers,
   onOpenSettings,
   onOpenNotifications,
+  onAttachFile,
 }) {
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
   const [visibleCount, setVisibleCount] = useState(50);
   const isTeam = channelType === 'team';
 
@@ -727,6 +779,12 @@ function TextChannelContent({
   }, [messages, visibleCount]);
 
   const hasOlderMessages = visibleCount < messages.length;
+
+  const handleFileSelect = (event) => {
+    const file = event.target.files?.[0];
+    if (file) onAttachFile?.(file);
+    event.target.value = '';
+  };
 
   return (
     <div className="flex h-full flex-col bg-white dark:bg-slate-900">
@@ -799,9 +857,20 @@ function TextChannelContent({
 
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
         <form onSubmit={handleSend} className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1.5 focus-within:border-blue-200 dark:focus-within:border-blue-800 focus-within:bg-white dark:focus-within:bg-slate-900 focus-within:ring-4 focus-within:ring-blue-50 dark:focus-within:ring-blue-900/20">
-          <button type="button" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 dark:text-slate-500 transition hover:bg-white dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-slate-300">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            title="Attach file"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 dark:text-slate-500 transition hover:bg-white dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-slate-300"
+          >
             <FiPaperclip className="h-4 w-4" />
           </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={handleFileSelect}
+          />
           <input
             type="text"
             className="h-8 min-w-0 flex-1 bg-transparent px-2 text-sm font-medium text-slate-900 dark:text-slate-100 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
@@ -836,6 +905,7 @@ const MessageItem = memo(function MessageItem({ msg, user }) {
             {msg.attachments.map((attachment) => (
               <div key={attachment.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-bold text-slate-500 dark:text-slate-400 shadow-sm">
                 {attachment.name}
+                {attachment.size ? <span className="ml-2 font-semibold text-slate-400">{formatBytes(attachment.size)}</span> : null}
               </div>
             ))}
           </div>
@@ -937,7 +1007,7 @@ function MemberPanel({ members, currentUser, roleLabels, onlineUsers = [], curre
     const isOnline = statusType === 'online';
     const isIdle = statusType === 'idle';
     return (
-      <button key={member.userId || index} type="button" className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition hover:bg-white dark:hover:bg-slate-800 hover:shadow-sm">
+      <div key={member.userId || index} className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition hover:bg-white dark:hover:bg-slate-800 hover:shadow-sm">
         <span className={`relative flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-black text-white ${isOnline ? 'bg-gradient-to-br from-blue-500 to-cyan-400' : isIdle ? 'bg-gradient-to-br from-amber-400 to-orange-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
           {getInitials(name)}
           <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white dark:border-slate-900 ${
@@ -953,7 +1023,7 @@ function MemberPanel({ members, currentUser, roleLabels, onlineUsers = [], curre
             {roleLabels[role] || role}
           </span>
         </span>
-      </button>
+      </div>
     );
   };
 
@@ -1031,6 +1101,23 @@ function formatTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+}
+
+function createMessageAttachment(file) {
+  return {
+    id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: file.name,
+    size: file.size,
+    type: file.type || 'application/octet-stream',
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function formatBytes(bytes = 0) {
+  const value = Number(bytes) || 0;
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function loadCollapsedState(key, fallback) {

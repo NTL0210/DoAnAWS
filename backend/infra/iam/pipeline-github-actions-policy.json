@@ -1,0 +1,74 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CloudFormationPipeline",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:CreateStack",
+        "cloudformation:UpdateStack",
+        "cloudformation:DeleteStack",
+        "cloudformation:DescribeStacks",
+        "cloudformation:DescribeStackEvents"
+      ],
+      "Resource": "arn:aws:cloudformation:ap-southeast-1:YOUR_ACCOUNT_ID:stack/ai-pipeline*"
+    },
+    {
+      "Sid": "S3Pipeline",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:PutBucketNotification",
+        "s3:PutBucketLifecycle",
+        "s3:PutBucketPolicy",
+        "s3:GetBucketNotification"
+      ],
+      "Resource": "arn:aws:s3:::ai-meeting-audio-*"
+    },
+    {
+      "Sid": "StepFunctions",
+      "Effect": "Allow",
+      "Action": [
+        "states:CreateStateMachine",
+        "states:UpdateStateMachine",
+        "states:TagResource"
+      ],
+      "Resource": "arn:aws:states:ap-southeast-1:YOUR_ACCOUNT_ID:stateMachine:ai-meeting-pipeline*"
+    },
+    {
+      "Sid": "IAMPassRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:PassRole",
+        "iam:CreateRole",
+        "iam:PutRolePolicy",
+        "iam:GetRole"
+      ],
+      "Resource": "arn:aws:iam::YOUR_ACCOUNT_ID:role/ai-pipeline*"
+    },
+    {
+      "Sid": "SNSPipeline",
+      "Effect": "Allow",
+      "Action": [
+        "sns:CreateTopic",
+        "sns:Subscribe",
+        "sns:GetTopicAttributes"
+      ],
+      "Resource": "arn:aws:sns:ap-southeast-1:YOUR_ACCOUNT_ID:ai-pipeline*"
+    },
+    {
+      "Sid": "LambdaPipeline",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:CreateFunction",
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration",
+        "lambda:InvokeFunction",
+        "lambda:GetFunction",
+        "lambda:AddPermission",
+        "lambda:TagResource"
+      ],
+      "Resource": "arn:aws:lambda:ap-southeast-1:YOUR_ACCOUNT_ID:function:ai-pipeline*"
+    }
+  ]
+}

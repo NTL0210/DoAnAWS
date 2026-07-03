@@ -15,6 +15,13 @@ function isMockModeNoSignalingUrl() {
   return false;
 }
 
+function isCloudModeNoSignalingUrl() {
+  if (process.env.NEXT_PUBLIC_VOICE_SERVER_URL) return false;
+  if (process.env.NEXT_PUBLIC_SIGNALING_URL) return false;
+  if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_APP_MODE === 'cloud') return true;
+  return false;
+}
+
 function getDefaultSignalingUrl() {
   // Explicit env vars take priority
   if (process.env.NEXT_PUBLIC_VOICE_SERVER_URL) return process.env.NEXT_PUBLIC_VOICE_SERVER_URL;
@@ -41,6 +48,11 @@ function getDefaultSignalingUrl() {
   ) {
     return 'http://localhost:3001';
   }
+
+  // Cloud mode without an explicit signaling URL — no server to connect to.
+  // The signaling server must be deployed separately (e.g. ECS, EC2) with a
+  // known URL configured via NEXT_PUBLIC_VOICE_SERVER_URL.
+  if (isCloudModeNoSignalingUrl()) return '';
 
   // CloudFront / CDN deployments — the CDN origin only serves the app on
   // standard ports (443/80), NOT port 3001 where the signaling server would

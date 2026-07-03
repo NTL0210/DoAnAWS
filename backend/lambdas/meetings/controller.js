@@ -15,9 +15,12 @@ import * as db from '../../src/dynamodb/client.js';
 import { ENTITY, pk, sk, gsi1 } from '../../src/dynamodb/entityTypes.js';
 import { success, created, noContent, notFound, badRequest } from '../shared/router.js';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
+import { SFNClient, StartExecutionCommand } from '@aws-sdk/client-sfn';
+import * as inviteService from './inviteService.js';
 
 const TABLE_NAME = db.getTableName();
 const lambda = new LambdaClient({ region: process.env.AWS_REGION || 'ap-southeast-1' });
+const sfn = new SFNClient({ region: process.env.AWS_REGION || 'ap-southeast-1' });
 
 // ─── Helpers ──────────────────────────────────────────
 
@@ -111,8 +114,16 @@ export async function list(event) {
 
 /**
  * POST /meetings — Create a new meeting record.
+ * POST /meetings/invite — Create workspace invitation (routed to inviteService).
  */
 export async function create(event) {
+  const { path } = event;
+
+  // Route invite requests to inviteService
+  if (path && /invite/.test(path)) {
+    return inviteService.handleInvite(event);
+  }
+
   const { parsedBody, authUser } = event;
 
   if (!parsedBody.title || !parsedBody.workspaceId) {
@@ -144,8 +155,16 @@ export async function create(event) {
 
 /**
  * GET /meetings/{id} — Get meeting details.
+ * GET /meetings/notifications — Get user notifications (routed to inviteService).
  */
 export async function get(event) {
+  const { path } = event;
+
+  // Route notification requests to inviteService
+  if (path && /notifications/.test(path)) {
+    return inviteService.handleGetNotifications(event);
+  }
+
   const { resourceId } = event;
 
   if (!resourceId) {
@@ -169,7 +188,17 @@ export async function get(event) {
  * PATCH /meetings/{id} — Update meeting metadata.
  */
 export async function update(event) {
-  const { resourceId, parsedBody, authUser } = event;
+  const { resourceId, parsedBody, authUser, path } = event;
+
+  // Route notification updates to inviteService
+  if (path && /notifications/.test(path)) {
+    // Extract the actual notification ID from the proxy path
+    const proxy = event.pathParameters?.proxy || '';
+    const segments = proxy.split('/');
+    const notifId = segments.length >= 2 ? segments[1] : null;
+    if (notifId) event.resourceId = notifId;
+    return inviteService.handleUpdateNotification(event);
+  }
 
   if (!resourceId) {
     return badRequest('Meeting ID is required');
@@ -240,7 +269,10 @@ export async function deleteMeeting(event) {
 }
 
 /**
- * POST /meetings/{id}/process — Trigger AI processing.
+ * POST /meetings/{id}/process — Trigger AI Step Functions pipeline.
+ *
+ * Starts the ai-meeting-pipeline state machine which orchestrates:
+ *   Transcribe → Summarize (Gemini) → Extract Tasks (Gemini) → Save → Notify
  */
 export async function postProcess(event) {
   const { resourceId, authUser } = event;
@@ -277,31 +309,43 @@ export async function postProcess(event) {
     GSI2SK: `MEETING#${meeting.createdAt}`,
   });
 
-  // Invoke ai-processing Lambda for summarization + task extraction
-  const AI_PROCESSING_FN = process.env.AI_PROCESSING_FUNCTION_NAME || 'ai-meeting-processing';
+  // Start Step Functions pipeline
+  const STATE_MACHINE_ARN = process.env.STATE_MACHINE_ARN || '';
 
-  const payload = {
-    action: 'summarize',
+  if (!STATE_MACHINE_ARN) {
+    return badRequest('AI pipeline not configured (STATE_MACHINE_ARN missing)', 'CONFIG_ERROR');
+  }
+
+  const pipelineInput = {
+    action: 'transcribe',
     meetingId: resourceId,
-    transcript: meeting.transcriptText || '',
-    storageKey: meeting.storageKey,
-    bucket: meeting.bucket || process.env.AUDIO_BUCKET,
+    storageKey: meeting.storageKey || '',
+    bucket: process.env.AUDIO_BUCKET || '',
+    transcriptText: meeting.transcriptText || '',
   };
 
-  // Fire-and-forget: invoke async, don't wait for result
-  lambda.send(new InvokeCommand({
-    FunctionName: AI_PROCESSING_FN,
-    InvocationType: 'Event',
-    Payload: new TextEncoder().encode(JSON.stringify(payload)),
-  })).catch((err) => {
-    console.error(`[Meetings] Failed to invoke AI processing for ${resourceId}:`, err);
-    // Don't throw — processing can be retried later
-  });
+  try {
+    await sfn.send(new StartExecutionCommand({
+      stateMachineArn: STATE_MACHINE_ARN,
+      input: JSON.stringify(pipelineInput),
+      name: `meeting-${resourceId}-${Date.now()}`,
+    }));
+  } catch (err) {
+    console.error(`[Meetings] Failed to start pipeline for ${resourceId}:`, err);
+    // Revert status so retry is possible
+    await db.updateItem(key, {
+      status: 'UPLOADED',
+      updatedAt: new Date().toISOString(),
+      GSI2PK: 'STATUS#UPLOADED',
+      GSI2SK: `MEETING#${meeting.createdAt}`,
+    });
+    return badRequest(`Failed to start AI pipeline: ${err.message}`, 'PIPELINE_ERROR');
+  }
 
   return success({
     meetingId: resourceId,
     status: 'PROCESSING',
-    message: 'AI processing started. The meeting will be updated when analysis completes.',
+    message: 'AI pipeline started. You will be notified when analysis completes.',
   }, 202);
 }
 

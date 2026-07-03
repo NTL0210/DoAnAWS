@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { generateId } from '@/lib/workspaceData';
+import { isCloudMode, isMockMode } from '@/services/apiClient';
 import { getWorkspacePlan, getWorkspaceUsageSnapshot, validateWorkspaceCapacity } from '@/services/billingService';
 import { getGlobalSocket } from '@/context/VoiceConnectionContext';
 
@@ -117,6 +118,68 @@ export default function useInvitationsState({
     persistInvitations(invitations);
   }, [invitations]);
 
+  // ─── Poll for incoming invitations (cloud mode) ───────
+  useEffect(() => {
+    if (!isCloudMode() || !currentUser) return;
+
+    let mounted = true;
+    let intervalId;
+
+    async function pollInvitations() {
+      try {
+        const { notificationsApi } = await import('@/services/cloudClient');
+        const result = await notificationsApi.list({ unreadOnly: 'true' });
+        const data = result.notifications || result || [];
+        const incoming = Array.isArray(data) ? data : [];
+
+        // Only process INVITATION type notifications with PENDING status
+        const inviteNotifs = incoming.filter(
+          (n) => n.type === 'INVITATION' && n.metadata?.status === 'PENDING'
+        );
+
+        if (!mounted) return;
+
+        // Convert backend notifications to local invitation format
+        setInvitations((prev) => {
+          const updated = [...prev];
+          for (const notif of inviteNotifs) {
+            // Skip if already exists in local state
+            const alreadyExists = prev.some(
+              (i) => i.id === notif.id || (i.inviteeEmail === currentUser?.email && i.workspaceId === notif.metadata?.workspaceId && i.status === 'PENDING')
+            );
+            if (alreadyExists) continue;
+
+            updated.push({
+              id: notif.id,
+              workspaceId: notif.metadata?.workspaceId || '',
+              workspaceName: notif.metadata?.workspaceName || '',
+              invitedByUserId: notif.metadata?.invitedBy || '',
+              invitedByUserName: notif.metadata?.invitedByUserName || 'Unknown',
+              inviteeEmail: notif.metadata?.invitedEmail || currentUser?.email || '',
+              role: notif.metadata?.role || 'EMPLOYEE',
+              teamIds: [],
+              status: 'PENDING',
+              createdAt: notif.createdAt || new Date().toISOString(),
+              _backend: true,
+            });
+          }
+          return updated;
+        });
+      } catch (err) {
+        console.warn('[Invite] Poll notifications failed (expected if backend not configured):', err?.message);
+      }
+    }
+
+    // Poll immediately on mount, then every 30 seconds
+    pollInvitations();
+    intervalId = setInterval(pollInvitations, 30000);
+
+    return () => {
+      mounted = false;
+      clearInterval(intervalId);
+    };
+  }, [currentUser]);
+
   /**
    * Invitations addressed to the current user (by email).
    * In mock mode, all users share localStorage on the same machine,
@@ -130,11 +193,11 @@ export default function useInvitationsState({
   }, [invitations, currentUser]);
 
   // ─── Invitation Actions ────────────────────────────────
-  const sendInvitation = useCallback((workspaceId, inviteeEmail, role, teamIds = []) => {
-    if (!currentUser) return;
+  const sendInvitation = useCallback(async (workspaceId, inviteeEmail, role, teamIds = []) => {
+    if (!currentUser) return null;
 
     const workspace = workspaces.find((w) => w.id === workspaceId);
-    if (!workspace) return;
+    if (!workspace) return null;
     const plan = getWorkspacePlan(workspace);
     const usage = getWorkspaceUsageSnapshot({
       workspace,
@@ -166,6 +229,23 @@ export default function useInvitationsState({
       createdAt: new Date().toISOString(),
     };
 
+    // In cloud mode, persist invitation via backend API
+    if (isCloudMode()) {
+      const { invitationsApi } = await import('@/services/cloudClient');
+      try {
+        await invitationsApi.send({
+          workspaceId,
+          workspaceName: workspace.name,
+          inviteeEmail,
+          role: role || 'EMPLOYEE',
+        });
+      } catch (err) {
+        console.error('[Invite] Failed to send invitation via API:', err);
+        showToast('error', 'Failed to send invitation. Please try again.');
+        return null;
+      }
+    }
+
     setInvitations((prev) => [...prev, newInv]);
     addActivity('invitation_sent', 'Invitation sent to ' + inviteeEmail);
     showToast('success', teamIds?.length ? 'Invitation sent and assigned to selected teams.' : 'Invitation sent to ' + inviteeEmail);
@@ -189,6 +269,15 @@ export default function useInvitationsState({
     setInvitations((prev) =>
       prev.map((i) => (i.id === invitationId ? { ...i, status: 'ACCEPTED' } : i))
     );
+
+    // In cloud mode, notify backend
+    if (isCloudMode()) {
+      import('@/services/cloudClient').then(({ notificationsApi }) => {
+        notificationsApi.update(invitationId, { action: 'accept' }).catch((err) =>
+          console.warn('[Invite] Failed to update backend on accept:', err?.message)
+        );
+      });
+    }
 
     // Notify the original sender in real time via signaling server
     const sock = getGlobalSocket();
@@ -255,6 +344,15 @@ export default function useInvitationsState({
     setInvitations((prev) =>
       prev.map((i) => (i.id === invitationId ? { ...i, status: 'DECLINED' } : i))
     );
+
+    // In cloud mode, notify backend
+    if (isCloudMode()) {
+      import('@/services/cloudClient').then(({ notificationsApi }) => {
+        notificationsApi.update(invitationId, { action: 'decline' }).catch((err) =>
+          console.warn('[Invite] Failed to update backend on decline:', err?.message)
+        );
+      });
+    }
   }, []);
 
   return {

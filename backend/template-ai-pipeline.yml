@@ -1,0 +1,199 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AI Processing Pipeline (audio → Gemini → DynamoDB → SNS)
+
+Parameters:
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+    Description: Gemini API key from https://aistudio.google.com/apikey
+  GeminiModel:
+    Type: String
+    Default: gemini-2.5-flash
+  NotifyEmail:
+    Type: String
+    Description: Email nhận thông báo khi pipeline hoàn thành
+  ExistingTableName:
+    Type: String
+    Description: Tên DynamoDB table có sẵn (ai-meeting-workforce-dev từ main-stack)
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Timeout: 180
+    MemorySize: 512
+    Architectures: [arm64]
+
+Resources:
+  # ─── S3 bucket cho audio ───────────────────────────
+  AudioBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "ai-meeting-audio-${AWS::AccountId}"
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ArchiveToGlacier
+            Status: Enabled
+            Prefix: uploads/
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 30
+
+  # ─── SNS topic ─────────────────────────────────────
+  NotifyTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${AWS::StackName}-notify"
+
+  NotifySubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref NotifyTopic
+      Protocol: email
+      Endpoint: !Ref NotifyEmail
+
+  # ─── Lambda: AI Process (Gemini transcribe + analyze) ──
+  AiLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-ai-process"
+      CodeUri: ../dist/lambdas/ai-processing-sam/
+      AutoPublishAlias: live
+      Handler: index.handler
+      Environment:
+        Variables:
+          GEMINI_API_KEY: !Ref GeminiApiKey
+          GEMINI_MODEL: !Ref GeminiModel
+          AWS_REGION: ap-southeast-1
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref AudioBucket
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: "*"
+
+  # ─── Lambda: Save results + notify ────────────────
+  SaveLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-save"
+      CodeUri: ../dist/lambdas/ai-processing-sam/
+      Handler: save.handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ExistingTableName
+          AWS_REGION: ap-southeast-1
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref AudioBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ExistingTableName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+                - dynamodb:BatchWriteItem
+              Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ExistingTableName}"
+            - Effect: Allow
+              Action:
+                - s3:DeleteObject
+                - s3:ListBucket
+              Resource: "*"
+
+  # ─── Step Functions ────────────────────────────────
+  PipelineStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: ai-meeting-pipeline
+      DefinitionUri: ../statemachine/pipeline.asl.json
+      DefinitionSubstitutions:
+        PromptLambdaArn: !GetAtt AiLambda.Arn
+        SaveLambdaArn: !GetAtt SaveLambda.Arn
+        NotifyTopicArn: !Ref NotifyTopic
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref AiLambda
+        - LambdaInvokePolicy:
+            FunctionName: !Ref SaveLambda
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt NotifyTopic.TopicName
+      Logging:
+        Level: ALL
+        IncludeExecutionData: true
+      Tracing:
+        Enabled: true
+
+  # ─── EventBridge: S3 upload → Step Functions ──────
+  StartPipelineRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        source: [aws.s3]
+        detail-type: [Object Created]
+        detail:
+          bucket:
+            name: [!Ref AudioBucket]
+          object:
+            key: [{ prefix: uploads/ }]
+      Targets:
+        - Arn: !Ref PipelineStateMachine
+          Id: StartPipeline
+          RoleArn: !GetAtt EventBridgeRole.Arn
+          InputTransformer:
+            InputPathsMap:
+              bkt: $.detail.bucket.name
+              key: $.detail.object.key
+            InputTemplate: |
+              {
+                "action": "process-audio",
+                "bucket": "<bkt>",
+                "storageKey": "<key>",
+                "meetingId": "<key>"
+              }
+
+  EventBridgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StartSfn
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: states:StartExecution
+                Resource: !Ref PipelineStateMachine
+
+  # ─── CloudWatch Alarm ─────────────────────────────
+  PipelineFailAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-pipeline-failed"
+      Namespace: AWS/States
+      MetricName: ExecutionsFailed
+      Dimensions:
+        - Name: StateMachineArn
+          Value: !Ref PipelineStateMachine
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions: [!Ref NotifyTopic]
+
+Outputs:
+  AudioBucketName: { Value: !Ref AudioBucket }
+  StateMachineArn: { Value: !Ref PipelineStateMachine }
+  AiLambdaName: { Value: !Ref AiLambda }

@@ -176,4 +176,19 @@ export const workspacesApi = {
   removeMember: (id, userId) => request(`/workspaces/${id}/members/${userId}`, { method: 'DELETE' }),
 };
 
-export default { request, authApi, usersApi, meetingsApi, tasksApi, workspacesApi, CloudError };
+// ─── Invitations & Notifications API ───────────────
+// Routes through the meetings Lambda ({proxy+} catch-all)
+
+export const invitationsApi = {
+  /** POST /meetings/invite — send workspace invitation */
+  send: (data) => request('/meetings/invite', { method: 'POST', body: data }),
+};
+
+export const notificationsApi = {
+  /** GET /meetings/notifications — list notifications for current user */
+  list: (params) => request('/meetings/notifications', { params }),
+  /** PATCH /meetings/notifications/{id} — update notification (read/accept/decline) */
+  update: (id, data) => request(`/meetings/notifications/${id}`, { method: 'PATCH', body: data }),
+};
+
+export default { request, authApi, usersApi, meetingsApi, tasksApi, workspacesApi, invitationsApi, notificationsApi, CloudError };

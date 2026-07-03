@@ -25,11 +25,12 @@ function toRecord(notif) {
     SK: `NOTIF#${notif.id}`,
     id: notif.id,
     userId: notif.userId,
-    type: notif.type || 'INFO',        // TASK_ASSIGNED | MEETING_READY | DEADLINE | INFO
+    type: notif.type || 'INFO',        // TASK_ASSIGNED | MEETING_READY | DEADLINE | INVITATION | INFO
     title: notif.title,
     message: notif.message || '',
     link: notif.link || null,
     isRead: Boolean(notif.isRead),
+    metadata: notif.metadata || null,
     createdAt: notif.createdAt || now,
     expiresAt: notif.expiresAt || undefined,  // TTL
   };
@@ -112,6 +113,7 @@ export async function create(notifData) {
     title: notifData.title || '',
     message: notifData.message || '',
     link: notifData.link || null,
+    metadata: notifData.metadata || null,
     isRead: false,
     createdAt: new Date().toISOString(),
     expiresAt: notifData.expiresAt,

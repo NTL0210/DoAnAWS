@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import {
   FiActivity,
@@ -23,11 +23,19 @@ const statusConfig = {
 };
 
 export default function WorkspaceAnalytics() {
-  const { activeWorkspace, workspaceMembers, workspaceTeams, workspaceTasks, workspaceMeetings, activityFeed } = useWorkspace();
+  const { activeWorkspace, workspaceMembers, workspaceTeams, workspaceTasks, workspaceMeetings, activityFeed, selectView } = useWorkspace();
+  const [timeRange, setTimeRange] = useState('month');
+  const [spotlight, setSpotlight] = useState(null);
 
   const analytics = useMemo(() => {
-    const tasks = (workspaceTasks || []).filter((task) => task.departmentId === activeWorkspace?.id || !task.departmentId);
-    const meetings = (workspaceMeetings || []).filter((meeting) => meeting.workspaceId === activeWorkspace?.id);
+    const tasks = (workspaceTasks || []).filter((task) =>
+      (task.departmentId === activeWorkspace?.id || task.workspaceId === activeWorkspace?.id || !task.departmentId) &&
+      isWithinRange(task.updatedAt || task.createdAt || task.deadline, timeRange)
+    );
+    const meetings = (workspaceMeetings || []).filter((meeting) =>
+      meeting.workspaceId === activeWorkspace?.id &&
+      isWithinRange(meeting.updatedAt || meeting.createdAt, timeRange)
+    );
 
     const counts = Object.keys(statusConfig).reduce((acc, status) => {
       acc[status] = tasks.filter((task) => task.status === status).length;
@@ -89,7 +97,7 @@ export default function WorkspaceAnalytics() {
       tasksByPriority,
       recentAIActivities: (activityFeed || []).filter((activity) => activity.type?.includes('ai') || activity.type?.includes('meeting') || activity.type?.includes('manager')).slice(0, 6),
     };
-  }, [workspaceMembers, workspaceTeams, workspaceTasks, workspaceMeetings, activeWorkspace, activityFeed]);
+  }, [workspaceMembers, workspaceTeams, workspaceTasks, workspaceMeetings, activeWorkspace, activityFeed, timeRange]);
 
   const kpis = [
     {
@@ -146,12 +154,18 @@ export default function WorkspaceAnalytics() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {['This Week', 'This Month', 'Last 30 Days'].map((label, index) => (
+              {[
+                ['week', 'This Week'],
+                ['month', 'This Month'],
+                ['30d', 'Last 30 Days'],
+              ].map(([key, label]) => (
                 <button
                   key={label}
                   type="button"
+                  onClick={() => setTimeRange(key)}
+                  aria-pressed={timeRange === key}
                   className={`rounded-full border px-3.5 py-2 text-xs font-bold transition ${
-                    index === 1
+                    timeRange === key
                       ? 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-sm'
                       : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600 hover:text-slate-700 dark:hover:text-slate-300'
                   }`}
@@ -175,6 +189,7 @@ export default function WorkspaceAnalytics() {
             title="Task status distribution"
             icon={FiActivity}
             action="View board"
+            onAction={() => selectView('tasks')}
           >
             <div className="space-y-4">
               {Object.entries(statusConfig).map(([status, config]) => (
@@ -195,6 +210,8 @@ export default function WorkspaceAnalytics() {
             title="Member workload"
             icon={FiUsers}
             action="Balance work"
+            onAction={() => setSpotlight((current) => current === 'workload' ? null : 'workload')}
+            highlighted={spotlight === 'workload'}
           >
             <div className="space-y-4">
               {analytics.workload.map((member) => (
@@ -236,13 +253,18 @@ export default function WorkspaceAnalytics() {
               />
             </div>
             <div className="mt-5 flex flex-wrap gap-2">
-              {['View overdue tasks', 'Open meetings', 'Team workload'].map((label) => (
+              {[
+                { label: 'View overdue tasks', action: () => selectView('tasks') },
+                { label: 'Open meetings', action: () => selectView('meetings') },
+                { label: 'Team workload', action: () => setSpotlight((current) => current === 'workload' ? null : 'workload') },
+              ].map((item) => (
                 <button
-                  key={label}
+                  key={item.label}
                   type="button"
+                  onClick={item.action}
                   className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300 shadow-sm transition hover:border-blue-200 dark:hover:border-blue-800 hover:text-blue-700 dark:hover:text-blue-300"
                 >
-                  {label}
+                  {item.label}
                   <FiArrowRight className="h-3.5 w-3.5" />
                 </button>
               ))}
@@ -305,9 +327,13 @@ function KpiCard({ label, value, detail, icon: Icon, tone, badge }) {
   );
 }
 
-function Panel({ eyebrow, title, icon: Icon, action, children }) {
+function Panel({ eyebrow, title, icon: Icon, action, onAction, highlighted = false, children }) {
   return (
-    <section className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-5 shadow-sm md:p-6">
+    <section className={`rounded-3xl border bg-white dark:bg-slate-900/80 p-5 shadow-sm transition md:p-6 ${
+      highlighted
+        ? 'border-blue-300 ring-4 ring-blue-100 dark:border-blue-700 dark:ring-blue-900/30'
+        : 'border-slate-200 dark:border-slate-800'
+    }`}>
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">
@@ -319,6 +345,7 @@ function Panel({ eyebrow, title, icon: Icon, action, children }) {
         {action && (
           <button
             type="button"
+            onClick={onAction}
             className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 transition hover:bg-white dark:hover:bg-slate-700 hover:text-blue-700 dark:hover:text-blue-300"
           >
             {action}
@@ -414,4 +441,21 @@ function getInitials(name) {
 function formatDateTime(value) {
   if (!value) return '';
   return new Date(value).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function isWithinRange(value, range) {
+  if (!value) return true;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return true;
+
+  const now = new Date();
+  const start = new Date(now);
+  if (range === 'week') {
+    start.setDate(now.getDate() - 7);
+  } else if (range === '30d') {
+    start.setDate(now.getDate() - 30);
+  } else {
+    start.setMonth(now.getMonth() - 1);
+  }
+  return date >= start && date <= now;
 }
