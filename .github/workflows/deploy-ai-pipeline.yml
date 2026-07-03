@@ -110,6 +110,19 @@ jobs:
           set -e
 
           if [ "$deploy_status" -ne 0 ]; then
+            change_set_id=$(aws cloudformation list-change-sets \
+              --stack-name "$STACK_NAME" \
+              --region "$AWS_REGION" \
+              --query 'reverse(sort_by(Summaries,&CreationTime))[0].ChangeSetId' \
+              --output text 2>/dev/null || true)
+
+            if [ -n "$change_set_id" ] && [ "$change_set_id" != "None" ]; then
+              aws cloudformation describe-change-set \
+                --change-set-name "$change_set_id" \
+                --stack-name "$STACK_NAME" \
+                --region "$AWS_REGION" || true
+            fi
+
             aws cloudformation describe-stack-events \
               --stack-name "$STACK_NAME" \
               --region "$AWS_REGION" \

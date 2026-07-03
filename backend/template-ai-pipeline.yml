@@ -73,13 +73,11 @@ Resources:
           GEMINI_MODEL: !Ref GeminiModel
           AWS_REGION: ap-southeast-1
       Policies:
-        - S3ReadPolicy:
-            BucketName: !Ref AudioBucket
         - Statement:
             - Effect: Allow
               Action:
                 - s3:GetObject
-              Resource: "*"
+              Resource: !Sub "arn:aws:s3:::ai-meeting-audio-*/*"
 
   # ─── Lambda: Save results + notify ────────────────
   SaveLambda:
@@ -93,8 +91,6 @@ Resources:
           TABLE_NAME: !Ref ExistingTableName
           AWS_REGION: ap-southeast-1
       Policies:
-        - S3ReadPolicy:
-            BucketName: !Ref AudioBucket
         - Statement:
             - Effect: Allow
               Action:
@@ -105,16 +101,16 @@ Resources:
               Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/*"
             - Effect: Allow
               Action:
+                - s3:GetObject
                 - s3:DeleteObject
+              Resource: !Sub "arn:aws:s3:::ai-meeting-audio-*/*"
+            - Effect: Allow
+              Action:
                 - s3:ListBucket
-              Resource: "*"
+              Resource: !Sub "arn:aws:s3:::ai-meeting-audio-*"
 
   # ─── Step Functions ────────────────────────────────
-  PipelineLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub "/aws/vendedlogs/states/${AWS::StackName}-pipeline"
-      RetentionInDays: 14
+
   PipelineStateMachine:
     Type: AWS::Serverless::StateMachine
     Properties:
@@ -125,31 +121,15 @@ Resources:
         SaveLambdaArn: !GetAtt SaveLambda.Arn
         NotifyTopicArn: !Ref NotifyTopic
       Policies:
-        - LambdaInvokePolicy:
-            FunctionName: !Ref AiLambda
-        - LambdaInvokePolicy:
-            FunctionName: !Ref SaveLambda
-        - SNSPublishMessagePolicy:
-            TopicName: !GetAtt NotifyTopic.TopicName
         - Statement:
-            - Sid: CloudWatchLogsDelivery
-              Effect: Allow
+            - Effect: Allow
               Action:
-                - logs:CreateLogDelivery
-                - logs:GetLogDelivery
-                - logs:UpdateLogDelivery
-                - logs:DeleteLogDelivery
-                - logs:ListLogDeliveries
-                - logs:PutResourcePolicy
-                - logs:DescribeResourcePolicies
-                - logs:DescribeLogGroups
-              Resource: "*"
-      Logging:
-        Destinations:
-          - CloudWatchLogsLogGroup:
-              LogGroupArn: !Sub "${PipelineLogGroup.Arn}:*"
-        Level: ALL
-        IncludeExecutionData: true
+                - lambda:InvokeFunction
+              Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-*"
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-*"
       Tracing:
         Enabled: true
 
@@ -198,24 +178,7 @@ Resources:
             Statement:
               - Effect: Allow
                 Action: states:StartExecution
-                Resource: !Ref PipelineStateMachine
-
-  # ─── CloudWatch Alarm ─────────────────────────────
-  PipelineFailAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${AWS::StackName}-pipeline-failed"
-      Namespace: AWS/States
-      MetricName: ExecutionsFailed
-      Dimensions:
-        - Name: StateMachineArn
-          Value: !Ref PipelineStateMachine
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      AlarmActions: [!Ref NotifyTopic]
+                Resource: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:ai-meeting-pipeline*"
 
 Outputs:
   AudioBucketName: { Value: !Ref AudioBucket }
