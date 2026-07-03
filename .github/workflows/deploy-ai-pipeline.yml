@@ -56,6 +56,15 @@ jobs:
           TABLE_NAME: ${{ secrets.TABLE_NAME }}
           S3_BUCKET: ${{ secrets.S3_BUCKET }}
         run: |
+          normalize_secret() {
+            printf '%s' "$1" | tr -d '\r\n[:space:]'
+          }
+
+          GEMINI_API_KEY=$(normalize_secret "$GEMINI_API_KEY")
+          TABLE_NAME=$(normalize_secret "$TABLE_NAME")
+          SNS_NOTIFY_EMAIL=$(normalize_secret "$SNS_NOTIFY_EMAIL")
+          S3_BUCKET=$(normalize_secret "$S3_BUCKET")
+
           if [ -z "$GEMINI_API_KEY" ]; then
             echo "::error::Missing required GitHub secret GEMINI_API_KEY"
             exit 1
@@ -72,6 +81,18 @@ jobs:
             echo "::error::Missing required GitHub secret S3_BUCKET"
             exit 1
           fi
+
+          if ! printf '%s' "$TABLE_NAME" | grep -Eq '^[A-Za-z0-9_.-]{3,255}$'; then
+            echo "::error::TABLE_NAME has an invalid DynamoDB table-name format after normalization"
+            exit 1
+          fi
+
+          aws dynamodb describe-table \
+            --table-name "$TABLE_NAME" \
+            --region "$AWS_REGION" \
+            >/dev/null
+
+          aws s3api head-bucket --bucket "$S3_BUCKET"
 
           PARAMETER_OVERRIDES=(
             "GeminiApiKey=$GEMINI_API_KEY"
