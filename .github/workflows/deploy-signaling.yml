@@ -1,0 +1,31 @@
+name: Deploy Signaling Server
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/server/**'
+
+env:
+  AWS_REGION: ap-southeast-1
+  ASG_NAME: app-asg
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Refresh ASG instances
+        run: |
+          aws autoscaling start-instance-refresh \
+            --auto-scaling-group-name ${{ env.ASG_NAME }} \
+            --preferences '{"MinHealthyPercentage": 50, "InstanceWarmup": 60}' \
+            --region ${{ env.AWS_REGION }}

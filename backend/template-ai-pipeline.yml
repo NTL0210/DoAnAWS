@@ -60,8 +60,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "${AWS::StackName}-ai-process"
-      CodeUri: ../dist/lambdas/ai-processing-sam/
-      AutoPublishAlias: live
+      CodeUri: ../lambdas/ai-processing/
       Handler: index.handler
       Environment:
         Variables:
@@ -82,7 +81,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "${AWS::StackName}-save"
-      CodeUri: ../dist/lambdas/ai-processing-sam/
+      CodeUri: ../lambdas/ai-processing/
       Handler: save.handler
       Environment:
         Variables:
