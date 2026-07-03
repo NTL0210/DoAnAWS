@@ -23,7 +23,11 @@
       "PowerShell(npm run build:backend 2>&1)",
       "Bash(git add *)",
       "Bash(git commit -m 'fix workflow: handle REVIEW_IN_PROGRESS stack state in cleanup steps *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(sed -n '87,107p' globals.css)",
+      "Bash(sed -n '132,263p' globals.css)",
+      "Bash(sed -n '266,291p' globals.css)",
+      "Bash(sed -n '345,384p' globals.css)"
     ]
   }
 }

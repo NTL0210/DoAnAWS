@@ -1,0 +1,517 @@
+.theme-toggler-button {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: #949ba4;
+  transition: background 0.15s, color 0.15s, transform 0.15s;
+  cursor: pointer;
+}
+
+.theme-toggler-button:hover {
+  background-color: #393b41;
+  color: #dbdee1;
+  transform: translateY(-1px);
+}
+
+.theme-toggler-button:active {
+  transform: scale(0.96);
+}
+
+/* --- 3D Nav Item --- */
+.nav-item-3d {
+  position: relative;
+  transform-style: preserve-3d;
+  perspective: 600px;
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.35s ease,
+              background 0.25s ease;
+  will-change: transform;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-sidebar-rail {
+  overflow-x: hidden;
+  perspective: 900px;
+}
+
+.app-sidebar-nav {
+  overflow-x: hidden;
+  scrollbar-width: none;
+  transform-style: preserve-3d;
+}
+
+.app-sidebar-nav::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.nav-item-3d::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.15) 0%,
+    rgba(168, 85, 247, 0.1) 50%,
+    rgba(59, 130, 246, 0.05) 100%
+  );
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.nav-item-3d:hover {
+  transform: perspective(600px) rotateX(8deg) rotateY(-10deg) translateZ(12px) translateY(-4px) scale(1.04);
+  box-shadow:
+    0 12px 32px rgba(37, 99, 235, 0.2),
+    0 4px 12px rgba(37, 99, 235, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.nav-item-3d:hover::before {
+  opacity: 1;
+}
+
+.nav-item-3d:active {
+  transform: perspective(600px) rotateX(2deg) rotateY(-2deg) translateZ(4px) scale(0.96);
+  box-shadow: 0 2px 12px rgba(37, 99, 235, 0.15);
+  transition-duration: 0.08s;
+}
+
+/* Active 3D nav item */
+.nav-item-3d.is-active {
+  transform: perspective(600px) rotateX(4deg) rotateY(-5deg) translateZ(6px);
+  box-shadow:
+    0 4px 16px rgba(37, 99, 235, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.nav-item-3d.is-active::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  border: 1.5px solid rgba(59, 130, 246, 0.35);
+  animation: active-ring-pulse 2.2s ease-in-out infinite;
+}
+
+/* --- Icon animations per nav item --- */
+.nav-item-3d .nav-icon-float {
+  animation: none;
+  transition: all 0.3s ease;
+}
+.nav-item-3d:hover .nav-icon-float {
+  animation: icon-spark 0.6s ease-out forwards;
+  filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.6));
+}
+
+.nav-item-3d .nav-icon-spin {
+  animation: none;
+  transition: all 0.3s ease;
+}
+.nav-item-3d:hover .nav-icon-spin {
+  animation: icon-spin-fast 0.8s ease-out forwards;
+  filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.6));
+}
+
+.nav-item-3d .nav-icon-bob {
+  animation: none;
+  transition: all 0.3s ease;
+}
+.nav-item-3d:hover .nav-icon-bob {
+  animation: icon-bounce 0.5s ease-out forwards;
+  filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.6));
+}
+
+.nav-item-3d .nav-icon-pulse {
+  animation: none;
+  transition: all 0.3s ease;
+}
+.nav-item-3d:hover .nav-icon-pulse {
+  animation: icon-glow 0.7s ease-out forwards;
+  filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.6));
+}
+
+/* Icon glow override when nav item is active */
+.nav-item-3d.is-active .nav-icon-float,
+.nav-item-3d.is-active .nav-icon-spin,
+.nav-item-3d.is-active .nav-icon-bob,
+.nav-item-3d.is-active .nav-icon-pulse {
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.4));
+  animation: icon-pulse-soft 2.8s ease-in-out infinite;
+}
+
+/* --- Sidebar glass orb decoration --- */
+.sidebar-orb {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 999px;
+  filter: blur(64px);
+  opacity: 0.35;
+  z-index: 0;
+}
+
+.sidebar-orb-1 {
+  top: -10%;
+  right: -20%;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.25), transparent);
+  animation: orb-drift 12s ease-in-out infinite;
+}
+
+.sidebar-orb-2 {
+  bottom: 10%;
+  left: -20%;
+  width: 160px;
+  height: 160px;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.2), transparent);
+  animation: orb-drift 15s ease-in-out infinite reverse;
+}
+
+/* --- Active nav indicator --- */
+.nav-dot-active {
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #3b82f6;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.6);
+  animation: active-dot-pulse 2s ease-in-out infinite;
+}
+
+/* --- Float animation for cards --- */
+.float-card {
+  animation: float-card 5s ease-in-out infinite;
+}
+
+/* --- Topbar glass effect --- */
+.topbar-glass {
+  background: rgba(248, 250, 252, 0.82);
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+}
+
+/* --- Search bar glow on focus --- */
+.search-glow:focus-within {
+  box-shadow:
+    0 0 0 2px rgba(59, 130, 246, 0.15),
+    0 0 24px rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+/* --- Badge micro-bounce --- */
+.badge-bounce {
+  animation: badge-bounce 2s ease-in-out infinite;
+}
+
+/* ─── Channel sidebar styles ─── */
+.channel-sidebar {
+  background-color: #2b2d31;
+  color: #949ba4;
+}
+
+.channel-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  margin: 1px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #949ba4;
+  font-size: 14px;
+  transition: background 0.1s, color 0.1s;
+  user-select: none;
+}
+
+.channel-item:hover {
+  background-color: #36373c;
+  color: #dbdee1;
+}
+
+.channel-item.active {
+  background-color: #393b41;
+  color: #dbdee1;
+}
+
+.channel-item .hash-icon {
+  margin-right: 6px;
+  font-size: 16px;
+  font-weight: 300;
+  opacity: 0.7;
+}
+
+.channel-item.active .hash-icon {
+  opacity: 1;
+}
+
+/* ─── Section header for sidebar ─── */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #949ba4;
+  cursor: pointer;
+  user-select: none;
+}
+
+.section-header:hover {
+  color: #dbdee1;
+}
+
+.section-header .collapse-icon {
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+
+.section-header .collapse-icon.collapsed {
+  transform: rotate(-90deg);
+}
+
+/* ─── Workspace name header ─── */
+.ws-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  height: 48px;
+  border-bottom: 1px solid #1f2022;
+  cursor: pointer;
+  color: #dbdee1;
+  font-size: 15px;
+  font-weight: 600;
+  transition: background 0.1s;
+}
+
+.ws-header:hover {
+  background-color: #1f2022;
+}
+
+/* ─── Top nav buttons ─── */
+.top-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  color: #949ba4;
+  transition: background 0.15s, color 0.15s;
+  cursor: pointer;
+}
+
+.top-nav-btn:hover {
+  background-color: #393b41;
+  color: #dbdee1;
+}
+
+.top-nav-btn.active {
+  background-color: #393b41;
+  color: #dbdee1;
+}
+
+/* ─── Badge for notification count ─── */
+.discord-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  padding: 0 4px;
+  background-color: #ed4245;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* ─── Invitation card ─── */
+.invitation-card {
+  background-color: #2b2d31;
+  border: 1px solid #393b41;
+  border-radius: 8px;
+  padding: 16px;
+  transition: border-color 0.15s;
+}
+
+.invitation-card:hover {
+  border-color: #5865F2;
+}
+
+/* ─── Modal overlay ─── */
+.discord-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.discord-modal {
+  background-color: #313338;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  width: 440px;
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow-y: auto;
+  animation: scaleIn 0.15s ease-out;
+}
+
+.discord-modal-header {
+  padding: 20px 20px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #dbdee1;
+}
+
+.discord-modal-body {
+  padding: 16px 20px;
+}
+
+.discord-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid #1f2022;
+}
+
+/* ─── Discord input ─── */
+.discord-input {
+  width: 100%;
+  padding: 10px 12px;
+  background-color: #383a40;
+  border: 1px solid #1f2022;
+  border-radius: 4px;
+  color: #dbdee1;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.discord-input:focus {
+  border-color: #5865F2;
+}
+
+.discord-input::placeholder {
+  color: #6d6f78;
+}
+
+/* ─── Discord button ─── */
+.discord-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  border: none;
+  user-select: none;
+}
+
+.discord-btn-primary {
+  background-color: #5865F2;
+  color: #fff;
+}
+
+.discord-btn-primary:hover {
+  background-color: #4752c4;
+}
+
+.discord-btn-secondary {
+  background-color: #383a40;
+  color: #dbdee1;
+}
+
+.discord-btn-secondary:hover {
+  background-color: #43454b;
+}
+
+.discord-btn-success {
+  background-color: #3ba55d;
+  color: #fff;
+}
+
+.discord-btn-success:hover {
+  background-color: #2d8146;
+}
+
+/* ─── Member list ─── */
+.member-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.member-item:hover {
+  background-color: #36373c;
+}
+
+/* ─── Online indicator ─── */
+.online-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #3ba55d;
+  flex-shrink: 0;
+}
+
+/* ─── Voice channel button ─── */
+.voice-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  margin: 2px 8px;
+  width: calc(100% - 16px);
+  border-radius: 4px;
+  background: transparent;
+  color: #949ba4;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  border: none;
+  text-align: left;
+}
+
+.voice-btn:hover {
+  background-color: #36373c;
+  color: #dbdee1;
+}
+
+.voice-btn.active {
+  background-color: #393b41;
+  color: #dbdee1;
+}
+
+.voice-btn .voice-icon {
+  font-size: 16px;
+}

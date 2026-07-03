@@ -1,0 +1,14 @@
+/* ─── Scrollbar styling (Discord style) ─── */
+.discord-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.discord-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.discord-scroll::-webkit-scrollbar-thumb {
+  background: #1a1b1e;
+  border-radius: 4px;
+}
+.discord-scroll::-webkit-scrollbar-thumb:hover {
+  background: #222326;
+}
