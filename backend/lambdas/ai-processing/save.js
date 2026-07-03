@@ -17,7 +17,7 @@ import {
   UpdateItemCommand,
   GetItemCommand,
 } from '@aws-sdk/client-dynamodb';
-import { notifyParticipants } from '../shared/summaryNotification.js';
+import { notifyParticipants } from './summaryNotification.js';
 
 const {
   TABLE_NAME,

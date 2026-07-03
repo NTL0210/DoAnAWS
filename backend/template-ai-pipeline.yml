@@ -60,7 +60,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "${AWS::StackName}-ai-process"
-      CodeUri: ../lambdas/ai-processing/
+      CodeUri: lambdas/ai-processing/
       Handler: index.handler
       Environment:
         Variables:
@@ -81,7 +81,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "${AWS::StackName}-save"
-      CodeUri: ../lambdas/ai-processing/
+      CodeUri: lambdas/ai-processing/
       Handler: save.handler
       Environment:
         Variables:
@@ -110,7 +110,7 @@ Resources:
     Type: AWS::Serverless::StateMachine
     Properties:
       Name: ai-meeting-pipeline
-      DefinitionUri: ../statemachine/pipeline.asl.json
+      DefinitionUri: statemachine/pipeline.asl.json
       DefinitionSubstitutions:
         PromptLambdaArn: !GetAtt AiLambda.Arn
         SaveLambdaArn: !GetAtt SaveLambda.Arn

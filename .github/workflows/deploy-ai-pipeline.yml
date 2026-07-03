@@ -39,6 +39,14 @@ jobs:
       - name: Setup SAM CLI
         uses: aws-actions/setup-sam@v2
 
+      - name: Validate SAM source paths
+        run: |
+          test -d lambdas/ai-processing
+          test -f lambdas/ai-processing/package.json
+          test -f statemachine/pipeline.asl.json
+          sam validate --template template-ai-pipeline.yml
+        working-directory: backend
+
       - name: SAM Build & Deploy
         run: |
           sam build --template template-ai-pipeline.yml
