@@ -111,6 +111,11 @@ Resources:
               Resource: "*"
 
   # ─── Step Functions ────────────────────────────────
+  PipelineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/vendedlogs/states/${AWS::StackName}-pipeline"
+      RetentionInDays: 14
   PipelineStateMachine:
     Type: AWS::Serverless::StateMachine
     Properties:
@@ -127,7 +132,23 @@ Resources:
             FunctionName: !Ref SaveLambda
         - SNSPublishMessagePolicy:
             TopicName: !GetAtt NotifyTopic.TopicName
+        - Statement:
+            - Sid: CloudWatchLogsDelivery
+              Effect: Allow
+              Action:
+                - logs:CreateLogDelivery
+                - logs:GetLogDelivery
+                - logs:UpdateLogDelivery
+                - logs:DeleteLogDelivery
+                - logs:ListLogDeliveries
+                - logs:PutResourcePolicy
+                - logs:DescribeResourcePolicies
+                - logs:DescribeLogGroups
+              Resource: "*"
       Logging:
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !Sub "${PipelineLogGroup.Arn}:*"
         Level: ALL
         IncludeExecutionData: true
       Tracing:
