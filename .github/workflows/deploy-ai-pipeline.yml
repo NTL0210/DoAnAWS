@@ -72,8 +72,8 @@ jobs:
 
           echo "Bucket found. Stack status: $STACK_STATUS"
 
-          if [ "$STACK_STATUS" != "ROLLBACK_COMPLETE" ]; then
-            echo "Stack status is '$STACK_STATUS', not 'ROLLBACK_COMPLETE'. Skipping bucket deletion to protect data."
+          if [ "$STACK_STATUS" != "ROLLBACK_COMPLETE" ] && [ "$STACK_STATUS" != "NOT_FOUND" ]; then
+            echo "Stack status is '$STACK_STATUS', not 'ROLLBACK_COMPLETE' or 'NOT_FOUND'. Skipping bucket deletion to protect data."
             exit 0
           fi
 
