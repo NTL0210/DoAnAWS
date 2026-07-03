@@ -148,7 +148,7 @@ Resources:
       Logging:
         Destinations:
           - CloudWatchLogsLogGroup:
-              LogGroupArn: !Sub "${PipelineLogGroup.Arn}:*"
+              LogGroupArn: !GetAtt PipelineLogGroup.Arn
         Level: ALL
         IncludeExecutionData: true
       Tracing:
