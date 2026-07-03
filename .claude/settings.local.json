@@ -12,7 +12,11 @@
       "Bash(cp -r /e/ai-meeting-workforce-platform/node_modules/@aws-amplify node_modules/@aws-amplify)",
       "Bash(cp -r /e/ai-meeting-workforce-platform/node_modules/aws-amplify node_modules/aws-amplify)",
       "Bash(gh run *)",
-      "Bash(npx --prefix frontend next build frontend)"
+      "Bash(npx --prefix frontend next build frontend)",
+      "PowerShell(git -C \"E:\\\\ai-meeting-workforce-platform\" remote add upstream https://github.com/NTL0210/DoAnAWS.git 2>&1)",
+      "PowerShell(git -C \"E:\\\\ai-meeting-workforce-platform\" remote -v)",
+      "PowerShell(git -C \"E:\\\\ai-meeting-workforce-platform\" fetch upstream 2>&1)",
+      "PowerShell(git -C \"E:\\\\ai-meeting-workforce-platform\" merge upstream/main --no-edit 2>&1)"
     ]
   }
 }
