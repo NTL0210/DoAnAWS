@@ -20,7 +20,10 @@
       "PowerShell(npm run build:frontend 2>&1)",
       "PowerShell(npm run lint 2>&1)",
       "PowerShell(npm install 2>&1)",
-      "PowerShell(npm run build:backend 2>&1)"
+      "PowerShell(npm run build:backend 2>&1)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'fix workflow: handle REVIEW_IN_PROGRESS stack state in cleanup steps *)",
+      "Bash(git push *)"
     ]
   }
 }
