@@ -19,20 +19,46 @@ function cloneUsers(users) {
   return users.map((user) => ({ ...user }));
 }
 
-/** Clear any previously-persisted data when running in mock mode */
-function clearLegacyPersistedStore() {
+/**
+ * Persist the in-memory store to localStorage so registered users
+ * survive page reload. This ensures login-after-refresh works
+ * even in mock mode.
+ */
+function persistToStorage() {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(getStore()));
   } catch {
-    // Best-effort cleanup
+    // Best-effort — localStorage may be full or unavailable
   }
+}
+
+/**
+ * Restore store from localStorage on initialization.
+ * Falls back to seed data if nothing is stored.
+ */
+function loadFromStorage() {
+  if (typeof window === 'undefined') return false;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        store = parsed;
+        return true;
+      }
+    }
+  } catch {
+    // Best-effort
+  }
+  return false;
 }
 
 function getStore() {
   if (!store) {
-    clearLegacyPersistedStore();
-    store = cloneUsers(mockUsers);
+    if (!loadFromStorage()) {
+      store = cloneUsers(mockUsers);
+    }
   }
   return store;
 }
@@ -69,7 +95,7 @@ export async function create(data) {
     createdAt: data.createdAt || now,
   };
   getStore().push(user);
-  persistStore();
+  persistToStorage();
   return { ...user };
 }
 
@@ -79,7 +105,7 @@ export async function update(id, data) {
   const idx = store.findIndex((u) => u.id === id);
   if (idx === -1) return null;
   store[idx] = { ...store[idx], ...data };
-  persistStore();
+  persistToStorage();
   return { ...store[idx] };
 }
 
@@ -89,7 +115,7 @@ export async function delete_(id) {
   const idx = store.findIndex((u) => u.id === id);
   if (idx !== -1) {
     store.splice(idx, 1);
-    persistStore();
+    persistToStorage();
   }
 }
 
