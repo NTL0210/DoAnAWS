@@ -16,8 +16,19 @@ export class WorkspaceController {
 
   list = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const query = listWorkspacesSchema.parse(req.query);
-      const workspaces = await this.service.list(query.userId);
+      listWorkspacesSchema.parse(req.query);
+      const userId = req.user?.userId;
+      if (!userId) {
+        res.status(401).json({
+          error: {
+            code: "AUTH_REQUIRED",
+            message: "Authentication required",
+            requestId: res.locals.requestId,
+          },
+        });
+        return;
+      }
+      const workspaces = await this.service.list(userId);
       res.status(200).json(workspaces.map(toWorkspaceResponse));
     } catch (error) {
       next(error);
@@ -37,9 +48,20 @@ export class WorkspaceController {
   create = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const input = createWorkspaceSchema.parse(req.body);
+      const ownerId = req.user?.userId;
+      if (!ownerId) {
+        res.status(401).json({
+          error: {
+            code: "AUTH_REQUIRED",
+            message: "Authentication required",
+            requestId: res.locals.requestId,
+          },
+        });
+        return;
+      }
       const workspace = await this.service.create({
         name: input.name,
-        ownerId: input.ownerId ?? req.user?.userId ?? "",
+        ownerId,
         ...(input.description !== undefined && { description: input.description }),
         ...(input.iconColor !== undefined && { iconColor: input.iconColor }),
         ...(input.workspaceType !== undefined && { workspaceType: input.workspaceType }),

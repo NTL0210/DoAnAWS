@@ -8,8 +8,8 @@ export function buildWorkspaceRouter(
 ): Router {
   const router = Router();
 
-  router.get("/", guard("MEMBER", "ADMIN", "OWNER"), controller.list);
-  router.post("/", guard("ADMIN", "OWNER"), controller.create);
+  router.get("/", controller.list);
+  router.post("/", controller.create);
   router.get("/:id", guard("MEMBER", "ADMIN", "OWNER"), controller.get);
   router.patch("/:id", guard("ADMIN", "OWNER"), controller.update);
   router.delete("/:id", guard("OWNER"), controller.delete_);

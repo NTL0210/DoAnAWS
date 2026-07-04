@@ -3,6 +3,7 @@ import {
   GetCommand,
   PutCommand,
   QueryCommand,
+  TransactWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { env } from "../../config/env.js";
 import { ddb } from "../../infrastructure/aws/dynamodb-client.js";
@@ -11,6 +12,7 @@ import {
   num,
   nullableText,
   isConditionalFailure,
+  isTransactionCanceled,
 } from "../../infrastructure/aws/dynamodb-utils.js";
 import { ConflictError } from "../../shared/errors/app-error.js";
 import type { WorkspaceRepository } from "./workspace.repository.js";
@@ -32,6 +34,14 @@ function gsi1pk(ownerId: string): string {
 
 function gsi1sk(workspaceId: string): string {
   return `WORKSPACE#${workspaceId}`;
+}
+
+function memberPk(workspaceId: string): string {
+  return `WS#${workspaceId}`;
+}
+
+function memberSk(userId: string): string {
+  return `MEMBER#${userId}`;
 }
 
 interface WorkspaceItem extends Record<string, unknown> {
@@ -109,14 +119,35 @@ export class DynamoWorkspaceRepository implements WorkspaceRepository {
   async create(ws: Workspace): Promise<void> {
     try {
       await ddb.send(
-        new PutCommand({
-          TableName: env.DYNAMODB_TABLE_MAIN,
-          Item: toItem(ws),
-          ConditionExpression: "attribute_not_exists(PK)",
+        new TransactWriteCommand({
+          TransactItems: [
+            {
+              Put: {
+                TableName: env.DYNAMODB_TABLE_MAIN,
+                Item: toItem(ws),
+                ConditionExpression: "attribute_not_exists(PK)",
+              },
+            },
+            {
+              Put: {
+                TableName: env.DYNAMODB_TABLE_MAIN,
+                Item: {
+                  PK: memberPk(ws.id),
+                  SK: memberSk(ws.ownerId),
+                  entityType: "WS_MEMBER",
+                  workspaceId: ws.id,
+                  userId: ws.ownerId,
+                  role: "OWNER",
+                  joinedAt: ws.createdAt,
+                },
+                ConditionExpression: "attribute_not_exists(PK)",
+              },
+            },
+          ],
         }),
       );
     } catch (error) {
-      if (isConditionalFailure(error)) {
+      if (isConditionalFailure(error) || isTransactionCanceled(error)) {
         throw new ConflictError("Workspace already exists");
       }
       throw error;

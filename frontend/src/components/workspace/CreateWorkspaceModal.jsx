@@ -33,26 +33,31 @@ export default function CreateWorkspaceModal({ isModal = false, onClose }) {
     }
     setIsCreating(true);
     await new Promise((resolve) => setTimeout(resolve, 300));
-    const workspace = createWorkspace(
-      {
-        name: form.name.trim(),
-        description: form.description.trim(),
-        iconColor: form.iconColor,
-        workspaceType: form.workspaceType,
-        visibility: form.visibility,
-      },
-      {
-        createDefaultTextChannel: form.createDefaultTextChannel,
-        createDefaultVoiceChannel: form.createDefaultVoiceChannel,
+    try {
+      const workspace = await createWorkspace(
+        {
+          name: form.name.trim(),
+          description: form.description.trim(),
+          iconColor: form.iconColor,
+          workspaceType: form.workspaceType,
+          visibility: form.visibility,
+        },
+        {
+          createDefaultTextChannel: form.createDefaultTextChannel,
+          createDefaultVoiceChannel: form.createDefaultVoiceChannel,
+        }
+      );
+      if (!workspace) {
+        setError('Unable to create workspace.');
+        return;
       }
-    );
-    setIsCreating(false);
-    if (!workspace) {
+      setCreated(true);
+      setTimeout(() => onClose?.(), 700);
+    } catch {
       setError('Unable to create workspace.');
-      return;
+    } finally {
+      setIsCreating(false);
     }
-    setCreated(true);
-    setTimeout(() => onClose?.(), 700);
   };
 
   const content = (

@@ -9,7 +9,7 @@ export const workspaceRoleSchema = z.enum([
 
 export const createWorkspaceSchema = z.object({
   name: z.string().min(1).max(200),
-  ownerId: z.string().min(1),
+  ownerId: z.string().min(1).optional(),
   description: z.string().max(2000).optional(),
   iconColor: z.string().max(20).optional(),
   workspaceType: z.string().max(50).optional(),
