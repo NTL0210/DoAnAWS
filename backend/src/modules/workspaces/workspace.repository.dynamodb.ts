@@ -9,11 +9,10 @@ import { ddb } from "../../infrastructure/aws/dynamodb-client.js";
 import {
   text,
   num,
-  bool,
   nullableText,
   isConditionalFailure,
 } from "../../infrastructure/aws/dynamodb-utils.js";
-import { ConflictError, NotFoundError } from "../../shared/errors/app-error.js";
+import { ConflictError } from "../../shared/errors/app-error.js";
 import type { WorkspaceRepository } from "./workspace.repository.js";
 import type { Workspace, WorkspaceMember, WorkspaceChannel, WorkspaceTeam } from "./workspace.types.js";
 

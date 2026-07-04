@@ -57,13 +57,13 @@ export class WorkspaceController {
       const patch = updateWorkspaceSchema.parse(req.body);
       // Remove undefined values from sub-entity arrays to satisfy exactOptionalPropertyTypes
       const cleanChannels = patch.channels?.map((ch) =>
-        JSON.parse(JSON.stringify(ch)),
+        structuredClone(ch),
       ) as WorkspaceChannel[] | undefined;
       const cleanTeams = patch.teams?.map((t) =>
-        JSON.parse(JSON.stringify(t)),
+        structuredClone(t),
       ) as WorkspaceTeam[] | undefined;
       const cleanMembers = patch.members?.map((m) =>
-        JSON.parse(JSON.stringify(m)),
+        structuredClone(m),
       ) as WorkspaceMember[] | undefined;
 
       const workspace = await this.service.update(params.id, {
