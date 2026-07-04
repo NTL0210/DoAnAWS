@@ -14,15 +14,45 @@
  */
 
 import { configure as serverlessExpress } from "@codegenie/serverless-express";
-import type { Handler } from "aws-lambda";
+import type { Context } from "aws-lambda";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 import { createApp } from "./app/app.js";
 import { logger } from "./infrastructure/observability/logger.js";
 
-/**
- * The Express app instance. Built once at cold start, reused across invocations.
- */
+// ─── Cognito Event Types ────────────────────────────
+// Defined locally to keep minimal type surface.
+// Matches the Cognito PreSignUp / PostConfirmation trigger event shape.
+
+interface CognitoUserAttrs {
+  sub: string;
+  email: string;
+  name?: string;
+  preferred_username?: string;
+  picture?: string;
+  phone_number?: string;
+  [key: string]: string | undefined;
+}
+
+interface CognitoTriggerRequest {
+  userAttributes: CognitoUserAttrs;
+}
+
+interface CognitoTriggerResponse {
+  autoConfirmUser?: boolean;
+  autoVerifyEmail?: boolean;
+  [key: string]: boolean | undefined;
+}
+
+interface CognitoTriggerEvent {
+  triggerSource: string;
+  userName: string;
+  request: CognitoTriggerRequest;
+  response: CognitoTriggerResponse;
+}
+
+// ─── Express App Setup ──────────────────────────────
+
 const app = createApp();
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION || "ap-southeast-1" });
@@ -34,10 +64,12 @@ const wrappedHandler = serverlessExpress({ app });
 
 logger.info({ event: "LAMBDA_COLD_START" }, "Lambda cold start — Express app initialised");
 
+// ─── Cognito Handlers ───────────────────────────────
+
 /**
  * Handle Cognito PostConfirmation trigger — auto-create user record in DynamoDB.
  */
-async function handlePostConfirmation(event: any): Promise<any> {
+async function handlePostConfirmation(event: CognitoTriggerEvent): Promise<CognitoTriggerEvent> {
   const { userAttributes } = event.request;
   const userName = event.userName;
 
@@ -45,7 +77,7 @@ async function handlePostConfirmation(event: any): Promise<any> {
 
   const userId = userAttributes.sub;
   const email = userAttributes.email;
-  const name = userAttributes.name || userAttributes.preferred_username || email?.split("@")[0] || "User";
+  const name = userAttributes.name || userAttributes.preferred_username || email.split("@")[0] || "User";
 
   if (!userId || !email) {
     logger.error("[PostConfirmation] Missing userId or email in Cognito attributes");
@@ -80,11 +112,13 @@ async function handlePostConfirmation(event: any): Promise<any> {
       ConditionExpression: "attribute_not_exists(PK)",
     }));
     logger.info({ userId }, "[PostConfirmation] DynamoDB user created");
-  } catch (err: any) {
-    if (err.name === "ConditionalCheckFailedException") {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "ConditionalCheckFailedException") {
       logger.info({ userId }, "[PostConfirmation] User already exists in DynamoDB");
-    } else {
+    } else if (err instanceof Error) {
       logger.error({ error: err.message }, "[PostConfirmation] Error creating user");
+    } else {
+      logger.error({ error: String(err) }, "[PostConfirmation] Error creating user");
     }
   }
 
@@ -94,9 +128,9 @@ async function handlePostConfirmation(event: any): Promise<any> {
 /**
  * Handle Cognito PreSignUp trigger — auto-confirm user immediately.
  */
-async function handlePreSignUp(event: any): Promise<any> {
+async function handlePreSignUp(event: CognitoTriggerEvent): Promise<CognitoTriggerEvent> {
   event.response.autoConfirmUser = true;
-  if (event.request.userAttributes?.email) {
+  if (event.request.userAttributes.email) {
     event.response.autoVerifyEmail = true;
   }
 
@@ -104,22 +138,23 @@ async function handlePreSignUp(event: any): Promise<any> {
   return event;
 }
 
+// ─── Entry Point ────────────────────────────────────
+
 /**
  * Lambda handler — entry point for API Gateway and all Cognito triggers.
- *
- * - PreSignUp_*  → auto-confirm user (no separate Lambda needed)
- * - PostConfirmation_* → create DynamoDB user record
- * - has httpMethod → API Gateway request → serverless-express
  */
-export const handler: Handler = async (event: any, context: any) => {
+export const handler = async (
+  event: CognitoTriggerEvent | Record<string, unknown>,
+  context: Context,
+): Promise<unknown> => {
   // Cognito PreSignUp trigger (runs BEFORE PostConfirmation)
-  if (event.triggerSource?.startsWith("PreSignUp_")) {
-    return handlePreSignUp(event);
-  }
-
-  // Cognito PostConfirmation trigger
-  if (event.triggerSource?.startsWith("PostConfirmation_")) {
-    return handlePostConfirmation(event);
+  if ("triggerSource" in event && typeof event.triggerSource === "string") {
+    if (event.triggerSource.startsWith("PreSignUp_")) {
+      return handlePreSignUp(event as CognitoTriggerEvent);
+    }
+    if (event.triggerSource.startsWith("PostConfirmation_")) {
+      return handlePostConfirmation(event as CognitoTriggerEvent);
+    }
   }
 
   // API Gateway HTTP request

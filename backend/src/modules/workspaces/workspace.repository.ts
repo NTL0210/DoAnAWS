@@ -1,4 +1,4 @@
-import type { Workspace, CreateWorkspaceInput, UpdateWorkspaceInput } from "./workspace.types.js";
+import type { Workspace } from "./workspace.types.js";
 
 export interface WorkspaceRepository {
   findById(id: string): Promise<Workspace | null>;
