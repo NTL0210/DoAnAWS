@@ -53,20 +53,31 @@ export async function list(event) {
 
 /**
  * POST /users — Create a new user.
- * Admin only. Creates user in DynamoDB + Cognito (if configured).
+ *
+ * Two flows:
+ *   1. Self-registration — user creates their own record after Cognito sign-up.
+ *      The frontend sends the Cognito userId. Password is optional (Cognito manages auth).
+ *   2. Admin creation — admin creates any user. Password is required.
  */
 export async function create(event) {
   const { parsedBody, authUser } = event;
 
-  // Only admin can create users
-  if (authUser.role !== 'ADMIN') {
+  const { name, email, password, role, departmentId, avatar } = parsedBody || {};
+
+  // Self-registration: user creating their own record (userId matches auth token)
+  const isSelf = parsedBody?.id === authUser.userId;
+
+  if (!isSelf && authUser.role !== 'ADMIN') {
     return badRequest('Only admins can create users', 'FORBIDDEN');
   }
 
-  const { name, email, password, role, departmentId, avatar } = parsedBody || {};
+  if (!name || !email) {
+    return badRequest('Name and email are required');
+  }
 
-  if (!name || !email || !password) {
-    return badRequest('Name, email, and password are required');
+  // Password required only for admin-created users
+  if (!isSelf && !password) {
+    return badRequest('Password is required');
   }
 
   // Check for duplicate email
@@ -75,13 +86,14 @@ export async function create(event) {
     return badRequest('Email already in use', 'CONFLICT');
   }
 
+  const userId = parsedBody.id || 'user-' + Date.now().toString(36);
   const user = await create({
-    id: parsedBody.id,
+    id: userId,
     name: name.trim(),
     email: email.trim().toLowerCase(),
-    password,
+    password: isSelf ? undefined : password,
     avatar: avatar || null,
-    role: role || 'EMPLOYEE',
+    role: isSelf ? 'EMPLOYEE' : (role || 'EMPLOYEE'),
     departmentId: departmentId || null,
   });
 

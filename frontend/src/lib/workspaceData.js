@@ -201,397 +201,6 @@ export const SPECIAL_VIEWS = [
 ];
 
 // ============================================================
-// MOCK WORKSPACES
-// ============================================================
-export const workspaces = [
-  {
-    id: 'ws-1',
-    name: 'Acme Corp',
-    slug: 'acme-corp',
-    ownerId: 'user-1',
-    channels: [
-      { id: 'ch-general', name: 'general', type: 'text', description: 'General discussion', isDefault: true },
-      { id: 'ch-announcements', name: 'announcements', type: 'text', description: 'Company announcements', isDefault: true },
-      { id: 'ch-meeting-notes', name: 'meeting-notes', type: 'text', description: 'Meeting notes', isDefault: false },
-      { id: 'ch-dev', name: 'development', type: 'text', description: 'Development team chat' },
-      { id: 'ch-marketing', name: 'marketing', type: 'text', description: 'Marketing discussions' },
-      {
-        id: 'vc-general',
-        name: 'General Voice',
-        type: 'voice',
-        scope: 'WORKSPACE',
-        teamId: null,
-        allowedTeamIds: [],
-        allowedUserIds: [],
-        deniedUserIds: [],
-        isDefault: true,
-        isLocked: false,
-        allowRecording: true,
-        createdAt: '2026-01-01T00:00:00Z',
-        updatedAt: '2026-06-01T00:00:00Z',
-      },
-      {
-        id: 'vc-engineering',
-        name: 'Engineering Voice',
-        type: 'voice',
-        scope: 'TEAM',
-        teamId: 'team-3',
-        allowedTeamIds: ['team-3'],
-        allowedUserIds: [],
-        deniedUserIds: [],
-        isDefault: false,
-        isLocked: true,
-        allowRecording: true,
-        createdAt: '2026-01-01T00:00:00Z',
-        updatedAt: '2026-06-01T00:00:00Z',
-      },
-      {
-        id: 'vc-project-alpha',
-        name: 'Project Alpha Voice',
-        type: 'voice',
-        scope: 'CUSTOM',
-        teamId: null,
-        allowedTeamIds: ['team-2', 'team-3'],
-        allowedUserIds: [],
-        deniedUserIds: [],
-        isDefault: false,
-        isLocked: true,
-        allowRecording: true,
-        createdAt: '2026-01-01T00:00:00Z',
-        updatedAt: '2026-06-01T00:00:00Z',
-      },
-    ],
-    teams: [
-      { id: 'team-1', name: 'General Team', description: 'Cross-functional team', color: '#5865F2', managerId: 'user-1', memberIds: ['user-1', 'user-2', 'user-3'] },
-      { id: 'team-2', name: 'Product Team', description: 'Product development', color: '#3BA55D', managerId: 'user-2', memberIds: ['user-2'] },
-      { id: 'team-3', name: 'Engineering Team', description: 'Engineering', color: '#FF8C00', managerId: 'user-1', memberIds: ['user-1', 'user-3'] },
-    ],
-    members: [
-      { userId: 'user-1', role: 'OWNER', joinedAt: '2026-01-01T00:00:00Z', nickname: null },
-      { userId: 'user-2', role: 'MANAGER', joinedAt: '2026-01-02T00:00:00Z', nickname: null },
-      { userId: 'user-3', role: 'EMPLOYEE', joinedAt: '2026-01-03T00:00:00Z', nickname: null },
-    ],
-    customRoles: [],
-    features: DEFAULT_FEATURES,
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-06-01T00:00:00Z',
-  },
-  {
-    id: 'ws-2',
-    name: 'Design Studio',
-    slug: 'design-studio',
-    ownerId: 'user-2',
-    channels: [
-      { id: 'ch-general-2', name: 'general', type: 'text', description: 'General', isDefault: true },
-      { id: 'ch-announce-2', name: 'announcements', type: 'text', description: 'Announcements', isDefault: true },
-    ],
-    teams: [
-      { id: 'team-ds-1', name: 'Design Team', description: 'Core design team', color: '#3BA55D', managerId: 'user-2', memberIds: ['user-2'] },
-    ],
-    members: [
-      { userId: 'user-2', role: 'OWNER', joinedAt: '2026-03-01T00:00:00Z', nickname: null },
-    ],
-    customRoles: [],
-    features: DEFAULT_FEATURES,
-    createdAt: '2026-03-01T00:00:00Z',
-    updatedAt: '2026-06-01T00:00:00Z',
-  },
-];
-
-// ============================================================
-// MOCK MESSAGES per channel
-// ============================================================
-export const mockMessages = {
-  'ch-general': [
-    {
-      id: 'msg-1',
-      channelId: 'ch-general',
-      workspaceId: 'ws-1',
-      userId: 'user-1',
-      content: 'Hi everyone! Welcome to the **Acme Corp** workspace.',
-      attachments: [],
-      createdAt: '2026-06-01T09:00:00Z',
-      updatedAt: null,
-    },
-    {
-      id: 'msg-2',
-      channelId: 'ch-general',
-      workspaceId: 'ws-1',
-      userId: 'user-2',
-      content: 'Hi Alex! Happy to join. I reviewed the channels, and the workspace already feels organized.',
-      attachments: [],
-      createdAt: '2026-06-01T09:05:00Z',
-      updatedAt: null,
-    },
-    {
-      id: 'msg-3',
-      channelId: 'ch-general',
-      workspaceId: 'ws-1',
-      userId: 'user-3',
-      content: 'Hi everyone, I am the new member. Looking forward to learning from the team.',
-      attachments: [],
-      createdAt: '2026-06-01T09:10:00Z',
-      updatedAt: null,
-    },
-    {
-      id: 'msg-4',
-      channelId: 'ch-general',
-      workspaceId: 'ws-1',
-      userId: 'user-1',
-      content: 'Welcome. This week we need to finish:\n1. Polish the login interface\n2. Set up the CI/CD pipeline\n3. Write API documentation\n\nPlease review the list and plan your time.',
-      attachments: [],
-      createdAt: '2026-06-02T08:00:00Z',
-      updatedAt: null,
-    },
-    {
-      id: 'msg-5',
-      channelId: 'ch-general',
-      workspaceId: 'ws-1',
-      userId: 'user-2',
-      content: 'Got it. I will take CI/CD and API documentation. Can John own the login interface?',
-      attachments: [],
-      createdAt: '2026-06-02T08:15:00Z',
-      updatedAt: null,
-    },
-    {
-      id: 'msg-6',
-      channelId: 'ch-general',
-      workspaceId: 'ws-1',
-      userId: 'user-3',
-      content: 'I can help with the login interface. I have React and Tailwind CSS experience. Please assign that task to me.',
-      attachments: [],
-      createdAt: '2026-06-02T08:30:00Z',
-      updatedAt: null,
-    },
-  ],
-  'ch-dev': [
-    {
-      id: 'msg-dev-1',
-      channelId: 'ch-dev',
-      workspaceId: 'ws-1',
-      userId: 'user-1',
-      content: 'Team, we need to discuss the new architecture.',
-      attachments: [],
-      createdAt: '2026-06-03T10:00:00Z',
-      updatedAt: null,
-    },
-    {
-      id: 'msg-dev-2',
-      channelId: 'ch-dev',
-      workspaceId: 'ws-1',
-      userId: 'user-2',
-      content: 'App Router supports React Server Components and streaming. If we have time, we should migrate gradually.',
-      attachments: [],
-      createdAt: '2026-06-03T10:30:00Z',
-      updatedAt: null,
-    },
-  ],
-  'ch-marketing': [
-    {
-      id: 'msg-mkt-1',
-      channelId: 'ch-marketing',
-      workspaceId: 'ws-1',
-      userId: 'user-2',
-      content: 'Team, this week we need to prepare content for the blog post about the new feature.',
-      attachments: [],
-      createdAt: '2026-06-04T14:00:00Z',
-      updatedAt: null,
-    },
-  ],
-  'ch-announcements': [
-    {
-      id: 'msg-ann-1',
-      channelId: 'ch-announcements',
-      workspaceId: 'ws-1',
-      userId: 'user-1',
-      content: '**IMPORTANT ANNOUNCEMENT**\n\nStarting in July, the company will roll out a new hybrid work policy.',
-      attachments: [
-        { id: 'att-1', name: 'Hybrid_Policy_2026.pdf', type: 'file', size: '245 KB' },
-      ],
-      createdAt: '2026-06-01T07:00:00Z',
-      updatedAt: null,
-    },
-  ],
-  'team-chat-team-1': [
-    {
-      id: 'msg-team-1',
-      teamId: 'team-1',
-      workspaceId: 'ws-1',
-      userId: 'user-1',
-      content: 'Welcome to the General Team chat. Use this space for cross-functional updates.',
-      attachments: [],
-      createdAt: '2026-06-05T09:00:00Z',
-      updatedAt: null,
-      scope: 'TEAM',
-    },
-  ],
-  'team-chat-team-2': [
-    {
-      id: 'msg-team-2',
-      teamId: 'team-2',
-      workspaceId: 'ws-1',
-      userId: 'user-2',
-      content: 'Product planning notes and roadmap questions can live here.',
-      attachments: [],
-      createdAt: '2026-06-05T10:00:00Z',
-      updatedAt: null,
-      scope: 'TEAM',
-    },
-  ],
-  'team-chat-team-3': [
-    {
-      id: 'msg-team-3',
-      teamId: 'team-3',
-      workspaceId: 'ws-1',
-      userId: 'user-3',
-      content: 'Engineering team chat is ready for implementation discussions.',
-      attachments: [],
-      createdAt: '2026-06-05T11:00:00Z',
-      updatedAt: null,
-      scope: 'TEAM',
-    },
-  ],
-};
-
-// ============================================================
-// MOCK AI MEETINGS
-// ============================================================
-export const mockWorkspaceMeetings = [
-  {
-    id: 'meeting-ai-1',
-    workspaceId: 'ws-1',
-    teamId: 'team-3',
-    title: 'AI Meeting Review Flow Kickoff',
-    type: 'TRANSCRIPT',
-    status: 'AI_REVIEW_READY',
-    participants: ['user-1', 'user-3'],
-    participantIds: ['user-1', 'user-3'],
-    transcript: 'Alex: We need a review step before creating AI tasks. John: I can polish the suggested task card and confidence warnings by Friday.',
-    transcriptText: 'Alex: We need a review step before creating AI tasks. John: I can polish the suggested task card and confidence warnings by Friday.',
-    audioFile: null,
-    storageKey: null,
-    aiSummary: 'The team aligned on a manager review flow where AI suggests tasks, managers edit and approve, then tasks are created with meeting traceability.',
-    summary: 'The team aligned on a manager review flow where AI suggests tasks, managers edit and approve, then tasks are created with meeting traceability.',
-    keyDecisions: [
-      'AI must not create tasks without manager approval.',
-      'Every created task should keep sourceMeetingId.',
-    ],
-    risks: [
-      'Low confidence suggestions need clear review warnings.',
-    ],
-    actionItems: [
-      'Build suggested task cards with edit controls.',
-      'Show generated tasks in meeting detail.',
-    ],
-    suggestedTasks: [
-      {
-        id: 'suggestion-ai-1',
-        title: 'Build suggested task review cards',
-        description: 'Create editable cards for AI suggested tasks with selection, assignee, team, priority, deadline, and confidence.',
-        assigneeId: 'user-3',
-        teamId: 'team-3',
-        priority: 'HIGH',
-        deadline: '2026-06-12',
-        confidence: 0.88,
-        status: 'PENDING_REVIEW',
-        approved: true,
-        selected: true,
-        sourceQuote: 'John: I can polish the suggested task card and confidence warnings by Friday.',
-        missingFields: [],
-      },
-      {
-        id: 'suggestion-ai-2',
-        title: 'Add low confidence review warning',
-        description: 'Display Needs review for confidence lower than 80 percent.',
-        assigneeId: null,
-        teamId: 'team-3',
-        priority: 'MEDIUM',
-        deadline: null,
-        confidence: 0.72,
-        status: 'PENDING_REVIEW',
-        approved: false,
-        selected: false,
-        sourceQuote: 'John: confidence warnings by Friday.',
-        missingFields: ['assigneeId', 'deadline'],
-      },
-    ],
-    generatedTaskIds: [],
-    processingJobId: 'mock-job-seed-1',
-    processingError: null,
-    createdBy: 'user-1',
-    createdAt: '2026-06-06T09:00:00Z',
-    updatedAt: '2026-06-06T09:05:00Z',
-  },
-];
-
-// ============================================================
-// MOCK INVITATIONS
-// ============================================================
-export const mockInvitations = [
-  {
-    id: 'inv-1',
-    workspaceId: 'ws-1',
-    workspaceName: 'Acme Corp',
-    invitedByUserId: 'user-1',
-    invitedByUserName: 'Alex Johnson',
-    inviteeEmail: 'robert@company.com',
-    role: 'EMPLOYEE',
-    status: 'PENDING',
-    createdAt: '2026-06-04T10:00:00Z',
-  },
-  {
-    id: 'inv-2',
-    workspaceId: 'ws-2',
-    workspaceName: 'Design Studio',
-    invitedByUserId: 'user-2',
-    invitedByUserName: 'Sarah Chen',
-    inviteeEmail: 'john@company.com',
-    role: 'MANAGER',
-    status: 'PENDING',
-    createdAt: '2026-06-04T12:00:00Z',
-  },
-];
-
-// ============================================================
-// USER WORKSPACE MEMBERSHIP
-// ============================================================
-export const userWorkspaces = {
-  'user-1': ['ws-1'],
-  'user-2': ['ws-1', 'ws-2'],
-  'user-3': ['ws-1'],
-};
-
-// ============================================================
-// MOCK USERS
-// ============================================================
-export const mockUsers = [
-  {
-    id: 'user-1',
-    name: 'Alex Johnson',
-    email: 'alex@company.com',
-    password: '123456',
-    avatar: 'https://i.pravatar.cc/150?img=1',
-    createdAt: '2026-01-10T00:00:00Z',
-  },
-  {
-    id: 'user-2',
-    name: 'Sarah Chen',
-    email: 'sarah@company.com',
-    password: '123456',
-    avatar: 'https://i.pravatar.cc/150?img=2',
-    createdAt: '2026-01-12T00:00:00Z',
-  },
-  {
-    id: 'user-3',
-    name: 'John Doe',
-    email: 'john@company.com',
-    password: '123456',
-    avatar: 'https://i.pravatar.cc/150?img=3',
-    createdAt: '2026-01-15T00:00:00Z',
-  },
-];
-
-// ============================================================
 // HELPERS
 // ============================================================
 
@@ -636,10 +245,8 @@ export function getWorkspaceRole(workspace, userId) {
  * @returns {string|null}
  */
 export function getMemberRole(workspaceId, userId) {
-  const workspace = workspaces.find((w) => w.id === workspaceId);
-  if (!workspace) return null;
-  const member = workspace.members?.find((m) => m.userId === userId);
-  return member ? member.role : null;
+  // Replaced: workspace lookup via seed data is removed.
+  return null;
 }
 
 /**
@@ -669,8 +276,8 @@ export function hasWorkspacePermission(workspace, userId, permission) {
  * @returns {boolean}
  */
 export function hasPermission(workspaceId, userId, permission) {
-  const workspace = workspaces.find((w) => w.id === workspaceId);
-  return hasWorkspacePermission(workspace, userId, permission);
+  // Replaced: workspace lookup via seed data is removed.
+  return false;
 }
 
 /**
@@ -701,8 +308,8 @@ export function getUserWorkspacePermissions(workspace, userId) {
  * @returns {string[]}
  */
 export function getUserPermissions(workspaceId, userId) {
-  const workspace = workspaces.find((w) => w.id === workspaceId);
-  return getUserWorkspacePermissions(workspace, userId);
+  // Replaced: workspace lookup via seed data is removed.
+  return [];
 }
 
 /**
@@ -734,82 +341,6 @@ export function getDefaultPermissionsForRole(role) {
 }
 
 /**
- * Create a complete default workspace structure
- * @param {string} name
- * @param {string} ownerId
- * @returns {Object}
- */
-export function createDefaultWorkspaceStructure(input, ownerId) {
-  const config = typeof input === 'object' && input !== null ? input : { name: input };
-  const name = String(config.name || 'Workspace').trim() || 'Workspace';
-  const wsId = 'ws-' + generateId();
-  const slug = generateWorkspaceSlug(name);
-  const now = new Date().toISOString();
-
-  // Create channels with unique IDs
-  const textChannels = DEFAULT_TEXT_CHANNELS.map((ch, i) => ({
-    id: wsId + '-ch-' + i,
-    name: ch.name,
-    type: 'text',
-    description: ch.description,
-    isDefault: ch.isDefault,
-  }));
-
-  const voiceChannels = DEFAULT_VOICE_CHANNELS.map((ch, i) => ({
-    id: wsId + '-vc-' + i,
-    name: ch.name,
-    type: 'voice',
-    scope: ch.scope,
-    teamId: ch.teamId,
-    allowedTeamIds: ch.allowedTeamIds,
-    allowedUserIds: ch.allowedUserIds,
-    deniedUserIds: ch.deniedUserIds,
-    isDefault: ch.isDefault,
-    isLocked: ch.isLocked,
-    allowRecording: ch.allowRecording,
-    createdAt: now,
-    updatedAt: now,
-  }));
-
-  // Create default teams with unique IDs
-  const teams = DEFAULT_TEAMS.map((team, i) => ({
-    id: wsId + '-team-' + i,
-    name: team.name,
-    description: team.description,
-    color: team.color,
-    managerId: ownerId,
-    memberIds: [ownerId],
-    createdAt: now,
-    updatedAt: now,
-  }));
-
-  return {
-    id: wsId,
-    name,
-    slug,
-    description: config.description || '',
-    iconColor: config.iconColor || 'blue',
-    workspaceType: config.workspaceType || 'blank',
-    visibility: config.visibility || 'private',
-    ownerId,
-    channels: [...textChannels, ...voiceChannels],
-    teams,
-    members: [
-      {
-        userId: ownerId,
-        role: 'OWNER',
-        joinedAt: now,
-        nickname: null,
-      },
-    ],
-    customRoles: [],
-    features: DEFAULT_FEATURES.map((f) => ({ ...f })),
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-/**
  * Create initial activity for a new workspace
  * @param {string} workspaceId
  * @param {string} userName
@@ -829,12 +360,6 @@ export function createInitialActivity(workspaceId, userName) {
 }
 
 export default {
-  workspaces,
-  mockMessages,
-  mockInvitations,
-  mockWorkspaceMeetings,
-  userWorkspaces,
-  mockUsers,
   DEFAULT_ROLES,
   DEFAULT_TEXT_CHANNELS,
   DEFAULT_VOICE_CHANNELS,
@@ -852,6 +377,5 @@ export default {
   getWorkspaceTeams,
   getWorkspaceMembers,
   getDefaultPermissionsForRole,
-  createDefaultWorkspaceStructure,
   createInitialActivity,
 };

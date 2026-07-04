@@ -84,3 +84,10 @@ jobs:
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
             --zip-file fileb://bundle-deploy.zip \
             --region ${{ env.AWS_REGION }}
+
+      - name: Update Lambda environment variables
+        run: |
+          aws lambda update-function-configuration \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --environment "Variables={DATA_PROVIDER=dynamodb,DYNAMODB_TABLE_MAIN=ai-meeting-platform,NODE_ENV=production}" \
+            --region ${{ env.AWS_REGION }}

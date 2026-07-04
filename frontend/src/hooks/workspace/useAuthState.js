@@ -117,7 +117,7 @@ export default function useAuthState() {
       // Dynamic import to avoid loading Amplify Auth in mock mode
       const { signUp, signIn, fetchAuthSession, getCurrentUser } = await import('aws-amplify/auth');
 
-      // Step 1: Sign up in Cognito
+      // Step 1: Sign up in Cognito (PostConfirmation Lambda auto-creates DynamoDB user)
       await signUp({
         username: email,
         password,
@@ -135,19 +135,17 @@ export default function useAuthState() {
       // Step 4: Lấy userId thật từ Cognito
       const cognitoUser = await getCurrentUser();
 
-      // Step 5: Tạo user record trong DynamoDB
+      // Step 5: Đợi PostConfirmation Lambda tạo user trong DynamoDB (tối đa 3 giây)
+      let userRecord = null;
       const { usersApi } = await import('@/services/cloudClient');
-      try {
-        await usersApi.create({
-          id: cognitoUser.userId,
-          name: name || email.split('@')[0],
-          email,
-          role: 'EMPLOYEE',
-          departmentId: null,
-        });
-      } catch (err) {
-        // User có thể đã tồn tại nếu signUp chạy lần 2
-        console.warn('[register] Could not create DynamoDB user:', err.message);
+      for (let i = 0; i < 6; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        try {
+          userRecord = await usersApi.get(cognitoUser.userId);
+          if (userRecord) break;
+        } catch {
+          // User chưa được tạo xong — retry
+        }
       }
 
       return {
