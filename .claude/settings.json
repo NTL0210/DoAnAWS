@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(aws cloudfront *)",
+      "Bash(aws wafv2 *)",
+      "Bash(aws logs *)"
+    ]
+  }
+}
