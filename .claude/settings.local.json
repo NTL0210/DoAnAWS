@@ -27,7 +27,18 @@
       "Bash(sed -n '87,107p' globals.css)",
       "Bash(sed -n '132,263p' globals.css)",
       "Bash(sed -n '266,291p' globals.css)",
-      "Bash(sed -n '345,384p' globals.css)"
+      "Bash(sed -n '345,384p' globals.css)",
+      "PowerShell(aws s3api list-buckets --query \"Buckets[?contains\\(Name, 'ai-meeting'\\)].[Name]\" --output table 2>&1)",
+      "PowerShell(aws configure get region 2>&1)",
+      "PowerShell(aws lambda list-functions --region ap-southeast-1 --output json 2>&1)",
+      "PowerShell(aws configure list 2>&1)",
+      "PowerShell(aws lambda list-functions --region ap-southeast-1 --max-items 50 2>&1)",
+      "PowerShell(aws cognito-idp describe-user-pool-client --user-pool-id ap-southeast-1_20iPdOTUE --client-id 6e1ne5noh1s2urvv03jf7oc7bp --query \"UserPoolClient.{ClientName:ClientName,ExplicitAuthFlows:ExplicitAuthFlows,ReadAttributes:ReadAttributes,WriteAttributes:WriteAttributes,RefreshTokenValidity:RefreshTokenValidity}\" --output json 2>&1)",
+      "PowerShell(aws configure list-profiles 2>&1)",
+      "PowerShell(aws sts get-caller-identity --output json 2>&1)",
+      "PowerShell(aws sts get-caller-identity --profile github_user --output json 2>&1)",
+      "PowerShell(aws cloudformation list-stacks --profile github_user --region ap-southeast-1 --query \"StackSummaries[?StackStatus!='DELETE_COMPLETE'].[StackName,StackStatus]\" --output json 2>&1)",
+      "PowerShell(aws dynamodb list-tables --profile github_user --region ap-southeast-1 --query \"TableNames\" --output json 2>&1)"
     ]
   }
 }
