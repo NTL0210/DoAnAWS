@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { signIn, signUp, signOut, getCurrentUser, fetchAuthSession } from 'aws-amplify/auth';
 import { loginUser, registerUser } from '@/services/userService';
 import { isMockMode, isCloudMode, setAuthToken } from '@/services/apiClient';
 
@@ -46,8 +45,41 @@ export default function useAuthState() {
 
   const login = useCallback(async (email, password) => {
     if (isCloudMode()) {
-      // Cognito sign in
-      await signIn({ username: email, password });
+      // Dynamic import to avoid loading Amplify Auth in mock mode
+      const { signIn, fetchAuthSession, getCurrentUser } = await import('aws-amplify/auth');
+
+      // Cognito sign in — dùng USER_PASSWORD_AUTH để tránh lỗi SRP
+      try {
+        await signIn({
+          username: email,
+          password,
+          options: {
+            authFlowType: 'USER_PASSWORD_AUTH',
+          },
+        });
+      } catch (err) {
+        // Log chi tiết lỗi Cognito để debug
+        console.error('[Auth:login] Cognito signIn failed:', {
+          name: err.name,
+          message: err.message,
+          code: err.code,
+        });
+
+        // Map lỗi Cognito sang tiếng Việt dễ hiểu
+        if (err.name === 'UserNotConfirmedException') {
+          throw new Error('Tài khoản chưa được xác thực. Vui lòng kiểm tra email để xác nhận.');
+        }
+        if (err.name === 'NotAuthorizedException') {
+          throw new Error('Email hoặc mật khẩu không đúng.');
+        }
+        if (err.name === 'UserNotFoundException') {
+          throw new Error('Tài khoản không tồn tại.');
+        }
+        if (err.name === 'InvalidParameterException' || err.name === 'InvalidLambdaResponseException') {
+          throw new Error('Lỗi cấu hình Cognito. Liên hệ admin để kiểm tra PreSignUp Lambda.');
+        }
+        throw err; // Giữ nguyên lỗi gốc nếu không mapping được
+      }
 
       // Store access token for API Gateway calls
       const session = await fetchAuthSession();
@@ -73,13 +105,44 @@ export default function useAuthState() {
 
   const register = useCallback(async (name, email, password) => {
     if (isCloudMode()) {
+      // Dynamic import to avoid loading Amplify Auth in mock mode
+      const { signUp, signIn, fetchAuthSession, getCurrentUser } = await import('aws-amplify/auth');
+
+      // Step 1: Sign up in Cognito
       await signUp({
         username: email,
         password,
         attributes: { email, name, preferred_username: name },
       });
+
+      // Step 2: Sign in ngay lập tức (PreSignUp Lambda tự động confirm)
+      await signIn({ username: email, password });
+
+      // Step 3: Lưu access token cho API Gateway calls
+      const session = await fetchAuthSession();
+      const token = session.tokens?.accessToken?.toString();
+      if (token) setAuthToken(token);
+
+      // Step 4: Lấy userId thật từ Cognito
+      const cognitoUser = await getCurrentUser();
+
+      // Step 5: Tạo user record trong DynamoDB
+      const { usersApi } = await import('@/services/cloudClient');
+      try {
+        await usersApi.create({
+          id: cognitoUser.userId,
+          name: name || email.split('@')[0],
+          email,
+          role: 'EMPLOYEE',
+          departmentId: null,
+        });
+      } catch (err) {
+        // User có thể đã tồn tại nếu signUp chạy lần 2
+        console.warn('[register] Could not create DynamoDB user:', err.message);
+      }
+
       return {
-        id: email,
+        id: cognitoUser.userId,
         email,
         name: name || email.split('@')[0],
         avatar: null,
@@ -132,7 +195,7 @@ export default function useAuthState() {
   const logout = useCallback(() => {
     // Cognito sign out in cloud mode
     if (isCloudMode()) {
-      signOut();
+      import('aws-amplify/auth').then(({ signOut }) => signOut()).catch(() => {});
     }
 
     setCurrentUser(null);
