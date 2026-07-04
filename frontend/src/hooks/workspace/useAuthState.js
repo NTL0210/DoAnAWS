@@ -46,7 +46,11 @@ export default function useAuthState() {
   const login = useCallback(async (email, password) => {
     if (isCloudMode()) {
       // Dynamic import to avoid loading Amplify Auth in mock mode
-      const { signIn, fetchAuthSession, getCurrentUser } = await import('aws-amplify/auth');
+      const { signIn, signOut, fetchAuthSession, getCurrentUser } = await import('aws-amplify/auth');
+
+      // Clear any existing session before signing in to avoid
+      // "There is already a signed in user" error after logout or failed attempts
+      try { await signOut(); } catch (_) { /* ignore — no session to clear */ }
 
       // Cognito sign in — dùng USER_PASSWORD_AUTH để tránh lỗi SRP
       try {
@@ -77,6 +81,11 @@ export default function useAuthState() {
         }
         if (err.name === 'InvalidParameterException' || err.name === 'InvalidLambdaResponseException') {
           throw new Error('Lỗi cấu hình Cognito. Liên hệ admin để kiểm tra PreSignUp Lambda.');
+        }
+        if (err.message?.includes('already a signed in user')) {
+          // Đã signOut ở trên, nếu vẫn lỗi thì clear mạnh tay
+          try { await signOut({ global: true }); } catch (_) {}
+          throw new Error('Đã xoá session cũ, vui lòng thử đăng nhập lại.');
         }
         throw err; // Giữ nguyên lỗi gốc nếu không mapping được
       }
