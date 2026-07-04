@@ -1,74 +1,56 @@
 /**
- * LegacyDataService — async wrapper for legacy mockData.js
+ * LegacyDataService — async wrapper for legacy data.
  *
- * This service provides backward-compatible access to the old
- * department-based mock data for pages that haven't been migrated
- * to the workspace architecture yet.
+ * In cloud mode, delegates to the cloud API.
+ * In non-cloud mode, returns empty arrays (no mock data).
  *
- * Migration path: When these pages are migrated to use repositories
- * and services directly, this file can be removed.
- *
- * NEVER import @/lib/mockData directly in page/component files.
- * Always use this service instead.
+ * NEVER import @/lib/mockData directly — mock data has been removed.
  */
 
-const DELAY_MS = 100;
-const delay = (ms = DELAY_MS) => new Promise((r) => setTimeout(r, ms));
+import { isCloudMode } from '@/config/runtimeConfig';
+import { meetingsApi, tasksApi, usersApi } from '@/services/cloudClient';
 
-/**
- * Load all departments
- * @returns {Promise<Array>}
- */
 export async function getDepartments() {
-  await delay();
-  const { departments } = await import('@/lib/mockData');
-  return departments;
+  return [];
 }
 
-/**
- * Load all users
- * @returns {Promise<Array>}
- */
 export async function getUsers() {
-  await delay();
-  const { users } = await import('@/lib/mockData');
-  return users;
+  if (isCloudMode()) {
+    try {
+      return await usersApi.list();
+    } catch {
+      return [];
+    }
+  }
+  return [];
 }
 
-/**
- * Load all meetings
- * @returns {Promise<Array>}
- */
 export async function getMeetings() {
-  await delay();
-  const { meetings } = await import('@/lib/mockData');
-  return meetings;
+  if (isCloudMode()) {
+    try {
+      return await meetingsApi.list({});
+    } catch {
+      return [];
+    }
+  }
+  return [];
 }
 
-/**
- * Load all tasks
- * @returns {Promise<Array>}
- */
 export async function getTasks() {
-  await delay();
-  const { tasks } = await import('@/lib/mockData');
-  return tasks;
+  if (isCloudMode()) {
+    try {
+      return await tasksApi.list({});
+    } catch {
+      return [];
+    }
+  }
+  return [];
 }
 
-/**
- * Load all notifications
- * @returns {Promise<Array>}
- */
 export async function getNotifications() {
-  await delay();
-  const { notifications } = await import('@/lib/mockData');
-  return notifications;
+  return [];
 }
 
-/**
- * Load all data at once
- * @returns {Promise<{departments: Array, users: Array, meetings: Array, tasks: Array, notifications: Array}>}
- */
 export async function getAllData() {
   const [departments, users, meetings, tasks, notifications] = await Promise.all([
     getDepartments(),
@@ -80,44 +62,30 @@ export async function getAllData() {
   return { departments, users, meetings, tasks, notifications };
 }
 
-/**
- * Get mock AI service
- * @returns {Promise<Object>}
- */
-export async function getMockAI() {
-  await delay();
-  const { mockAI } = await import('@/lib/mockData');
-  return mockAI;
-}
-
-/**
- * Find a user by ID
- * @param {string} id
- * @returns {Promise<Object|null>}
- */
 export async function getUserById(id) {
-  const users = await getUsers();
-  return users.find((u) => u.id === id) || null;
+  if (isCloudMode()) {
+    try {
+      return await usersApi.get(id);
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
-/**
- * Find tasks by assignee ID
- * @param {string} assigneeId
- * @returns {Promise<Array>}
- */
 export async function getTasksByAssignee(assigneeId) {
-  const tasks = await getTasks();
-  return tasks.filter((t) => t.assigneeId === assigneeId);
+  if (isCloudMode()) {
+    try {
+      return await tasksApi.list({ assigneeId });
+    } catch {
+      return [];
+    }
+  }
+  return [];
 }
 
-/**
- * Find meetings by department
- * @param {string} departmentId
- * @returns {Promise<Array>}
- */
 export async function getMeetingsByDepartment(departmentId) {
-  const meetings = await getMeetings();
-  return meetings.filter((m) => m.departmentId === departmentId);
+  return [];
 }
 
 // ─── Re-export new cost-aware services for backward compatibility ───

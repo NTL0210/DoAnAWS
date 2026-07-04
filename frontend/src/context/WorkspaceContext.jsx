@@ -219,7 +219,7 @@ export function WorkspaceProvider({ children }) {
           const token = getAuthToken();
           if (token) {
             try {
-              const { authApi } = await import('@/services/cloudClient');
+              const { authApi, workspacesApi } = await import('@/services/cloudClient');
               const result = await authApi.me();
               const user = result?.user || result;
               if (user?.id) {
@@ -231,6 +231,17 @@ export function WorkspaceProvider({ children }) {
                   expiresAt: Date.now() + SESSION_TTL_MS,
                 }));
                 localStorage.setItem('user', JSON.stringify(hydratedUser));
+
+                // Load workspaces from cloud API
+                try {
+                  const wsList = await workspacesApi.list({ userId: user.id });
+                  if (Array.isArray(wsList) && wsList.length > 0) {
+                    workspaceHook.setWorkspaces(wsList);
+                  }
+                } catch (wsErr) {
+                  // Workspace list is best-effort; user can create new ones
+                }
+
                 if (!cancelled) setWorkspaceStorageHydrated(true);
                 return;
               }
@@ -301,6 +312,36 @@ export function WorkspaceProvider({ children }) {
     if (!workspaceStorageHydrated) return;
     localStorage.setItem(STORAGE_KEYS.trash, JSON.stringify(tasksHook.trashItems));
   }, [workspaceStorageHydrated, tasksHook.trashItems]);
+
+  // ─── Cloud API sync (debounced) ───────────────────────
+  // Persist workspace sub-entities (teams, channels, messages, voice)
+  // to DynamoDB via cloud API whenever they change.
+  useEffect(() => {
+    if (!workspaceStorageHydrated) return;
+    if (!isCloudMode()) return;
+    if (!authHook.currentUser?.id) return;
+
+    const timer = setTimeout(async () => {
+      for (const ws of workspaceHook.workspaces) {
+        try {
+          const { workspacesApi } = await import('@/services/cloudClient');
+          await workspacesApi.update(ws.id, {
+            teams: ws.teams,
+            channels: ws.channels,
+            members: ws.members,
+            messages: ws.messages,
+            voiceRecords: ws.voiceRecords,
+            expectedVersion: ws.version ?? 1,
+          });
+        } catch {
+          // Best-effort; next sync will retry
+        }
+      }
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceStorageHydrated, workspaceHook.workspaces]);
 
   // ─── Auto-select workspace when user logs in ──────────
   useEffect(() => {

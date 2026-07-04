@@ -1,34 +1,18 @@
 /**
  * WorkspaceService — business logic for workspaces
  *
+ * Supports two modes:
+ *   mock  → localStorage via mock repository
+ *   cloud → API Gateway + Cognito
+ *
  * Extends the existing src/services/workspaceService.js
  */
 
 export { canManageAIWorkflow } from './permissionService';
 export { getDefaultPermissionsForRole } from '@/data/defaults/roles';
 
-/**
- * Get a team from a workspace by team ID
- * @param {Object} workspace
- * @param {string} teamId
- * @returns {Object|null}
- */
-export function getWorkspaceTeam(workspace, teamId) {
-  if (!workspace || !teamId) return null;
-  return workspace.teams?.find((team) => team.id === teamId) || null;
-}
-
-/**
- * Get team members from workspace members
- * @param {Array} workspaceMembers
- * @param {Object} team
- * @returns {Array}
- */
-export function getTeamMembers(workspaceMembers, team) {
-  if (!team) return workspaceMembers || [];
-  return (workspaceMembers || []).filter((member) => team.memberIds?.includes(member.userId));
-}
-
+import { isCloudMode } from '@/config/runtimeConfig';
+import { workspacesApi } from '@/services/cloudClient';
 import { workspaceRepo, teamRepo, channelRepo } from '@/repositories';
 import { DEFAULT_FEATURES } from '@/data/defaults/features';
 import { DEFAULT_TEXT_CHANNELS, DEFAULT_VOICE_CHANNELS } from '@/data/defaults/channels';
@@ -220,6 +204,9 @@ export function createInitialActivity(workspaceId, userName) {
  * @returns {Promise<Object[]>}
  */
 export async function getWorkspacesForUser(userId) {
+  if (isCloudMode()) {
+    return workspacesApi.list({ userId });
+  }
   return workspaceRepo.findByUserId(userId);
 }
 
@@ -229,6 +216,9 @@ export async function getWorkspacesForUser(userId) {
  * @returns {Promise<Object|null>}
  */
 export async function getWorkspaceById(workspaceId) {
+  if (isCloudMode()) {
+    return workspacesApi.get(workspaceId);
+  }
   return workspaceRepo.findById(workspaceId);
 }
 
@@ -249,6 +239,16 @@ export async function createWorkspace({
   createDefaultTextChannel = true,
   createDefaultVoiceChannel = true,
 }) {
+  if (isCloudMode()) {
+    return workspacesApi.create({
+      name,
+      ownerId,
+      description,
+      workspaceType,
+      visibility,
+      iconColor,
+    });
+  }
   const structure = createCleanWorkspaceStructure(
     { name, description, workspaceType, visibility, iconColor },
     ownerId,

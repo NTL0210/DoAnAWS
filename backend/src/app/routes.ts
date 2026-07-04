@@ -11,6 +11,9 @@ import { TaskService } from "../modules/tasks/task.service.js";
 import { UserController } from "../modules/users/user.controller.js";
 import { buildUserRouter } from "../modules/users/user.router.js";
 import { UserService } from "../modules/users/user.service.js";
+import { WorkspaceController } from "../modules/workspaces/workspace.controller.js";
+import { buildWorkspaceRouter } from "../modules/workspaces/workspace.router.js";
+import { WorkspaceService } from "../modules/workspaces/workspace.service.js";
 import type { Repositories } from "./repositories.js";
 
 /** Middleware factory pre-bound to the workspace repository. */
@@ -37,6 +40,11 @@ export function buildApiRouter(repositories: Repositories): Router {
   const userService = new UserService(repositories.users);
   const userController = new UserController(userService);
   api.use("/users", buildUserRouter(userController, guard));
+
+  // ── Workspaces ────────────────────────────────────────
+  const workspaceService = new WorkspaceService(repositories.workspaceCrud);
+  const workspaceController = new WorkspaceController(workspaceService);
+  api.use("/workspaces", buildWorkspaceRouter(workspaceController, guard));
 
   return api;
 }

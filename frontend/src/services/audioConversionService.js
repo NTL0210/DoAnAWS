@@ -6,19 +6,10 @@
  *   backend (ffmpeg worker) processes → frontend polls status →
  *   user downloads MP3.
  *
- * Currently in mock mode: no real conversion, no fake .mp3 extension changes.
- * The mock simulates job lifecycle for UI development.
- * Replace adapter with real backend calls when the conversion worker is built.
- *
  * Reference: https://github.com/NTL0210/Ytomp34 (architecture ideas only)
  */
 
-import { isApiMode } from '@/config/runtimeConfig';
-
-import * as mockAdapter from '@/services/adapters/mockAudioProcessingAdapter';
 import * as apiAdapter from '@/services/adapters/apiAudioProcessingAdapter';
-
-const adapter = isApiMode() ? apiAdapter : mockAdapter;
 
 /** @type {Map<string, Object>} */
 const _jobCache = new Map();
@@ -31,7 +22,7 @@ const _jobCache = new Map();
  * @returns {Promise<Object>} Job { id, recordId, sourceFormat, targetFormat, status, progress, outputFileName, outputObjectUrl, errorMessage }
  */
 export async function createAudioProcessingJob(record, targetFormat = 'MP3') {
-  const job = await adapter.createAudioProcessingJob(record, targetFormat);
+  const job = await apiAdapter.createAudioProcessingJob(record, targetFormat);
   if (job?.id) _jobCache.set(job.id, job);
   return job;
 }
@@ -47,7 +38,7 @@ export async function getAudioProcessingJob(jobId) {
   if (cached && ['COMPLETED', 'FAILED', 'CANCELLED'].includes(cached.status)) {
     return cached;
   }
-  const job = await adapter.getAudioProcessingJob(jobId);
+  const job = await apiAdapter.getAudioProcessingJob(jobId);
   if (job) _jobCache.set(job.id, job);
   return job;
 }
@@ -59,7 +50,7 @@ export async function getAudioProcessingJob(jobId) {
  * @returns {Promise<Object[]>}
  */
 export function getJobsByRecord(recordId) {
-  return adapter.getJobsByRecord(recordId);
+  return apiAdapter.getJobsByRecord(recordId);
 }
 
 /**
@@ -69,7 +60,7 @@ export function getJobsByRecord(recordId) {
  * @returns {Promise<Object|null>}
  */
 export async function retryAudioProcessingJob(jobId) {
-  const job = await adapter.retryAudioProcessingJob(jobId);
+  const job = await apiAdapter.retryAudioProcessingJob(jobId);
   if (job) _jobCache.set(job.id, job);
   return job;
 }
@@ -81,7 +72,7 @@ export async function retryAudioProcessingJob(jobId) {
  * @returns {Promise<Object|null>}
  */
 export async function cancelAudioProcessingJob(jobId) {
-  const job = await adapter.cancelAudioProcessingJob(jobId);
+  const job = await apiAdapter.cancelAudioProcessingJob(jobId);
   if (job) _jobCache.set(job.id, job);
   return job;
 }

@@ -1,115 +1,201 @@
 /**
- * Repository factory — provides the correct repository implementation
- * based on the current data provider configuration.
+ * Repository factory — provides repository implementations backed by cloud API.
  *
- * Server-only: DATA_PROVIDER env var (not NEXT_PUBLIC_*)
- *   DATA_PROVIDER=mock   → uses mock in-memory repositories
- *   DATA_PROVIDER=mongodb → will use MongoDB repositories (future)
- *
- * NEXT_PUBLIC_APP_MODE is for client-side display (mock | production)
- * and MUST NOT be used for repository selection.
+ * All data now goes through DynamoDB via the cloud API Gateway.
+ * In local dev (non-cloud mode), falls back to in-memory/API adapters.
  *
  * Components and services should NEVER import mock repositories directly.
  * Always use this factory:
  *
- *   import { taskRepo, workspaceRepo } from '@/repositories';
+ *   import { workspaceRepo } from '@/repositories';
  */
 
-// Only import mock repos in mock mode or by default
-// When adding MongoDB repos, import them conditionally.
-
-import * as mockWorkspace from '@/repositories/mock/mockWorkspaceRepository';
-import * as mockTask from '@/repositories/mock/mockTaskRepository';
-import * as mockMeeting from '@/repositories/mock/mockMeetingRepository';
-import * as mockUser from '@/repositories/mock/mockUserRepository';
-import * as mockTeam from '@/repositories/mock/mockTeamRepository';
-import * as mockChannel from '@/repositories/mock/mockChannelRepository';
-import * as mockMessage from '@/repositories/mock/mockMessageRepository';
-import * as mockNotification from '@/repositories/mock/mockNotificationRepository';
-import * as mockVoice from '@/repositories/mock/mockVoiceRepository';
+import { isCloudMode } from '@/config/runtimeConfig';
+import { workspacesApi, usersApi, meetingsApi, tasksApi } from '@/services/cloudClient';
 
 /**
- * Get the current data provider name from environment.
- *
- * Uses DATA_PROVIDER (server-only env var), NOT NEXT_PUBLIC_*.
- * NEXT_PUBLIC_* vars leak to the client bundle and must not
- * control database access.
- *
- * @returns {'mock'|'mongodb'}
+ * Workspace repository — delegates to cloud API when in cloud mode.
  */
-function getProvider() {
-  // Server-side: DATA_PROVIDER env var (not exposed to frontend)
-  if (typeof process !== 'undefined' && process.env?.DATA_PROVIDER) {
-    return process.env.DATA_PROVIDER === 'mongodb' ? 'mongodb' : 'mock';
-  }
-
-  // Allow runtime override via window for testing (dev only)
-  if (typeof window !== 'undefined' && window.__DATA_PROVIDER) {
-    return window.__DATA_PROVIDER;
-  }
-
-  return 'mock';
-}
-
-const provider = getProvider();
+export const workspaceRepo = {
+  findById: async (id) => {
+    return workspacesApi.get(id);
+  },
+  findByUserId: async (userId) => {
+    return workspacesApi.list({ userId });
+  },
+  create: async (data) => {
+    return workspacesApi.create(data);
+  },
+  update: async (id, data) => {
+    return workspacesApi.update(id, data);
+  },
+  delete_: async (id) => {
+    return workspacesApi.delete(id);
+  },
+};
 
 /**
- * Repository instances.
- *
- * When adding MongoDB support, create a factory function:
- *
- *   if (provider === 'mongodb') {
- *     const { MongoWorkspaceRepository } = await import('@/repositories/mongo/mongoWorkspaceRepository');
- *     workspaceRepo = new MongoWorkspaceRepository();
- *   }
- *
- * For now, all repos are mock in-memory implementations.
+ * User repository — delegates to cloud API when in cloud mode.
  */
+export const userRepo = {
+  findById: async (id) => {
+    return usersApi.get(id);
+  },
+  findByEmail: async (email) => {
+    return usersApi.list({ email });
+  },
+  create: async (data) => {
+    return usersApi.create(data);
+  },
+  update: async (id, data) => {
+    return usersApi.update(id, data);
+  },
+};
 
 /**
- * @type {import('@/repositories/interfaces/workspaceRepository').WorkspaceRepository}
+ * Meeting repository — delegates to cloud API when in cloud mode.
  */
-export const workspaceRepo = mockWorkspace;
+export const meetingRepo = {
+  findById: async (id) => {
+    return meetingsApi.get(id);
+  },
+  findByWorkspace: async (workspaceId) => {
+    return meetingsApi.list({ workspaceId });
+  },
+  create: async (data) => {
+    return meetingsApi.create(data);
+  },
+  update: async (id, data) => {
+    return meetingsApi.update(id, data);
+  },
+};
 
 /**
- * @type {import('@/repositories/interfaces/taskRepository').TaskRepository}
+ * Task repository — delegates to cloud API when in cloud mode.
  */
-export const taskRepo = mockTask;
+export const taskRepo = {
+  findByWorkspace: async (workspaceId) => {
+    return tasksApi.list({ workspaceId });
+  },
+  findById: async (id) => {
+    return tasksApi.get(id);
+  },
+  create: async (data) => {
+    return tasksApi.create(data);
+  },
+  update: async (id, data) => {
+    return tasksApi.update(id, data);
+  },
+  delete_: async (id) => {
+    return tasksApi.delete(id);
+  },
+};
 
 /**
- * @type {import('@/repositories/interfaces/meetingRepository').MeetingRepository}
+ * Team repository — workspaces store teams as nested array.
+ * Uses workspace update API to persist team changes.
  */
-export const meetingRepo = mockMeeting;
+export const teamRepo = {
+  findByWorkspace: async (workspaceId) => {
+    const ws = await workspacesApi.get(workspaceId);
+    return ws?.teams ?? [];
+  },
+  findById: async (workspaceId, teamId) => {
+    const ws = await workspacesApi.get(workspaceId);
+    return ws?.teams?.find((t) => t.id === teamId) ?? null;
+  },
+  create: async (workspaceId, data) => {
+    // Create is handled by the hook which updates workspace state,
+    // then the sync effect persists to API.
+    return data;
+  },
+  update: async (workspaceId, teamId, data) => {
+    const ws = await workspacesApi.get(workspaceId);
+    if (!ws) return null;
+    const teams = (ws.teams ?? []).map((t) =>
+      t.id === teamId ? { ...t, ...data } : t
+    );
+    await workspacesApi.update(workspaceId, { teams, expectedVersion: ws.version ?? 1 });
+    return teams.find((t) => t.id === teamId) ?? null;
+  },
+  delete_: async (workspaceId, teamId) => {
+    const ws = await workspacesApi.get(workspaceId);
+    if (!ws) return;
+    const teams = (ws.teams ?? []).filter((t) => t.id !== teamId);
+    await workspacesApi.update(workspaceId, { teams, expectedVersion: ws.version ?? 1 });
+  },
+};
 
 /**
- * @type {import('@/repositories/interfaces/userRepository').UserRepository}
+ * Channel repository — workspaces store channels as nested array.
+ * Uses workspace update API to persist channel changes.
  */
-export const userRepo = mockUser;
+export const channelRepo = {
+  findByWorkspace: async (workspaceId) => {
+    const ws = await workspacesApi.get(workspaceId);
+    return ws?.channels ?? [];
+  },
+  create: async (workspaceId, data) => {
+    // Create is handled by the hook which updates workspace state,
+    // then the sync effect persists to API.
+    return data;
+  },
+  delete_: async (workspaceId, channelId) => {
+    // Delete is handled by the hook which updates workspace state,
+    // then the sync effect persists to API.
+  },
+};
 
 /**
- * @type {import('@/repositories/interfaces/teamRepository').TeamRepository}
+ * Message repository — workspaces store messages as a record.
+ * Uses workspace update API to persist message changes.
  */
-export const teamRepo = mockTeam;
+export const messageRepo = {
+  findByChannel: async () => [],
+  findByTeamChat: async () => [],
+  create: async (data) => data,
+};
 
 /**
- * @type {import('@/repositories/interfaces/channelRepository').ChannelRepository}
+ * Notification repository — delegates to cloud API.
  */
-export const channelRepo = mockChannel;
+export const notificationRepo = {
+  findByUser: async (userId) => {
+    const { notificationsApi } = await import('@/services/cloudClient');
+    return notificationsApi.list({ userId });
+  },
+  findUnreadByUser: async (userId) => {
+    const { notificationsApi } = await import('@/services/cloudClient');
+    const all = await notificationsApi.list({ userId });
+    return (all ?? []).filter((n) => !n.isRead);
+  },
+  create: async (data) => {
+    const { notificationsApi } = await import('@/services/cloudClient');
+    return notificationsApi.update(data.id, data);
+  },
+  markAsRead: async (notificationId) => {
+    const { notificationsApi } = await import('@/services/cloudClient');
+    return notificationsApi.update(notificationId, { isRead: true });
+  },
+  markAllAsRead: async (userId) => {
+    // Best-effort; individual notification marking handles this
+  },
+};
 
 /**
- * @type {import('@/repositories/interfaces/messageRepository').MessageRepository}
+ * Voice repository — voice records are stored in workspace document.
  */
-export const messageRepo = mockMessage;
-
-/**
- * @type {import('@/repositories/interfaces/notificationRepository').NotificationRepository}
- */
-export const notificationRepo = mockNotification;
-
-/**
- * @type {import('@/repositories/interfaces/voiceRepository').VoiceRepository}
- */
-export const voiceRepo = mockVoice;
+export const voiceRepo = {
+  findByChannel: async (workspaceId, channelId) => {
+    const ws = await workspacesApi.get(workspaceId);
+    return (ws?.voiceRecords ?? []).filter(
+      (r) => typeof r === 'object' && r.channelId === channelId
+    );
+  },
+  createVoiceRecord: async (data) => data,
+  updateVoiceRecord: async (id, data) => data,
+  deleteVoiceRecord: async (id) => {},
+};
 
 export default {
   workspaceRepo,

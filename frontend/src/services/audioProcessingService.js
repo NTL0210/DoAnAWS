@@ -1,9 +1,5 @@
-import { isApiMode } from '@/config/runtimeConfig';
 import { AUDIO_TARGET_FORMAT } from '@/domain/models/AudioProcessingJob';
-import * as mockAdapter from '@/services/adapters/mockAudioProcessingAdapter';
 import * as apiAdapter from '@/services/adapters/apiAudioProcessingAdapter';
-
-const adapter = isApiMode() ? apiAdapter : mockAdapter;
 
 /*
 Production audio pipeline:
@@ -17,11 +13,10 @@ to the browser, or ship ffmpeg in the client bundle.
 */
 
 export function createAudioProcessingJob(record, targetFormat = AUDIO_TARGET_FORMAT.MP3) {
-  return adapter.createAudioProcessingJob(record, targetFormat);
+  return apiAdapter.createAudioProcessingJob(record, targetFormat);
 }
 
-export const getAudioProcessingJob = (jobId) => adapter.getAudioProcessingJob(jobId);
-export const getJobsByRecord = (recordId) => adapter.getJobsByRecord(recordId);
-export const retryAudioProcessingJob = (jobId) => adapter.retryAudioProcessingJob(jobId);
-export const cancelAudioProcessingJob = (jobId) => adapter.cancelAudioProcessingJob(jobId);
-export const mockConvertToMp3 = (record) => mockAdapter.createAudioProcessingJob(record, AUDIO_TARGET_FORMAT.MP3);
+export const getAudioProcessingJob = (jobId) => apiAdapter.getAudioProcessingJob(jobId);
+export const getJobsByRecord = (recordId) => apiAdapter.getJobsByRecord(recordId);
+export const retryAudioProcessingJob = (jobId) => apiAdapter.retryAudioProcessingJob(jobId);
+export const cancelAudioProcessingJob = (jobId) => apiAdapter.cancelAudioProcessingJob(jobId);

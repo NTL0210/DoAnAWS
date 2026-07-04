@@ -9,14 +9,11 @@
  */
 
 import { isApiMode } from '@/config/runtimeConfig';
-import * as mockAdapter from '@/services/adapters/mockVoiceRecordingAdapter';
 import * as apiAdapter from '@/services/adapters/apiVoiceRecordingAdapter';
 import {
   MAX_AI_AUDIO_SIZE_BYTES,
   WARNING_AI_AUDIO_SIZE_BYTES,
 } from '@/domain/constants/costConstants';
-
-const adapter = isApiMode() ? apiAdapter : mockAdapter;
 
 // ─── In-memory local record store ───────────────────────────────────
 /** @type {Map<string, { id: string, blob: Blob, blobUrl: string, metadata: Object, savedToCloud: boolean, sentToAi: boolean }>} */
@@ -149,17 +146,8 @@ export async function uploadRecordToCloud(recordId) {
     return { ok: true, error: 'Already saved to cloud.' };
   }
 
-  if (!isApiMode()) {
-    // Mock: mark as saved, don't actually upload
-    record.savedToCloud = true;
-    return {
-      ok: true,
-      remoteId: `cloud-record-${recordId}`,
-    };
-  }
-
   // Real mode: upload blob to backend
-  const result = await adapter.uploadVoiceRecord(recordId, record.blob);
+  const result = await apiAdapter.uploadVoiceRecord(recordId, record.blob);
   if (result?.id) {
     record.savedToCloud = true;
     return { ok: true, remoteId: result.id };
@@ -198,17 +186,8 @@ export async function sendRecordToAiProcessing(recordId) {
     }
   }
 
-  if (!isApiMode()) {
-    // Mock: mark as sent to AI
-    record.sentToAi = true;
-    return {
-      ok: true,
-      jobId: `mock-ai-job-${recordId}`,
-    };
-  }
-
   // Real mode: call adapter
-  const result = await adapter.sendVoiceRecordToAI(recordId);
+  const result = await apiAdapter.sendVoiceRecordToAI(recordId);
   if (result?.jobId) {
     record.sentToAi = true;
     return { ok: true, jobId: result.jobId };
@@ -217,10 +196,10 @@ export async function sendRecordToAiProcessing(recordId) {
 }
 
 // ─── Legacy adapter passthroughs ─────────────────────────────────────
-export const createVoiceRecord = (recordData) => adapter.createVoiceRecord(recordData);
+export const createVoiceRecord = (recordData) => apiAdapter.createVoiceRecord(recordData);
 export const getVoiceRecordsByChannel = (workspaceId, channelId) =>
-  adapter.getVoiceRecordsByChannel(workspaceId, channelId);
-export const deleteVoiceRecord = (recordId) => adapter.deleteVoiceRecord(recordId);
+  apiAdapter.getVoiceRecordsByChannel(workspaceId, channelId);
+export const deleteVoiceRecord = (recordId) => apiAdapter.deleteVoiceRecord(recordId);
 
 /**
  * Legacy sendVoiceRecordToAI — now delegates to new local-first flow
