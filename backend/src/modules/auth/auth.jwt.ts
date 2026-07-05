@@ -83,6 +83,7 @@ function verifyMockToken(token: string): AuthUser {
     return {
       userId: stringVal(raw.sub) || stringVal(raw.userId),
       email: stringVal(raw.email),
+      name: stringVal(raw.name) || stringVal(raw.preferred_username),
       systemRole: stringVal(raw.role, "EMPLOYEE"),
       workspaceId: raw.workspaceId ? stringVal(raw.workspaceId) : undefined,
     };
@@ -141,6 +142,11 @@ async function verifyCognitoToken(token: string): Promise<AuthUser> {
     return {
       userId: stringVal(rawPayload.sub),
       email: stringVal(rawPayload.email) || stringVal(rawPayload["cognito:email"]),
+      name:
+        stringVal(rawPayload.name) ||
+        stringVal(rawPayload.preferred_username) ||
+        stringVal(rawPayload.username) ||
+        stringVal(rawPayload["cognito:username"]),
       systemRole: role,
       workspaceId: rawPayload["custom:workspaceId"]
         ? stringVal(rawPayload["custom:workspaceId"])
