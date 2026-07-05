@@ -10,6 +10,7 @@
 import { getAuthToken, clearAuthToken } from './apiClient';
 
 const DEFAULT_API_STAGE = 'prod';
+const API_PREFIX = '/api/v1';
 
 function normalizeBaseUrl(url) {
   const trimmed = String(url || '').trim().replace(/\/+$/, '');
@@ -21,7 +22,8 @@ function normalizeBaseUrl(url) {
 
 function buildUrl(path) {
   const normalizedPath = String(path || '').startsWith('/') ? path : `/${path || ''}`;
-  return `${BASE_URL}${normalizedPath}`;
+  const apiPath = normalizedPath.startsWith('/api/') ? normalizedPath : `${API_PREFIX}${normalizedPath}`;
+  return `${BASE_URL}${apiPath}`;
 }
 
 const BASE_URL = normalizeBaseUrl(process.env.NEXT_PUBLIC_API_GATEWAY_URL);
@@ -142,7 +144,7 @@ export const authApi = {
   },
 
   /** GET /auth/me — returns current user */
-  me: () => request('/auth/me'),
+  me: () => request('/users/me'),
 };
 
 // ─── Users API ────────────────────────────────────
