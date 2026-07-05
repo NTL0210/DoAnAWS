@@ -8,6 +8,10 @@ export function buildMeetingRouter(
 ): Router {
   const router = Router();
 
+  router.get("/notifications", controller.listNotifications);
+  router.patch("/notifications/:id", controller.updateNotification);
+  router.post("/invite", controller.sendInvitation);
+
   router.get("/", guard("MEMBER", "ADMIN", "OWNER"), controller.list);
   router.post("/", guard("ADMIN", "OWNER"), controller.create);
   router.get("/:id", guard("MEMBER", "ADMIN", "OWNER"), controller.get);

@@ -6,6 +6,7 @@ import {
   FiCamera,
   FiCheckCircle,
   FiClock,
+  FiImage,
   FiLoader,
   FiLock,
   FiMail,
@@ -19,6 +20,7 @@ import AppShell, { Panel } from '../src/components/layout/AppShell';
 import { useWorkspace } from '../src/context/WorkspaceContext';
 
 const PRESET_COLORS = ['5865F2', 'ED4245', '57F287', 'FEE75C', 'EB459E', 'FF73FA', '00B0FF', '9B59B6'];
+const MAX_AVATAR_UPLOAD_BYTES = 2 * 1024 * 1024;
 
 const departmentNames = {
   'dept-1': 'Frontend Team',
@@ -33,6 +35,41 @@ function buildPresetAvatars(name) {
     url: `https://ui-avatars.com/api/?name=${encoded}&background=${color}&color=fff&size=128&bold=true`,
     color,
   }));
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
+  });
+}
+
+async function fileToAvatarDataUrl(file) {
+  if (!file?.type?.startsWith('image/')) {
+    throw new Error('Please choose an image file.');
+  }
+  if (file.size > MAX_AVATAR_UPLOAD_BYTES) {
+    throw new Error('Avatar image must be 2 MB or smaller.');
+  }
+
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const image = await loadImage(sourceUrl);
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const side = Math.min(image.naturalWidth, image.naturalHeight);
+    const sx = (image.naturalWidth - side) / 2;
+    const sy = (image.naturalHeight - side) / 2;
+    ctx.drawImage(image, sx, sy, side, side, 0, 0, size, size);
+    return canvas.toDataURL('image/jpeg', 0.82);
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
 }
 
 export default function AccountSettings() {
@@ -145,6 +182,19 @@ export default function AccountSettings() {
       handleSelectAvatar(url);
     } catch {
       showToast('error', 'Please enter a valid URL.');
+    }
+  };
+
+  const handleAvatarFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      const dataUrl = await fileToAvatarDataUrl(file);
+      handleSelectAvatar(dataUrl);
+    } catch (error) {
+      showToast('error', error?.message || 'Failed to upload avatar.');
     }
   };
 
@@ -409,6 +459,18 @@ export default function AccountSettings() {
                 );
               })}
             </div>
+
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Upload from device</p>
+            <label className="mb-4 flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 active:scale-95 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
+              <FiImage className="h-4 w-4" />
+              Choose image
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="sr-only"
+                onChange={handleAvatarFileChange}
+              />
+            </label>
 
             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Or use a custom URL</p>
             <div className="flex gap-2">

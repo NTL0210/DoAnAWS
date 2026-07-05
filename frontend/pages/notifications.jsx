@@ -2,69 +2,82 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   FiBell,
-  FiCalendar,
   FiCheckCircle,
   FiClock,
   FiFileText,
   FiLoader,
   FiUserPlus,
 } from 'react-icons/fi';
-import AppShell, { Panel, StatusPill, LoadingState, EmptyState } from '../src/components/layout/AppShell';
-
-const MOCK_NOTIFICATIONS = [
-  { id: 'n1', title: 'New task assigned', message: 'You have been assigned: Implement form validation for login page', type: 'task_assigned', isRead: false, createdAt: '2026-05-21T10:30:00Z' },
-  { id: 'n2', title: 'Task deadline approaching', message: 'Your task "Create reusable input components" is due in 2 days', type: 'deadline_approaching', isRead: false, createdAt: '2026-06-01T14:20:00Z' },
-  { id: 'n3', title: 'Meeting processed', message: 'The Weekly Sync meeting has been processed. 3 tasks extracted.', type: 'meeting_processed', isRead: false, createdAt: '2026-05-22T09:15:00Z' },
-  { id: 'n4', title: 'Task completed', message: 'You marked "Review designs" as completed.', type: 'task_completed', isRead: true, createdAt: '2026-05-25T16:00:00Z' },
-  { id: 'n5', title: 'New comment', message: 'Sarah added a note to your task "Implement form validation"', type: 'comment', isRead: true, createdAt: '2026-05-23T11:20:00Z' },
-];
+import AppShell, { Panel, LoadingState, EmptyState } from '../src/components/layout/AppShell';
+import { useWorkspace } from '../src/context/WorkspaceContext';
+import { isCloudMode } from '../src/services/apiClient';
 
 const typeConfig = {
-  task_assigned: { icon: FiUserPlus, color: 'bg-blue-50 text-blue-600', label: 'Assignment' },
-  deadline_approaching: { icon: FiClock, color: 'bg-amber-50 text-amber-600', label: 'Deadline' },
-  meeting_processed: { icon: FiFileText, color: 'bg-primary-50 text-primary-600', label: 'Meeting' },
-  task_completed: { icon: FiCheckCircle, color: 'bg-emerald-50 text-emerald-600', label: 'Completed' },
-  comment: { icon: FiBell, color: 'bg-slate-50 text-slate-600', label: 'Note' },
+  task_assigned: { icon: FiUserPlus, color: 'bg-blue-50 text-blue-600' },
+  deadline_approaching: { icon: FiClock, color: 'bg-amber-50 text-amber-600' },
+  meeting_processed: { icon: FiFileText, color: 'bg-primary-50 text-primary-600' },
+  task_completed: { icon: FiCheckCircle, color: 'bg-emerald-50 text-emerald-600' },
+  comment: { icon: FiBell, color: 'bg-slate-50 text-slate-600' },
+  INFO: { icon: FiBell, color: 'bg-slate-50 text-slate-600' },
+  INVITATION: { icon: FiUserPlus, color: 'bg-blue-50 text-blue-600' },
 };
 
 export default function EmployeeNotifications() {
-  const [user, setUser] = useState(null);
+  const {
+    currentUser,
+    loading: authLoading,
+    aiNotifications,
+    markNotificationRead,
+    markAllNotificationsRead,
+  } = useWorkspace();
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState([]);
   const [filter, setFilter] = useState('all');
 
   useEffect(() => {
-    const load = async () => {
+    let cancelled = false;
+
+    async function loadNotifications() {
       setLoading(true);
-      const storedUser = JSON.parse(localStorage.getItem('user') || 'null');
-      const fallback = {
-        id: 'emp-3',
-        name: 'John Doe',
-        email: 'john@company.com',
-        role: 'EMPLOYEE',
-        departmentId: 'dept-1',
-        avatar: 'https://i.pravatar.cc/150?img=3',
-      };
-      const currentUser = storedUser?.role === 'EMPLOYEE' ? { ...fallback, ...storedUser } : fallback;
-      await new Promise((r) => setTimeout(r, 300));
-      setUser(currentUser);
-      setNotifications(MOCK_NOTIFICATIONS);
-      setLoading(false);
-    };
-    load();
-  }, []);
+      try {
+        if (isCloudMode()) {
+          const { notificationsApi } = await import('../src/services/cloudClient');
+          const result = await notificationsApi.list();
+          const data = result.notifications || result.items || result || [];
+          if (!cancelled) setNotifications(Array.isArray(data) ? data : []);
+          return;
+        }
+
+        if (!cancelled) setNotifications(aiNotifications || []);
+      } catch {
+        if (!cancelled) setNotifications([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    if (!authLoading) loadNotifications();
+    return () => { cancelled = true; };
+  }, [authLoading, aiNotifications]);
+
+  useEffect(() => {
+    if (!isCloudMode()) setNotifications(aiNotifications || []);
+  }, [aiNotifications]);
 
   const markAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    markAllNotificationsRead();
   };
 
   const toggleRead = (id) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, isRead: !n.isRead } : n))
     );
+    markNotificationRead(id);
   };
 
-  if (loading || !user) return <LoadingState label="Loading notifications..." />;
+  if (loading || authLoading) return <LoadingState label="Loading notifications..." />;
+  if (!currentUser) return <LoadingState label="Please log in first." />;
 
   const filtered =
     filter === 'all'
@@ -77,7 +90,7 @@ export default function EmployeeNotifications() {
 
   return (
     <AppShell
-      user={user}
+      user={currentUser}
       eyebrow="Notifications"
       title="Activity & alerts"
       description={`${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}`}
@@ -124,7 +137,7 @@ export default function EmployeeNotifications() {
         ) : (
           <div className="space-y-2">
             {filtered.map((n, idx) => {
-              const config = typeConfig[n.type] || typeConfig.task_assigned;
+              const config = typeConfig[n.type] || typeConfig.INFO;
               return (
                 <motion.button
                   key={n.id}
@@ -139,23 +152,21 @@ export default function EmployeeNotifications() {
                       : 'bg-[#fbfcfe] dark:bg-[#17212c]'
                   }`}
                 >
-                  <div
-                    className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${config.color}`}
-                  >
+                  <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${config.color}`}>
                     <config.icon className="h-5 w-5" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                        {n.title}
+                        {n.title || n.message || 'Notification'}
                       </h3>
                       {!n.isRead && (
                         <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-primary-500" />
                       )}
                     </div>
-                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{n.message}</p>
+                    {n.message && <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{n.message}</p>}
                     <p className="mt-1.5 text-xs text-slate-400">
-                      {new Date(n.createdAt).toLocaleString()}
+                      {n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}
                     </p>
                   </div>
                 </motion.button>

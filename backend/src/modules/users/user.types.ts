@@ -29,5 +29,5 @@ export interface UpdateUserInput {
   avatar?: string | null | undefined;
   phone?: string | undefined;
   avatarHistory?: string[] | undefined;
-  expectedVersion: number;
+  expectedVersion?: number | undefined;
 }
