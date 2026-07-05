@@ -10,7 +10,12 @@
 import { getAuthToken, clearAuthToken } from './apiClient';
 
 const DEFAULT_API_STAGE = 'prod';
-const API_PREFIX = '/api/v1';
+const DEFAULT_API_PREFIX = '/api/v1';
+
+function normalizeApiPrefix(prefix) {
+  const trimmed = String(prefix || '').trim().replace(/^\/+|\/+$/g, '');
+  return trimmed ? `/${trimmed}` : '';
+}
 
 function normalizeBaseUrl(url) {
   const trimmed = String(url || '').trim().replace(/\/+$/, '');
@@ -20,13 +25,41 @@ function normalizeBaseUrl(url) {
   return trimmed;
 }
 
+function getApiPrefix() {
+  if (process.env.NEXT_PUBLIC_API_GATEWAY_API_PREFIX !== undefined) {
+    return normalizeApiPrefix(process.env.NEXT_PUBLIC_API_GATEWAY_API_PREFIX);
+  }
+
+  return DEFAULT_API_PREFIX;
+}
+
 function buildUrl(path) {
   const normalizedPath = String(path || '').startsWith('/') ? path : `/${path || ''}`;
-  const apiPath = normalizedPath.startsWith('/api/') ? normalizedPath : `${API_PREFIX}${normalizedPath}`;
+  const apiPath = normalizedPath.startsWith('/api/') || !API_PREFIX
+    ? normalizedPath
+    : `${API_PREFIX}${normalizedPath}`;
   return `${BASE_URL}${apiPath}`;
 }
 
-const BASE_URL = normalizeBaseUrl(process.env.NEXT_PUBLIC_API_GATEWAY_URL);
+async function readJson(response) {
+  const text = await response.text();
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {
+      success: false,
+      error: 'NON_JSON_RESPONSE',
+      message: `HTTP ${response.status}`,
+      details: text.slice(0, 200),
+    };
+  }
+}
+
+const RAW_BASE_URL = process.env.NEXT_PUBLIC_API_GATEWAY_URL;
+const BASE_URL = normalizeBaseUrl(RAW_BASE_URL);
+const API_PREFIX = getApiPrefix();
 
 /**
  * Make an authenticated API Gateway request.
@@ -77,7 +110,7 @@ async function request(path, options = {}) {
     return { success: true, data: null };
   }
 
-  const json = await response.json();
+  const json = await readJson(response);
 
   if (!response.ok) {
     // Token expired — clear auth
@@ -131,14 +164,14 @@ export const authApi = {
       body: JSON.stringify({ email, password }),
     }).then(async (response) => {
       if (!response.ok) {
-        const json = await response.json();
+        const json = await readJson(response);
         throw new CloudError(
           json.message || 'Login failed',
           json.error || 'AUTH_ERROR',
           response.status
         );
       }
-      const json = await response.json();
+      const json = await readJson(response);
       return json.data !== undefined ? json.data : json;
     });
   },
