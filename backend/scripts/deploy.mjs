@@ -44,7 +44,7 @@ async function main() {
   console.log(`\n📤 Step 2: Uploading Lambdas to S3 (${artifactBucket})...`);
   ensureBucketExists(artifactBucket);
 
-  const lambdaNames = ['auth', 'users', 'meetings', 'tasks', 'ai-processing'];
+  const lambdaNames = ['auth', 'users', 'meetings', 'tasks', 'workspaces', 'ai-processing'];
   for (const name of lambdaNames) {
     const zipPath = join(BACKEND_ROOT, 'dist', 'lambdas', `${name}.zip`);
     if (!existsSync(zipPath)) {
@@ -96,7 +96,7 @@ function getArtifactBucket() {
     'aws sts get-caller-identity --query Account --output text',
     { encoding: 'utf-8' }
   ).trim();
-  return `ai-meeting-lambda-${accountId}-${ENVIRONMENT}`;
+  return `ai-meeting-lambda-${accountId}`;
 }
 
 /**
