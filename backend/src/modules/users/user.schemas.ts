@@ -13,10 +13,10 @@ export const createUserSchema = z.object({
 
 export const updateUserSchema = z.object({
   name: z.string().min(1).max(100).optional(),
-  avatar: z.string().max(500).nullable().optional(),
+  avatar: z.string().max(200_000).nullable().optional(),
   phone: z.string().max(30).optional(),
-  avatarHistory: z.array(z.string().max(500)).max(5).optional(),
-  expectedVersion: z.coerce.number().int().positive()
+  avatarHistory: z.array(z.string().max(200_000)).max(5).optional(),
+  expectedVersion: z.coerce.number().int().positive().optional()
 });
 
 export const idParamsSchema = z.object({

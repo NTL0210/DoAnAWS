@@ -75,6 +75,11 @@ export class UserController {
   update = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const params = idParamsSchema.parse(req.params);
+      if (req.user?.userId !== params.id && req.user?.systemRole !== "ADMIN") {
+        res.status(403).json({ message: "You can only update your own profile" });
+        return;
+      }
+
       const patch = updateUserSchema.parse(req.body);
       const user = await this.service.update({
         id: params.id,

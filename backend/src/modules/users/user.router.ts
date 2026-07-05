@@ -15,7 +15,7 @@ export function buildUserRouter(
   router.post("/", guard("ADMIN", "OWNER"), controller.create);
   router.get("/by-email", guard("MEMBER", "ADMIN", "OWNER"), controller.getByEmail);
   router.get("/:id", guard("MEMBER", "ADMIN", "OWNER"), controller.get);
-  router.patch("/:id", guard("ADMIN", "OWNER"), controller.update);
+  router.patch("/:id", controller.update);
   router.delete("/:id", guard("OWNER"), controller.delete);
 
   return router;

@@ -51,6 +51,17 @@ interface CognitoTriggerEvent {
   response: CognitoTriggerResponse;
 }
 
+interface ApiGatewayHttpEvent extends Record<string, unknown> {
+  rawPath?: string;
+  path?: string;
+  requestContext?: {
+    stage?: string;
+    http?: {
+      path?: string;
+    };
+  };
+}
+
 // ─── Express App Setup ──────────────────────────────
 
 const app = createApp();
@@ -138,6 +149,38 @@ async function handlePreSignUp(event: CognitoTriggerEvent): Promise<CognitoTrigg
   return event;
 }
 
+function stripStagePrefix(path: string | undefined, stage: string | undefined): string | undefined {
+  if (!path || !stage || stage === "$default") return path;
+
+  const prefix = `/${stage}`;
+  if (path === prefix) return "/";
+  if (path.startsWith(`${prefix}/`)) return path.slice(prefix.length);
+  return path;
+}
+
+function normalizeApiGatewayEvent(event: Record<string, unknown>): Record<string, unknown> {
+  const apiEvent = event as ApiGatewayHttpEvent;
+  const stage = apiEvent.requestContext?.stage;
+  if (!stage || stage === "$default") return event;
+
+  const normalizedRawPath = stripStagePrefix(apiEvent.rawPath, stage);
+  const normalizedPath = stripStagePrefix(apiEvent.path, stage);
+  const normalizedHttpPath = stripStagePrefix(apiEvent.requestContext?.http?.path, stage);
+
+  return {
+    ...apiEvent,
+    ...(normalizedRawPath && { rawPath: normalizedRawPath }),
+    ...(normalizedPath && { path: normalizedPath }),
+    requestContext: {
+      ...apiEvent.requestContext,
+      http: {
+        ...apiEvent.requestContext?.http,
+        ...(normalizedHttpPath && { path: normalizedHttpPath }),
+      },
+    },
+  };
+}
+
 // ─── Entry Point ────────────────────────────────────
 
 /**
@@ -158,5 +201,5 @@ export const handler = async (
   }
 
   // API Gateway HTTP request
-  return wrappedHandler(event, context, () => {});
+  return wrappedHandler(normalizeApiGatewayEvent(event as Record<string, unknown>), context, () => {});
 };

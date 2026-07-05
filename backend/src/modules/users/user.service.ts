@@ -58,7 +58,7 @@ export class UserService {
       version: current.version + 1,
       updatedAt: new Date().toISOString()
     };
-    await this.repository.update(updated, input.patch.expectedVersion);
+    await this.repository.update(updated, input.patch.expectedVersion ?? current.version);
     return this.stripPassword(updated);
   }
 

@@ -11,6 +11,24 @@ import type { MeetingService } from "./meeting.service.js";
 export class MeetingController {
   constructor(private readonly service: MeetingService) {}
 
+  listNotifications = async (_req: Request, res: Response) => {
+    res.status(200).json({ notifications: [] });
+  };
+
+  updateNotification = async (req: Request, res: Response) => {
+    const body = req.body as { action?: unknown } | undefined;
+    const action = typeof body?.action === "string" ? body.action : "";
+
+    res.status(200).json({
+      id: req.params.id,
+      status: action === "decline" ? "DECLINED" : "ACCEPTED",
+    });
+  };
+
+  sendInvitation = async (_req: Request, res: Response) => {
+    res.status(202).json({ accepted: true });
+  };
+
   list = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const input = listMeetingsSchema.parse(req.query);
