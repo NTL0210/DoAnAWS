@@ -1,10 +1,20 @@
-export const WORKSPACE_ROLES = ["OWNER", "ADMIN", "MEMBER"] as const;
+export const WORKSPACE_ROLES = [
+  "OWNER",
+  "ADMIN",
+  "VICE_ADMIN",
+  "MANAGER",
+  "MEMBER",
+  "EMPLOYEE",
+] as const;
 export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 
 export const ROLE_HIERARCHY: Record<WorkspaceRole, number> = {
-  OWNER: 3,
-  ADMIN: 2,
+  OWNER: 5,
+  ADMIN: 4,
+  VICE_ADMIN: 4,
+  MANAGER: 3,
   MEMBER: 1,
+  EMPLOYEE: 1,
 };
 
 export function hasSufficientRole(

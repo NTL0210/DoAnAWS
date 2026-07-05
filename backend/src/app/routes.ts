@@ -26,9 +26,12 @@ export function buildApiRouter(repositories: Repositories): Router {
   const guard: GuardFn = (...roles) =>
     requireWorkspaceRole(repositories.workspaces, ...roles);
 
+  const userService = new UserService(repositories.users);
+  const workspaceService = new WorkspaceService(repositories.workspaceCrud);
+
   // ── Meetings ──────────────────────────────────────────
   const meetingService = new MeetingService(repositories.meetings);
-  const meetingController = new MeetingController(meetingService);
+  const meetingController = new MeetingController(meetingService, userService, workspaceService);
   api.use("/meetings", buildMeetingRouter(meetingController, guard));
 
   // ── Tasks ─────────────────────────────────────────────
@@ -37,12 +40,10 @@ export function buildApiRouter(repositories: Repositories): Router {
   api.use("/tasks", buildTaskRouter(taskController, guard));
 
   // ── Users ─────────────────────────────────────────────
-  const userService = new UserService(repositories.users);
   const userController = new UserController(userService);
   api.use("/users", buildUserRouter(userController, guard));
 
   // ── Workspaces ────────────────────────────────────────
-  const workspaceService = new WorkspaceService(repositories.workspaceCrud);
   const workspaceController = new WorkspaceController(workspaceService);
   api.use("/workspaces", buildWorkspaceRouter(workspaceController, guard));
 

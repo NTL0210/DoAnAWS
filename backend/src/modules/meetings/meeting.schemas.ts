@@ -30,6 +30,22 @@ export const listMeetingsSchema = z.object({
   nextToken: z.string().optional()
 });
 
+export const listNotificationsSchema = z.object({
+  unreadOnly: z.coerce.boolean().optional(),
+});
+
+export const sendInvitationSchema = z.object({
+  workspaceId: z.string().min(1),
+  workspaceName: z.string().min(1).max(200).optional(),
+  inviteeEmail: z.string().email().max(255),
+  role: z.enum(["OWNER", "VICE_ADMIN", "MANAGER", "EMPLOYEE"]).optional().default("EMPLOYEE"),
+  teamIds: z.array(z.string().min(1)).optional().default([]),
+});
+
+export const updateNotificationSchema = z.object({
+  action: z.enum(["accept", "decline", "read"]).optional().default("read"),
+});
+
 export const idParamsSchema = z.object({
   id: z.string().min(1)
 });

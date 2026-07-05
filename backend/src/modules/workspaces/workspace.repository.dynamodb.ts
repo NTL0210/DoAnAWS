@@ -1,7 +1,6 @@
 import {
   DeleteCommand,
   GetCommand,
-  PutCommand,
   QueryCommand,
   TransactWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
@@ -42,6 +41,18 @@ function memberPk(workspaceId: string): string {
 
 function memberSk(userId: string): string {
   return `MEMBER#${userId}`;
+}
+
+function toMemberItem(workspaceId: string, member: WorkspaceMember): Record<string, unknown> {
+  return {
+    PK: memberPk(workspaceId),
+    SK: memberSk(member.userId),
+    entityType: "WS_MEMBER",
+    workspaceId,
+    userId: member.userId,
+    role: member.role,
+    joinedAt: member.joinedAt,
+  };
 }
 
 interface WorkspaceItem extends Record<string, unknown> {
@@ -118,6 +129,15 @@ export class DynamoWorkspaceRepository implements WorkspaceRepository {
 
   async create(ws: Workspace): Promise<void> {
     try {
+      const ownerMember =
+        ws.members.find((member) => member.userId === ws.ownerId) ??
+        {
+          userId: ws.ownerId,
+          role: "OWNER" as const,
+          joinedAt: ws.createdAt,
+          nickname: null,
+        };
+
       await ddb.send(
         new TransactWriteCommand({
           TransactItems: [
@@ -131,15 +151,7 @@ export class DynamoWorkspaceRepository implements WorkspaceRepository {
             {
               Put: {
                 TableName: env.DYNAMODB_TABLE_MAIN,
-                Item: {
-                  PK: memberPk(ws.id),
-                  SK: memberSk(ws.ownerId),
-                  entityType: "WS_MEMBER",
-                  workspaceId: ws.id,
-                  userId: ws.ownerId,
-                  role: "OWNER",
-                  joinedAt: ws.createdAt,
-                },
+                Item: toMemberItem(ws.id, ownerMember),
                 ConditionExpression: "attribute_not_exists(PK)",
               },
             },
@@ -157,16 +169,28 @@ export class DynamoWorkspaceRepository implements WorkspaceRepository {
   async update(ws: Workspace, expectedVersion: number): Promise<void> {
     try {
       await ddb.send(
-        new PutCommand({
-          TableName: env.DYNAMODB_TABLE_MAIN,
-          Item: toItem(ws),
-          ConditionExpression: "#version = :expectedVersion",
-          ExpressionAttributeNames: { "#version": "version" },
-          ExpressionAttributeValues: { ":expectedVersion": expectedVersion },
+        new TransactWriteCommand({
+          TransactItems: [
+            {
+              Put: {
+                TableName: env.DYNAMODB_TABLE_MAIN,
+                Item: toItem(ws),
+                ConditionExpression: "#version = :expectedVersion",
+                ExpressionAttributeNames: { "#version": "version" },
+                ExpressionAttributeValues: { ":expectedVersion": expectedVersion },
+              },
+            },
+            ...ws.members.slice(0, 90).map((member) => ({
+              Put: {
+                TableName: env.DYNAMODB_TABLE_MAIN,
+                Item: toMemberItem(ws.id, member),
+              },
+            })),
+          ],
         }),
       );
     } catch (error) {
-      if (isConditionalFailure(error)) {
+      if (isConditionalFailure(error) || isTransactionCanceled(error)) {
         throw new ConflictError("Workspace version conflict");
       }
       throw error;
