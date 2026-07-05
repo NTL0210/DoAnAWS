@@ -79,6 +79,7 @@ export default function WorkspaceChannelView() {
     setShowCreateChannel,
     showCreateTeam,
     setShowCreateTeam,
+    showInviteMember,
     setShowInviteMember,
     showToast,
   } = useWorkspace();

@@ -18,7 +18,7 @@ export class UserController {
         res.status(401).json({ message: "Not authenticated" });
         return;
       }
-      const user = await this.service.getById(req.user.userId);
+      const user = await this.service.getOrCreateFromAuth(req.user);
       res.status(200).json(toUserResponse(user));
     } catch (error) {
       next(error);

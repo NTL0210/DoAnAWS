@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { AuthUser } from "../auth/auth.types.js";
 import { NotFoundError } from "../../shared/errors/app-error.js";
 import type { UserRepository } from "./user.repository.js";
 import type { CreateUserInput, UpdateUserInput, User } from "./user.types.js";
@@ -15,6 +16,32 @@ export class UserService {
   async getByEmail(email: string): Promise<User | null> {
     const user = await this.repository.findByEmail(email);
     return user ? this.stripPassword(user) : null;
+  }
+
+  async getOrCreateFromAuth(authUser: AuthUser): Promise<User> {
+    const existing = await this.repository.findById(authUser.userId);
+    if (existing) return this.stripPassword(existing);
+
+    const now = new Date().toISOString();
+    const email = authUser.email?.trim().toLowerCase() || `${authUser.userId}@user.local`;
+    const name = authUser.name?.trim() || email.split("@")[0] || "User";
+    const role = this.normalizeRole(authUser.systemRole);
+    const user: User = {
+      id: authUser.userId,
+      name,
+      email,
+      avatar: null,
+      phone: "",
+      avatarHistory: [],
+      role,
+      departmentId: null,
+      version: 1,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    await this.repository.create(user);
+    return this.stripPassword(user);
   }
 
   async getAll(): Promise<User[]> {
@@ -69,5 +96,11 @@ export class UserService {
   private stripPassword(user: User): User {
     const { password: _, ...rest } = user;
     return rest;
+  }
+
+  private normalizeRole(role: string): User["role"] {
+    return role === "ADMIN" || role === "MANAGER" || role === "EMPLOYEE"
+      ? role
+      : "EMPLOYEE";
   }
 }

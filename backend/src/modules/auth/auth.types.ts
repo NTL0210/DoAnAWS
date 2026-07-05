@@ -17,6 +17,7 @@ export function hasSufficientRole(
 export interface AuthUser {
   userId: string;
   email: string;
+  name?: string | undefined;
   systemRole: string;
   workspaceId?: string | undefined;
 }
