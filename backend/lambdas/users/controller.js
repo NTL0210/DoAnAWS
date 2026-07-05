@@ -14,7 +14,7 @@
  * @module lambdas/users/controller
  */
 
-import { findById, findByEmail, findAll, create, update, delete_ } from '../../src/dynamodb/repositories/userRepository.js';
+import { findById, findByEmail, findAll, create as createUserRecord, update as updateUserRecord, delete_ as deleteUserRecord } from '../../src/dynamodb/repositories/userRepository.js';
 import { success, created, noContent, notFound, badRequest } from '../shared/router.js';
 
 // ─── Helpers ──────────────────────────────────────────
@@ -87,7 +87,7 @@ export async function create(event) {
   }
 
   const userId = parsedBody.id || 'user-' + Date.now().toString(36);
-  const user = await create({
+  const user = await createUserRecord({
     id: userId,
     name: name.trim(),
     email: email.trim().toLowerCase(),
@@ -192,7 +192,7 @@ export async function updateProfile(event) {
     updates.avatarHistory = updates.avatarHistory.slice(0, 5);
   }
 
-  const updated = await update(resourceId, updates, current.version);
+  const updated = await updateUserRecord(resourceId, updates, current.version);
   if (!updated) {
     return badRequest('Failed to update user. Version conflict?', 'CONFLICT');
   }
@@ -220,8 +220,11 @@ export async function deleteUser(event) {
     return notFound('User not found');
   }
 
-  await delete_(resourceId);
+  await deleteUserRecord(resourceId);
   return noContent();
 }
 
-export default { list, create, get, getByEmail, updateProfile, deleteUser };
+export const update = updateProfile;
+export const delete_ = deleteUser;
+
+export default { list, create, get, getByEmail, updateProfile, deleteUser, update, delete_ };

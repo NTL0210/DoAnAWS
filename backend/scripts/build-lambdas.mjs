@@ -19,7 +19,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync, cpSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, cpSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, dirname, relative, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -29,7 +29,7 @@ const LAMBDAS_DIR = join(BACKEND_ROOT, 'lambdas');
 const DIST_DIR = join(BACKEND_ROOT, 'dist', 'lambdas');
 
 // Lambda functions to package
-const LAMBDA_ENTRIES = ['auth', 'users', 'meetings', 'tasks', 'ai-processing'];
+const LAMBDA_ENTRIES = ['auth', 'users', 'meetings', 'tasks', 'workspaces', 'ai-processing'];
 
 async function main() {
   const target = process.argv[2]; // optional: build only one
@@ -88,6 +88,8 @@ async function buildLambda(name) {
     copyFiles(repoSrc, repoDest);
   }
 
+  rewritePackagedImports(buildDir);
+
   // Create minimal package.json for the Lambda
   const lambdaPackage = {
     name: `@ai-meeting/lambda-${name}`,
@@ -101,6 +103,8 @@ async function buildLambda(name) {
       '@aws-sdk/client-transcribe': '^3.705.0',
       '@aws-sdk/client-bedrock-runtime': '^3.705.0',
       '@aws-sdk/client-cognito-identity-provider': '^3.705.0',
+      '@aws-sdk/client-lambda': '^3.705.0',
+      '@aws-sdk/client-sfn': '^3.705.0',
     },
   };
   writeFileSync(join(buildDir, 'package.json'), JSON.stringify(lambdaPackage, null, 2));
@@ -116,27 +120,68 @@ async function buildLambda(name) {
   console.log(`   Creating ZIP: ${basename(zipPath)}`);
   if (existsSync(zipPath)) rmSync(zipPath);
 
-  // Use system zip or 7z
   try {
-    execSync(`powershell -Command "Compress-Archive -Path '${buildDir}\\*' -DestinationPath '${zipPath}' -Force"`, {
+    const zipCommand = process.platform === 'win32'
+      ? `npx -y bestzip "${zipPath}" .`
+      : `zip -qr "${zipPath}" .`;
+    execSync(zipCommand, {
+      cwd: buildDir,
       stdio: 'pipe',
-      timeout: 30000,
+      timeout: 60000,
     });
   } catch {
-    // Fallback to npm's archiver if available
-    execSync(`npx -y bestzip "${zipPath}" "${buildDir}\\*"`, {
-      cwd: BACKEND_ROOT,
+    execSync(`npx -y bestzip "${zipPath}" .`, {
+      cwd: buildDir,
       stdio: 'pipe',
+      timeout: 60000,
     });
   }
 
-  const stats = existsSync(zipPath) ? `(${(readdirSync(DIST_DIR).length / 1024 / 1024).toFixed(1)} MB)` : '';
-  console.log(`   ✅ ${name}.zip created ${stats}`);
+  if (!existsSync(zipPath)) {
+    throw new Error(`Lambda zip was not created: ${zipPath}`);
+  }
 
   // Clean up build directory (keep only ZIP)
   rmSync(buildDir, { recursive: true });
+
+  console.log(`   OK ${name}.zip created`);
 }
 
+
+function toImportPath(path) {
+  const normalized = path.split('\\').join('/');
+  return normalized.startsWith('.') ? normalized : `./${normalized}`;
+}
+
+function rewritePackagedImports(buildDir) {
+  rewriteImportsInDir(buildDir, buildDir);
+}
+
+function rewriteImportsInDir(currentDir, buildDir) {
+  const entries = readdirSync(currentDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === 'node_modules' || entry.name === 'shared' || entry.name === 'dynamodb') continue;
+
+    const filePath = join(currentDir, entry.name);
+    if (entry.isDirectory()) {
+      rewriteImportsInDir(filePath, buildDir);
+      continue;
+    }
+    if (!entry.isFile() || !entry.name.endsWith('.js')) continue;
+
+    const fileDir = dirname(filePath);
+    const sharedImport = toImportPath(relative(fileDir, join(buildDir, 'shared')));
+    const dynamodbImport = toImportPath(relative(fileDir, join(buildDir, 'dynamodb')));
+    const original = readFileSync(filePath, 'utf8');
+    const rewritten = original
+      .replaceAll('../shared/', `${sharedImport}/`)
+      .replaceAll('../../src/dynamodb/', `${dynamodbImport}/`);
+
+    if (rewritten !== original) {
+      writeFileSync(filePath, rewritten);
+    }
+  }
+}
 /**
  * Recursively copy files from src to dest, optionally filtered by predicate.
  */

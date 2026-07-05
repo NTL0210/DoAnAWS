@@ -268,6 +268,21 @@ Resources:
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
 
+  WorkspacesLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "ai-meeting-workspaces-${Environment}"
+      Description: Workspace management CRUD
+      Code:
+        S3Bucket: !Sub "ai-meeting-lambda-${AWS::AccountId}"
+        S3Key: !Sub "lambdas/workspaces.zip"
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref DynamoDBTable
+          ENVIRONMENT: !Ref Environment
+
   # Lambda Functions — AI Processing
   AIProcessingLambda:
     Type: AWS::Lambda::Function
@@ -411,6 +426,47 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TasksLambda.Arn}/invocations"
 
+  # Workspaces API
+  WorkspacesResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: workspaces
+
+  WorkspacesResourceProxy:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref WorkspacesResource
+      PathPart: "{proxy+}"
+
+  WorkspacesMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref WorkspacesResource
+      HttpMethod: ANY
+      AuthorizationType: COGNITO
+      AuthorizerId: !Ref CognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WorkspacesLambda.Arn}/invocations"
+
+  WorkspacesProxyMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref WorkspacesResourceProxy
+      HttpMethod: ANY
+      AuthorizationType: COGNITO
+      AuthorizerId: !Ref CognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WorkspacesLambda.Arn}/invocations"
+
   # Auth API
   AuthResource:
     Type: AWS::ApiGateway::Resource
@@ -520,6 +576,14 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/tasks*"
+
+  LambdaInvokePermissionWorkspaces:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref WorkspacesLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/workspaces*"
 
   LambdaInvokePermissionAuth:
     Type: AWS::Lambda::Permission
