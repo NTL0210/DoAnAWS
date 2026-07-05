@@ -7,10 +7,24 @@
  * @module services/cloudClient
  */
 
-import { runtimeConfig } from '@/config/runtimeConfig';
 import { getAuthToken, clearAuthToken } from './apiClient';
 
-const BASE_URL = runtimeConfig.apiGatewayUrl;
+const DEFAULT_API_STAGE = 'prod';
+
+function normalizeBaseUrl(url) {
+  const trimmed = String(url || '').trim().replace(/\/+$/, '');
+  if (/^https:\/\/[^/]+\.execute-api\.[^/]+\.amazonaws\.com$/.test(trimmed)) {
+    return `${trimmed}/${process.env.NEXT_PUBLIC_API_GATEWAY_STAGE || DEFAULT_API_STAGE}`;
+  }
+  return trimmed;
+}
+
+function buildUrl(path) {
+  const normalizedPath = String(path || '').startsWith('/') ? path : `/${path || ''}`;
+  return `${BASE_URL}${normalizedPath}`;
+}
+
+const BASE_URL = normalizeBaseUrl(process.env.NEXT_PUBLIC_API_GATEWAY_URL);
 
 /**
  * Make an authenticated API Gateway request.
@@ -31,7 +45,7 @@ async function request(path, options = {}) {
   }
 
   // Build URL
-  let url = `${BASE_URL}${path}`;
+  let url = buildUrl(path);
 
   // Add query params
   if (params) {
@@ -108,7 +122,7 @@ export const authApi = {
   /** POST /auth/login — returns { token, user }. No auth token required. */
   login: (email, password) => {
     // For login, we bypass the auth check and pass credentials directly
-    const url = `${BASE_URL}/auth/login`;
+    const url = buildUrl('/auth/login');
     return fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
