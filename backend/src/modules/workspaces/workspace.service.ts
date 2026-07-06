@@ -48,7 +48,7 @@ export class WorkspaceService {
           nickname: null,
         },
       ],
-      channels: input.channels ?? [],
+      channels: input.channels ?? defaultWorkspaceChannels(id, now),
       teams: input.teams ?? [],
       tasks: [],
       meetings: [],
@@ -151,4 +151,35 @@ export class WorkspaceService {
       .replace(/^-+|-+$/g, "")
       .slice(0, 60) || "workspace";
   }
+}
+
+function defaultWorkspaceChannels(workspaceId: string, now: string): Workspace["channels"] {
+  return [
+    {
+      id: `${workspaceId}-ch-general`,
+      workspaceId,
+      name: "general",
+      type: "text",
+      description: "General discussion",
+      isDefault: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: `${workspaceId}-vc-general`,
+      workspaceId,
+      name: "General Voice",
+      type: "voice",
+      scope: "WORKSPACE",
+      teamId: null,
+      allowedTeamIds: [],
+      allowedUserIds: [],
+      deniedUserIds: [],
+      isDefault: false,
+      isLocked: false,
+      allowRecording: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
 }

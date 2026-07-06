@@ -11,6 +11,9 @@ import { TaskService } from "../modules/tasks/task.service.js";
 import { UserController } from "../modules/users/user.controller.js";
 import { buildUserRouter } from "../modules/users/user.router.js";
 import { UserService } from "../modules/users/user.service.js";
+import { VoiceRecordingController } from "../modules/voice-recordings/voice-recording.controller.js";
+import { buildVoiceRecordingRouter } from "../modules/voice-recordings/voice-recording.router.js";
+import { VoiceRecordingService } from "../modules/voice-recordings/voice-recording.service.js";
 import { WorkspaceController } from "../modules/workspaces/workspace.controller.js";
 import { buildWorkspaceRouter } from "../modules/workspaces/workspace.router.js";
 import { WorkspaceService } from "../modules/workspaces/workspace.service.js";
@@ -26,10 +29,21 @@ export function buildApiRouter(repositories: Repositories): Router {
   const guard: GuardFn = (...roles) =>
     requireWorkspaceRole(repositories.workspaces, ...roles);
 
+  const userService = new UserService(repositories.users);
+  const workspaceService = new WorkspaceService(repositories.workspaceCrud);
+
   // ── Meetings ──────────────────────────────────────────
   const meetingService = new MeetingService(repositories.meetings);
-  const meetingController = new MeetingController(meetingService);
+  const meetingController = new MeetingController(meetingService, userService, workspaceService);
   api.use("/meetings", buildMeetingRouter(meetingController, guard));
+
+  const voiceRecordingService = new VoiceRecordingService(
+    repositories.voiceRecordings,
+    meetingService,
+    repositories.workspaces,
+  );
+  const voiceRecordingController = new VoiceRecordingController(voiceRecordingService);
+  api.use("/voice-recordings", buildVoiceRecordingRouter(voiceRecordingController, guard));
 
   // ── Tasks ─────────────────────────────────────────────
   const taskService = new TaskService(repositories.tasks);
@@ -37,12 +51,10 @@ export function buildApiRouter(repositories: Repositories): Router {
   api.use("/tasks", buildTaskRouter(taskController, guard));
 
   // ── Users ─────────────────────────────────────────────
-  const userService = new UserService(repositories.users);
   const userController = new UserController(userService);
   api.use("/users", buildUserRouter(userController, guard));
 
   // ── Workspaces ────────────────────────────────────────
-  const workspaceService = new WorkspaceService(repositories.workspaceCrud);
   const workspaceController = new WorkspaceController(workspaceService);
   api.use("/workspaces", buildWorkspaceRouter(workspaceController, guard));
 

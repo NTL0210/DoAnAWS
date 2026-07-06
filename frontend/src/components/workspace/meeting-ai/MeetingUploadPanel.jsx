@@ -4,10 +4,9 @@ import {
   MAX_AI_AUDIO_SIZE_BYTES,
   WARNING_AI_AUDIO_SIZE_BYTES,
 } from '@/domain/constants/costConstants';
-import { computeFileHash, checkFileExists } from '@/services/storageService';
+import { computeFileHash } from '@/services/storageService';
 import { estimateAudioMinutesFromFile, formatPlanLimit } from '@/services/billingService';
 
-const sampleTranscript = `Sarah: We need to finish the AI meeting flow this week. John will prepare the API contract by Friday. Alex should review the task extraction experience. The team agreed that AI can suggest tasks, but managers must approve them before task creation.`;
 const MAX_FILE_SIZE = MAX_AI_AUDIO_SIZE_BYTES; // 400 MB
 const ALLOWED_EXTENSIONS = /\.(mp3|wav|m4a|ogg|webm|txt|vtt|srt)$/i;
 const ALLOWED_MIME_TYPES = [
@@ -32,11 +31,11 @@ export default function MeetingUploadPanel({
   const [duplicateWarning, setDuplicateWarning] = useState('');
   const [fileSizeWarning, setFileSizeWarning] = useState('');
   const [form, setForm] = useState({
-    title: 'Sprint Planning Meeting',
+    title: '',
     teamId: workspaceTeams[0]?.id || '',
     type: 'TRANSCRIPT',
-    transcript: sampleTranscript,
-    participantIds: workspaceMembers.slice(0, 3).map((member) => member.userId),
+    transcript: '',
+    participantIds: [],
   });
 
   const participantOptions = useMemo(() => {
@@ -98,12 +97,6 @@ export default function MeetingUploadPanel({
     try {
       const hash = await computeFileHash(selected);
       setFileHash(hash);
-      if (hash) {
-        const exists = await checkFileExists(hash);
-        if (exists.exists) {
-          setDuplicateWarning('This file appears to have been uploaded before. Check the meeting history to avoid duplicates.');
-        }
-      }
     } catch {
       // Silently ignore hash failures
     }
@@ -295,7 +288,7 @@ export default function MeetingUploadPanel({
 
           <button
             type="submit"
-            disabled={processing || !form.title.trim()}
+            disabled={processing || !form.title.trim() || (!file && !form.transcript.trim())}
             className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-700"
           >
             {processing ? <FiLoader className="h-4 w-4 animate-spin" /> : <FiZap className="h-4 w-4" />}

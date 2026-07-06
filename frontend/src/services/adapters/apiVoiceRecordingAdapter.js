@@ -1,21 +1,14 @@
-import { runtimeConfig } from '@/config/runtimeConfig';
+import cloudClient from '@/services/cloudClient';
 
-async function request(path, options = {}) {
-  const response = await fetch(`${runtimeConfig.apiBaseUrl}${path}`, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-  });
-  if (!response.ok) throw new Error('Voice recording API request failed');
-  return response.json();
-}
+const request = (path, options = {}) => cloudClient.request(path, options);
 
 export const createVoiceRecord = (recordData) =>
-  request('/voice-recordings', { method: 'POST', body: JSON.stringify(recordData) });
+  request('/voice-recordings', { method: 'POST', body: recordData });
 
 export const uploadVoiceRecord = async (recordId, blob) => {
   const { uploadUrl, storageKey } = await request(`/voice-recordings/${recordId}/upload-url`, {
     method: 'POST',
-    body: JSON.stringify({ contentType: blob?.type, sizeBytes: blob?.size }),
+    body: { contentType: blob?.type, sizeBytes: blob?.size },
   });
   const upload = await fetch(uploadUrl, {
     method: 'PUT',
@@ -25,7 +18,7 @@ export const uploadVoiceRecord = async (recordId, blob) => {
   if (!upload.ok) throw new Error('Voice recording upload failed');
   return request(`/voice-recordings/${recordId}`, {
     method: 'PATCH',
-    body: JSON.stringify({ storageKey, status: 'READY' }),
+    body: { storageKey, status: 'READY', sizeBytes: blob?.size || 0 },
   });
 };
 

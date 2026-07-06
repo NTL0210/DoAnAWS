@@ -50,5 +50,11 @@ export interface UpdateMeetingInput {
   title?: string | undefined;
   status?: MeetingStatus | undefined;
   summary?: string | undefined;
+  storageRef?: string | undefined;
+  transcriptText?: string | undefined;
+  keyDecisions?: string[] | undefined;
+  risks?: string[] | undefined;
+  actionItems?: string[] | undefined;
+  suggestedTasks?: SuggestedTask[] | undefined;
   expectedVersion: number;
 }

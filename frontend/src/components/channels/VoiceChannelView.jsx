@@ -487,18 +487,39 @@ export default function VoiceChannelView({ channel: propChannel }) {
     const existing = processingJobs[record.id];
     if (existing?.status === AUDIO_PROCESSING_STATUS.COMPLETED) return;
     if (!window.confirm('Converting this recording to MP3 may use processing resources. Continue?')) return;
-    const job = await createAudioProcessingJob(record, AUDIO_TARGET_FORMAT.MP3);
-    setProcessingJobs((prev) => ({ ...prev, [record.id]: job }));
+    try {
+      const job = await createAudioProcessingJob(record, AUDIO_TARGET_FORMAT.MP3);
+      setProcessingJobs((prev) => ({ ...prev, [record.id]: job }));
+    } catch (err) {
+      setProcessingJobs((prev) => ({
+        ...prev,
+        [record.id]: {
+          id: `conversion-disabled-${record.id}`,
+          sourceRecordId: record.id,
+          status: AUDIO_PROCESSING_STATUS.FAILED,
+          progress: 0,
+          errorMessage: err.message || 'Audio conversion worker is not deployed.',
+        },
+      }));
+    }
   }, [processingJobs]);
 
   const handleRetryConversion = useCallback(async (jobId) => {
-    const job = await retryAudioProcessingJob(jobId);
-    if (job) setProcessingJobs((prev) => ({ ...prev, [job.sourceRecordId]: job }));
+    try {
+      const job = await retryAudioProcessingJob(jobId);
+      if (job) setProcessingJobs((prev) => ({ ...prev, [job.sourceRecordId]: job }));
+    } catch (err) {
+      setRecordingError(err.message || 'Audio conversion worker is not deployed.');
+    }
   }, []);
 
   const handleCancelConversion = useCallback(async (jobId) => {
-    const job = await cancelAudioProcessingJob(jobId);
-    if (job) setProcessingJobs((prev) => ({ ...prev, [job.sourceRecordId]: job }));
+    try {
+      const job = await cancelAudioProcessingJob(jobId);
+      if (job) setProcessingJobs((prev) => ({ ...prev, [job.sourceRecordId]: job }));
+    } catch (err) {
+      setRecordingError(err.message || 'Audio conversion worker is not deployed.');
+    }
   }, []);
 
   // ─── Processing job polling ─────────────────────────────

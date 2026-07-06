@@ -1,67 +1,31 @@
 'use client';
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { generateId } from '@/lib/workspaceData';
-import { isCloudMode, isMockMode } from '@/services/apiClient';
+import { isCloudMode } from '@/services/apiClient';
 import { getWorkspacePlan, getWorkspaceUsageSnapshot, validateWorkspaceCapacity } from '@/services/billingService';
 import { getGlobalSocket } from '@/context/VoiceConnectionContext';
 
-const INVITATIONS_STORAGE_KEY = 'meetingAppInvitations';
-
-/**
- * Load all invitations from localStorage (shared global store).
- * Returns an empty array when no stored data or on parse failure.
- */
-function loadStoredInvitations() {
-  try {
-    const raw = localStorage.getItem(INVITATIONS_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+function notificationToInvitation(notif, currentUser) {
+  return {
+    id: notif.id,
+    workspaceId: notif.metadata?.workspaceId || '',
+    workspaceName: notif.metadata?.workspaceName || '',
+    invitedByUserId: notif.metadata?.invitedBy || '',
+    invitedByUserName: notif.metadata?.invitedByUserName || 'Unknown',
+    inviteeEmail: notif.metadata?.invitedEmail || currentUser?.email || '',
+    role: notif.metadata?.role || 'EMPLOYEE',
+    teamIds: Array.isArray(notif.metadata?.teamIds) ? notif.metadata.teamIds : [],
+    status: notif.metadata?.status || notif.status || 'PENDING',
+    createdAt: notif.createdAt || new Date().toISOString(),
+    backendNotification: notif,
+  };
 }
 
-/**
- * Persist invitations array to localStorage.
- */
-function persistInvitations(invitations) {
-  try {
-    localStorage.setItem(INVITATIONS_STORAGE_KEY, JSON.stringify(invitations));
-  } catch {
-    // Storage is best-effort
-  }
-}
-
-/**
- * useInvitationsState — manages invitations state and actions.
- *
- * @param {Object} params
- * @param {Object|null} params.currentUser
- * @param {Array} params.workspaces
- * @param {Array} params.workspaceMeetings
- * @param {Function} params.setWorkspaces
- * @param {Function} params.setWorkspaceMeetings
- * @param {Function} params.setActiveWorkspaceId
- * @param {Function} params.setActiveChannelId
- * @param {Function} params.setActiveTeamId
- * @param {Function} params.setActiveView
- * @param {Function} params.addActivity
- * @param {Function} params.showToast
- * @returns {{
- *   invitations: Array,
- *   setInvitations: Function,
- *   userInvitations: Array,
- *   sendInvitation: (workspaceId: string, inviteeEmail: string, role: string, teamIds?: Array) => Object|null,
- *   acceptInvitation: (invitationId: string) => void,
- *   declineInvitation: (invitationId: string) => void,
- * }}
- */
 export default function useInvitationsState({
   currentUser,
   workspaces,
   workspaceMeetings,
   setWorkspaces,
-  setWorkspaceMeetings,
   setActiveWorkspaceId,
   setActiveChannelId,
   setActiveTeamId,
@@ -69,28 +33,13 @@ export default function useInvitationsState({
   addActivity,
   showToast,
 }) {
-  const [invitations, setInvitations] = useState(() => loadStoredInvitations());
+  const [invitations, setInvitations] = useState([]);
 
-  // ─── Cross-tab sync via storage events ─────────────────
-  useEffect(() => {
-    const handler = (event) => {
-      if (event.key === INVITATIONS_STORAGE_KEY) {
-        setInvitations(loadStoredInvitations());
-      }
-    };
-    window.addEventListener('storage', handler);
-    return () => window.removeEventListener('storage', handler);
-  }, []);
-
-  // ─── Real-time invitation relay via signaling server ────
-  // VoiceConnectionProvider relays socket events as window CustomEvents,
-  // so any module can respond without a direct socket dependency.
   useEffect(() => {
     const handleNew = (event) => {
       const invitation = event.detail;
       if (!invitation || !invitation.id) return;
       setInvitations((prev) => {
-        // Avoid duplicates (same ID already exists)
         if (prev.some((i) => i.id === invitation.id)) return prev;
         return [...prev, invitation];
       });
@@ -98,11 +47,8 @@ export default function useInvitationsState({
     const handleAccepted = (event) => {
       const { invitation, acceptedBy } = event.detail || {};
       if (!invitation?.id || !acceptedBy) return;
-      // Mark invitation as accepted so sender's UI reflects the change
       setInvitations((prev) =>
-        prev.map((i) =>
-          i.id === invitation.id ? { ...i, status: 'ACCEPTED' } : i
-        )
+        prev.map((i) => (i.id === invitation.id ? { ...i, status: 'ACCEPTED' } : i))
       );
     };
     window.addEventListener('invitation:new', handleNew);
@@ -113,12 +59,6 @@ export default function useInvitationsState({
     };
   }, []);
 
-  // ─── Persist whenever invitations change ───────────────
-  useEffect(() => {
-    persistInvitations(invitations);
-  }, [invitations]);
-
-  // ─── Poll for incoming invitations (cloud mode) ───────
   useEffect(() => {
     if (!isCloudMode() || !currentUser) return;
 
@@ -131,46 +71,16 @@ export default function useInvitationsState({
         const result = await notificationsApi.list({ unreadOnly: 'true' });
         const data = result.notifications || result || [];
         const incoming = Array.isArray(data) ? data : [];
-
-        // Only process INVITATION type notifications with PENDING status
         const inviteNotifs = incoming.filter(
           (n) => n.type === 'INVITATION' && n.metadata?.status === 'PENDING'
         );
-
         if (!mounted) return;
-
-        // Convert backend notifications to local invitation format
-        setInvitations((prev) => {
-          const updated = [...prev];
-          for (const notif of inviteNotifs) {
-            // Skip if already exists in local state
-            const alreadyExists = prev.some(
-              (i) => i.id === notif.id || (i.inviteeEmail === currentUser?.email && i.workspaceId === notif.metadata?.workspaceId && i.status === 'PENDING')
-            );
-            if (alreadyExists) continue;
-
-            updated.push({
-              id: notif.id,
-              workspaceId: notif.metadata?.workspaceId || '',
-              workspaceName: notif.metadata?.workspaceName || '',
-              invitedByUserId: notif.metadata?.invitedBy || '',
-              invitedByUserName: notif.metadata?.invitedByUserName || 'Unknown',
-              inviteeEmail: notif.metadata?.invitedEmail || currentUser?.email || '',
-              role: notif.metadata?.role || 'EMPLOYEE',
-              teamIds: [],
-              status: 'PENDING',
-              createdAt: notif.createdAt || new Date().toISOString(),
-              _backend: true,
-            });
-          }
-          return updated;
-        });
+        setInvitations(inviteNotifs.map((notif) => notificationToInvitation(notif, currentUser)));
       } catch (err) {
-        console.warn('[Invite] Poll notifications failed (expected if backend not configured):', err?.message);
+        console.warn('[Invite] Poll notifications failed:', err?.message);
       }
     }
 
-    // Poll immediately on mount, then every 30 seconds
     pollInvitations();
     intervalId = setInterval(pollInvitations, 30000);
 
@@ -180,11 +90,6 @@ export default function useInvitationsState({
     };
   }, [currentUser]);
 
-  /**
-   * Invitations addressed to the current user (by email).
-   * In mock mode, all users share localStorage on the same machine,
-   * so the inviteeEmail field acts as the routing key.
-   */
   const userInvitations = useMemo(() => {
     if (!currentUser?.email) return [];
     return invitations.filter(
@@ -192,9 +97,8 @@ export default function useInvitationsState({
     );
   }, [invitations, currentUser]);
 
-  // ─── Invitation Actions ────────────────────────────────
   const sendInvitation = useCallback(async (workspaceId, inviteeEmail, role, teamIds = []) => {
-    if (!currentUser) return null;
+    if (!currentUser || !isCloudMode()) return null;
 
     const workspace = workspaces.find((w) => w.id === workspaceId);
     if (!workspace) return null;
@@ -216,144 +120,87 @@ export default function useInvitationsState({
       showToast('info', capacity.message);
     }
 
-    const newInv = {
-      id: 'inv-' + generateId(),
-      workspaceId,
-      workspaceName: workspace.name,
-      invitedByUserId: currentUser.id,
-      invitedByUserName: currentUser.name,
-      inviteeEmail,
-      role: role || 'EMPLOYEE',
-      teamIds: Array.from(new Set(teamIds || [])),
-      status: 'PENDING',
-      createdAt: new Date().toISOString(),
-    };
-
-    // In cloud mode, persist invitation via backend API
-    if (isCloudMode()) {
-      const { invitationsApi } = await import('@/services/cloudClient');
-      try {
-        await invitationsApi.send({
-          workspaceId,
-          workspaceName: workspace.name,
-          inviteeEmail,
-          role: role || 'EMPLOYEE',
-        });
-      } catch (err) {
-        console.error('[Invite] Failed to send invitation via API:', err);
-        showToast('error', 'Failed to send invitation. Please try again.');
-        return null;
-      }
-    }
-
-    setInvitations((prev) => [...prev, newInv]);
-    addActivity('invitation_sent', 'Invitation sent to ' + inviteeEmail);
-    showToast('success', teamIds?.length ? 'Invitation sent and assigned to selected teams.' : 'Invitation sent to ' + inviteeEmail);
-
-    // Relay invitation via signaling server if connected (real-time cross-user)
-    const sock = getGlobalSocket();
-    if (sock?.connected) {
-      sock.emit('invitation:send', {
+    const { invitationsApi } = await import('@/services/cloudClient');
+    try {
+      const result = await invitationsApi.send({
+        workspaceId,
+        workspaceName: workspace.name,
         inviteeEmail,
-        invitation: newInv,
+        role: role || 'EMPLOYEE',
+        teamIds: Array.from(new Set(teamIds || [])),
       });
-    }
+      const notification = result.notification || result?.data?.notification;
+      const createdInvitation = notification
+        ? notificationToInvitation(notification, { email: inviteeEmail })
+        : null;
 
-    return newInv;
+      if (createdInvitation) {
+        setInvitations((prev) => {
+          if (prev.some((item) => item.id === createdInvitation.id)) return prev;
+          return [...prev, createdInvitation];
+        });
+        const sock = getGlobalSocket();
+        if (sock?.connected) {
+          sock.emit('invitation:send', { inviteeEmail, invitation: createdInvitation });
+        }
+      }
+
+      addActivity('invitation_sent', 'Invitation sent to ' + inviteeEmail);
+      showToast('success', teamIds?.length ? 'Invitation sent and assigned to selected teams.' : 'Invitation sent to ' + inviteeEmail);
+      return createdInvitation || result;
+    } catch (err) {
+      console.error('[Invite] Failed to send invitation via API:', err);
+      showToast('error', err?.message || 'Failed to send invitation. Please try again.');
+      return null;
+    }
   }, [currentUser, workspaces, workspaceMeetings, addActivity, showToast]);
 
-  const acceptInvitation = useCallback((invitationId) => {
+  const acceptInvitation = useCallback(async (invitationId) => {
     const inv = invitations.find((i) => i.id === invitationId);
-    if (!inv) return;
+    if (!inv || !currentUser || !isCloudMode()) return;
 
-    setInvitations((prev) =>
-      prev.map((i) => (i.id === invitationId ? { ...i, status: 'ACCEPTED' } : i))
-    );
-
-    // In cloud mode, notify backend
-    if (isCloudMode()) {
-      import('@/services/cloudClient').then(({ notificationsApi }) => {
-        notificationsApi.update(invitationId, { action: 'accept' }).catch((err) =>
-          console.warn('[Invite] Failed to update backend on accept:', err?.message)
-        );
-      });
-    }
-
-    // Notify the original sender in real time via signaling server
-    const sock = getGlobalSocket();
-    if (sock?.connected && currentUser?.id) {
-      sock.emit('invitation:accept', {
-        fromUserId: currentUser.id,
-        invitation: inv,
-      });
-    }
-
-    // Add user as workspace member
-    setWorkspaces((prev) =>
-      prev.map((ws) => {
-        if (ws.id !== inv.workspaceId) return ws;
-        const alreadyMember = ws.members.some((m) => m.userId === currentUser?.id);
-        if (alreadyMember) return ws;
-        return {
-          ...ws,
-          members: [
-            ...ws.members,
-            {
-              userId: currentUser?.id,
-              role: inv.role || 'EMPLOYEE',
-              joinedAt: new Date().toISOString(),
-            },
-          ],
-        };
-      })
-    );
-
-    // Assign user to teams
-    if (inv.teamIds && inv.teamIds.length > 0) {
-      setWorkspaces((prev) =>
-        prev.map((ws) => {
-          if (ws.id !== inv.workspaceId) return ws;
-          return {
-            ...ws,
-            teams: (ws.teams || []).map((team) => ({
-              ...team,
-              memberIds: inv.teamIds.includes(team.id)
-                ? [...new Set([...(team.memberIds || []), currentUser?.id])]
-                : team.memberIds || [],
-            })),
-          };
-        })
+    try {
+      const { notificationsApi, workspacesApi } = await import('@/services/cloudClient');
+      await notificationsApi.update(invitationId, { action: 'accept' });
+      setInvitations((prev) =>
+        prev.map((i) => (i.id === invitationId ? { ...i, status: 'ACCEPTED' } : i))
       );
-    }
 
-    // Switch to the workspace
-    setActiveWorkspaceId(inv.workspaceId);
-    const targetWs = workspaces.find((w) => w.id === inv.workspaceId);
-    if (targetWs) {
-      const general = targetWs.channels.find((c) => c.isDefault && c.type === 'text');
+      const wsList = await workspacesApi.list({ userId: currentUser.id });
+      const nextWorkspaces = Array.isArray(wsList) ? wsList : [];
+      setWorkspaces(nextWorkspaces);
+
+      const targetWs = nextWorkspaces.find((w) => w.id === inv.workspaceId);
+      setActiveWorkspaceId(inv.workspaceId);
+      const general = targetWs?.channels?.find((c) => c.isDefault && c.type === 'text') || targetWs?.channels?.[0];
       setActiveChannelId(general?.id || null);
+      setActiveTeamId(null);
+      setActiveView('home');
+
+      const sock = getGlobalSocket();
+      if (sock?.connected) {
+        sock.emit('invitation:accept', { fromUserId: currentUser.id, invitation: inv });
+      }
+
+      addActivity('invitation_accepted', 'Joined workspace ' + (inv.workspaceName || ''));
+      showToast('success', 'You have joined "' + (inv.workspaceName || 'Workspace') + '"!');
+    } catch (err) {
+      showToast('error', err?.message || 'Failed to accept invitation.');
     }
-    setActiveTeamId(null);
-    setActiveView('home');
+  }, [invitations, currentUser, setWorkspaces, setActiveWorkspaceId, setActiveChannelId, setActiveTeamId, setActiveView, addActivity, showToast]);
 
-    addActivity('invitation_accepted', 'Joined workspace ' + (inv.workspaceName || ''));
-    showToast('success', 'You have joined "' + (inv.workspaceName || 'Workspace') + '"!');
-  }, [invitations, currentUser, workspaces, setWorkspaces, setActiveWorkspaceId, setActiveChannelId, setActiveTeamId, setActiveView, addActivity, showToast]);
-
-  const declineInvitation = useCallback((invitationId) => {
-    setInvitations((prev) =>
-      prev.map((i) => (i.id === invitationId ? { ...i, status: 'DECLINED' } : i))
-    );
-
-    // In cloud mode, notify backend
-    if (isCloudMode()) {
-      import('@/services/cloudClient').then(({ notificationsApi }) => {
-        notificationsApi.update(invitationId, { action: 'decline' }).catch((err) =>
-          console.warn('[Invite] Failed to update backend on decline:', err?.message)
-        );
-      });
+  const declineInvitation = useCallback(async (invitationId) => {
+    if (!isCloudMode()) return;
+    try {
+      const { notificationsApi } = await import('@/services/cloudClient');
+      await notificationsApi.update(invitationId, { action: 'decline' });
+      setInvitations((prev) =>
+        prev.map((i) => (i.id === invitationId ? { ...i, status: 'DECLINED' } : i))
+      );
+    } catch (err) {
+      showToast('error', err?.message || 'Failed to decline invitation.');
     }
-  }, []);
+  }, [showToast]);
 
   return {
     invitations,

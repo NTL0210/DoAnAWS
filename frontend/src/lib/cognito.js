@@ -1,10 +1,7 @@
 /**
  * Cognito Amplify Auth — conditional initialization.
  *
- * Only configures Amplify when Cognito env vars are actually populated.
- * In mock mode (empty credentials) this module is a no-op to prevent
- * Amplify from auto-initializing Auth and causing spurious 400 errors
- * from Cognito and E353 csPostMessage timeouts.
+ * Only configures Amplify when Cognito env vars are populated.
  */
 
 const userPoolId =
@@ -13,7 +10,7 @@ const userPoolClientId =
   (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID : '') || '';
 
 if (userPoolId && userPoolClientId) {
-  // Dynamic import to avoid loading Amplify Auth in mock mode
+  // Dynamic import keeps Amplify out of bundles that do not configure Cognito.
   import('aws-amplify').then(({ Amplify }) => {
     Amplify.configure({
       Auth: {
@@ -27,6 +24,6 @@ if (userPoolId && userPoolClientId) {
       },
     });
   }).catch(() => {
-    // Silently ignore — not critical for mock mode
+    // Auth bootstrap failure is surfaced by login/register calls.
   });
 }

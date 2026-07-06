@@ -4,8 +4,7 @@
  * Provides low-level CRUD + query operations using the single-table
  * design defined in entityTypes.js.
  *
- * In production, uses AWS DynamoDB.
- * In development, can fall back to a mock (DynamoDB Local or in-memory).
+ * Uses AWS DynamoDB.
  *
  * @module dynamodb/client
  */

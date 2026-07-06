@@ -10,12 +10,14 @@ export function buildMeetingRouter(
 
   router.get("/notifications", controller.listNotifications);
   router.patch("/notifications/:id", controller.updateNotification);
-  router.post("/invite", controller.sendInvitation);
+  router.post("/invite", guard("ADMIN", "OWNER"), controller.sendInvitation);
 
   router.get("/", guard("MEMBER", "ADMIN", "OWNER"), controller.list);
   router.post("/", guard("ADMIN", "OWNER"), controller.create);
   router.get("/:id", guard("MEMBER", "ADMIN", "OWNER"), controller.get);
   router.patch("/:id", guard("ADMIN", "OWNER"), controller.update);
+  router.post("/:id/upload-url", guard("ADMIN", "OWNER"), controller.createUploadUrl);
+  router.post("/:id/process", guard("ADMIN", "OWNER"), controller.process);
 
   return router;
 }

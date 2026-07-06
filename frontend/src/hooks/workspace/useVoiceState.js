@@ -7,11 +7,14 @@ import {
 import {
   buildAudioConstraints,
   buildMediaRecorderOptions,
+  createRecordingDiagnostics,
   createProcessedLocalRecordingStream,
   createProcessedRecordingStream,
 } from '@/lib/voiceAudioQuality';
-import { createVoiceRecord as serviceCreateVoiceRecord } from '@/services/voiceRecordingService';
-import { generateId } from '@/lib/workspaceData';
+import {
+  createVoiceRecord as serviceCreateVoiceRecord,
+  sendVoiceRecordToAI as serviceSendVoiceRecordToAI,
+} from '@/services/voiceRecordingService';
 
 /**
  * useVoiceState — manages voice presence, recording, and channel permissions.
@@ -83,6 +86,7 @@ export default function useVoiceState({
   const mediaStreamRefs = useRef({});
   const mediaChunkRefs = useRef({});
   const mediaCleanupRefs = useRef({});
+  const mediaDiagnosticsRefs = useRef({});
 
   useEffect(() => {
     voiceRecordsRef.current = voiceRecords;
@@ -219,6 +223,7 @@ export default function useVoiceState({
     const blob = new Blob(chunks, { type: mimeType });
     const size = blob.size;
     const duration = (Date.now() - (activeVoiceRecordings[channelId]?.startedAt || Date.now())) / 1000;
+    const diagnostics = mediaDiagnosticsRefs.current[channelId]?.getStats?.() || {};
 
     // Run audio context cleanup
     const cleanup = mediaCleanupRefs.current[channelId];
@@ -246,10 +251,13 @@ export default function useVoiceState({
         duration,
         reason,
         objectUrl,
+        recordingMode: activeVoiceRecordings[channelId]?.recordingMode,
+        remoteCount: activeVoiceRecordings[channelId]?.remoteCount || 0,
+        diagnostics,
       });
 
       if (record) {
-        setVoiceRecords((prev) => [...prev, record]);
+        setVoiceRecords((prev) => [...prev, { ...record, diagnostics }]);
         addActivity('voice_recording_finished', `Voice recording saved (${Math.round(duration)}s)`);
       } else {
         URL.revokeObjectURL(objectUrl);
@@ -273,6 +281,7 @@ export default function useVoiceState({
     delete mediaStreamRefs.current[channelId];
     delete mediaChunkRefs.current[channelId];
     delete mediaCleanupRefs.current[channelId];
+    delete mediaDiagnosticsRefs.current[channelId];
 
     setActiveVoiceRecordings((prev) => {
       if (!prev[channelId]) return prev;
@@ -416,18 +425,43 @@ export default function useVoiceState({
         return null;
       }
 
-      const processedResult = await createProcessedLocalRecordingStream({ localStream: stream });
+      // Mix local + remote streams for a complete meeting recording
+      const remoteStreamsArr = [];
+      if (options.remoteStreams instanceof Map) {
+        for (const remoteStream of options.remoteStreams.values()) {
+          if (remoteStream?.getAudioTracks?.()?.length > 0) {
+            remoteStreamsArr.push(remoteStream);
+          }
+        }
+      }
+
+      const hasRemote = remoteStreamsArr.length > 0;
+      const processedResult = hasRemote
+        ? createProcessedRecordingStream({
+            localStream: stream,
+            remoteStreams: remoteStreamsArr,
+            settings: options.settings || {},
+          })
+        : await createProcessedLocalRecordingStream({ localStream: stream });
       const processedStream = processedResult.stream;
       const mimeType = options.mimeType || 'audio/webm;codecs=opus';
       const recorderOptions = buildMediaRecorderOptions(mimeType);
       const recorder = new MediaRecorder(processedStream, recorderOptions);
+      const diagnostics = createRecordingDiagnostics({
+        rawStream: stream,
+        recordingStream: processedStream,
+        compressor: processedResult.compressor,
+        label: `${channelId}:${hasRemote ? 'mixed-room' : 'local-only'}`,
+      });
 
       mediaChunkRefs.current[channelId] = [];
+      mediaDiagnosticsRefs.current[channelId] = diagnostics;
 
       recorder.ondataavailable = (e) => {
         if (e.data?.size > 0) {
           const chunks = mediaChunkRefs.current[channelId];
           if (chunks) chunks.push(e.data);
+          diagnostics.noteChunk(e.data.size);
         }
       };
 
@@ -441,13 +475,17 @@ export default function useVoiceState({
           mimeType,
           duration: 0,
           size: 0,
-          recordingMode: options.recordingMode || 'LOCAL_ONLY',
+          recordingMode: hasRemote ? 'MIXED_ROOM' : (options.recordingMode || 'LOCAL_ONLY'),
+          remoteCount: remoteStreamsArr.length,
         },
       }));
 
       recorder.start(1000);
       mediaRecorderRefs.current[channelId] = recorder;
-      mediaCleanupRefs.current[channelId] = processedResult.cleanup;
+      mediaCleanupRefs.current[channelId] = () => {
+        try { diagnostics.stop(); } catch { /* ignore */ }
+        try { processedResult.cleanup?.(); } catch { /* ignore */ }
+      };
 
       if (!mediaStreamRefs.current[channelId]) {
         mediaStreamRefs.current[channelId] = stream;
@@ -474,7 +512,20 @@ export default function useVoiceState({
     const chunks = mediaChunkRefs.current[channelId] || [];
     const totalSize = chunks.reduce((sum, c) => sum + c.size, 0);
     const duration = (Date.now() - recording.startedAt) / 1000;
-    return { duration, size: totalSize };
+    const diagnostics = mediaDiagnosticsRefs.current[channelId]?.getStats?.() || {};
+    return {
+      duration,
+      durationSeconds: duration,
+      size: totalSize,
+      estimatedSizeBytes: totalSize,
+      remoteCount: recording.remoteCount || 0,
+      recordingMode: recording.recordingMode,
+      ...diagnostics,
+      peakLevel: diagnostics.recordingPeak || 0,
+      rmsLevel: diagnostics.recordingRms || 0,
+      rawPeak: diagnostics.rawPeak || 0,
+      rawRms: diagnostics.rawRms || 0,
+    };
   }, [activeVoiceRecordings]);
 
   const updateVoiceChannelPermissions = useCallback((channelId, updates) => {
@@ -596,40 +647,58 @@ export default function useVoiceState({
       return;
     }
 
-    const meetingId = 'mtg-' + generateId();
-    const newMeeting = {
-      id: meetingId,
-      title: channel?.name ? `Voice Recording - ${channel.name}` : 'Voice Recording',
-      departmentId: activeWorkspaceId,
-      uploadedBy: currentUser?.id,
-      transcriptText: '',
-      audioUrl: record.url || null,
-      summary: null,
-      status: 'PROCESSING',
-      suggestions: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    setWorkspaceMeetings((prev) => [newMeeting, ...prev]);
-    addActivity('voice_record_sent_to_ai', 'Voice record sent for AI processing', { meetingId });
-    showToast('success', 'Voice record sent to AI Meeting Flow.');
-    return newMeeting;
-  }, [voiceChannels, activeWorkspaceId, canManageAIReview, currentUser, canAccessVoice, setWorkspaceMeetings, addActivity, showToast]);
+    try {
+      setVoiceRecords((prev) =>
+        prev.map((item) => (item.id === recordId ? { ...item, aiStatus: 'PROCESSING' } : item))
+      );
+      const result = await serviceSendVoiceRecordToAI(recordId);
+      if (!result?.ok || !result.meeting) {
+        throw new Error(result?.error || 'AI processing request failed.');
+      }
+      const newMeeting = {
+        ...result.meeting,
+        suggestions: result.meeting.suggestedTasks || [],
+        audioUrl: record.url || record.objectUrl || null,
+      };
+      setWorkspaceMeetings((prev) => [newMeeting, ...prev.filter((meeting) => meeting.id !== newMeeting.id)]);
+      setVoiceRecords((prev) =>
+        prev.map((item) =>
+          item.id === recordId
+            ? { ...item, ...(result.recording || {}), aiStatus: 'COMPLETED', meetingId: newMeeting.id }
+            : item
+        )
+      );
+      addActivity('voice_record_sent_to_ai', 'Voice record analyzed by AI', { meetingId: newMeeting.id });
+      showToast('success', 'Voice recording transcribed and analyzed.');
+      return newMeeting;
+    } catch (err) {
+      setVoiceRecords((prev) =>
+        prev.map((item) => (item.id === recordId ? { ...item, aiStatus: 'FAILED' } : item))
+      );
+      showToast('error', err.message || 'AI processing failed.');
+    }
+  }, [voiceChannels, canManageAIReview, canAccessVoice, setWorkspaceMeetings, addActivity, showToast]);
 
   // ─── Voice cleanup on unmount ─────────────────────────
   useEffect(() => {
+    const mediaRecorders = mediaRecorderRefs.current;
+    const mediaStreams = mediaStreamRefs.current;
+    const mediaChunks = mediaChunkRefs.current;
+    const mediaDiagnostics = mediaDiagnosticsRefs.current;
     return () => {
-      Object.values(mediaRecorderRefs.current).forEach((r) => {
+      Object.values(mediaRecorders).forEach((r) => {
         try { if (r.state !== 'inactive') r.stop(); } catch { /* ignore */ }
       });
-      Object.values(mediaStreamRefs.current).forEach((s) => {
+      Object.values(mediaStreams).forEach((s) => {
         try { s.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
       });
-      Object.values(mediaChunkRefs.current).forEach((chunks) => {
+      Object.values(mediaChunks).forEach((chunks) => {
         chunks.forEach((c) => {
           try { if (c?.url?.startsWith?.('blob:')) URL.revokeObjectURL(c.url); } catch { /* ignore */ }
         });
+      });
+      Object.values(mediaDiagnostics).forEach((diagnostics) => {
+        try { diagnostics.stop?.(); } catch { /* ignore */ }
       });
     };
   }, []);

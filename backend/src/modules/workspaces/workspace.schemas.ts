@@ -25,6 +25,7 @@ export const workspaceMemberSchema = z.object({
 
 export const workspaceChannelSchema = z.object({
   id: z.string(),
+  workspaceId: z.string().optional(),
   name: z.string(),
   type: z.enum(["text", "voice"]),
   description: z.string().optional(),

@@ -124,8 +124,7 @@ export default function AccountSettings() {
     }
     setSaving(true);
     try {
-      await new Promise((r) => setTimeout(r, 300));
-      updateCurrentUser({
+      await updateCurrentUser({
         name: displayName.trim(),
         phone: phone.trim(),
       });
@@ -140,7 +139,7 @@ export default function AccountSettings() {
   };
 
   // Avatar management
-  const handleSelectAvatar = (newUrl) => {
+  const handleSelectAvatar = async (newUrl) => {
     if (newUrl === avatar) {
       setShowAvatarPicker(false);
       return;
@@ -152,34 +151,50 @@ export default function AccountSettings() {
       if (newHistory.length > 5) newHistory = newHistory.slice(0, 5);
     }
 
+    const previousAvatar = avatar;
+    const previousHistory = avatarHistory;
     setAvatar(newUrl);
     setAvatarHistory(newHistory);
-    setShowAvatarPicker(false);
-    setCustomAvatarUrl('');
 
-    updateCurrentUser({ avatar: newUrl, avatarHistory: newHistory });
-    showToast('success', 'Avatar updated.');
+    try {
+      await updateCurrentUser({ avatar: newUrl, avatarHistory: newHistory });
+      setShowAvatarPicker(false);
+      setCustomAvatarUrl('');
+      showToast('success', 'Avatar updated.');
+    } catch {
+      setAvatar(previousAvatar);
+      setAvatarHistory(previousHistory);
+      showToast('error', 'Failed to save avatar. Please try again.');
+    }
   };
 
-  const handleRestoreHistoryAvatar = (oldUrl) => {
+  const handleRestoreHistoryAvatar = async (oldUrl) => {
     if (oldUrl === avatar) return;
 
     let newHistory = avatarHistory.filter((a) => a !== oldUrl);
     if (avatar) newHistory.unshift(avatar);
     if (newHistory.length > 5) newHistory.length = 5;
 
+    const previousAvatar = avatar;
+    const previousHistory = avatarHistory;
     setAvatar(oldUrl);
     setAvatarHistory(newHistory);
-    updateCurrentUser({ avatar: oldUrl, avatarHistory: newHistory });
-    showToast('success', 'Restored previous avatar.');
+    try {
+      await updateCurrentUser({ avatar: oldUrl, avatarHistory: newHistory });
+      showToast('success', 'Restored previous avatar.');
+    } catch {
+      setAvatar(previousAvatar);
+      setAvatarHistory(previousHistory);
+      showToast('error', 'Failed to restore avatar.');
+    }
   };
 
-  const handleCustomAvatarSubmit = () => {
+  const handleCustomAvatarSubmit = async () => {
     const url = customAvatarUrl.trim();
     if (!url) return;
     try {
       new URL(url);
-      handleSelectAvatar(url);
+      await handleSelectAvatar(url);
     } catch {
       showToast('error', 'Please enter a valid URL.');
     }

@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { generateId } from '@/lib/workspaceData';
 import { normalizeVoiceChannel } from '@/lib/voicePermissions';
+import { workspacesApi } from '@/services/cloudClient';
 
 /**
  * useChannelsAndMessages — manages messages and channel CRUD.
@@ -54,7 +55,7 @@ export default function useChannelsAndMessages({
   }, [messages, teamMessagesKey]);
 
   // ─── Channel Actions ───────────────────────────────────
-  const createChannel = useCallback((name, type, description) => {
+  const createChannel = useCallback(async (name, type, description) => {
     if (!activeWorkspace || !currentUser) return null;
 
     const channelId = 'ch-' + generateId();
@@ -74,38 +75,37 @@ export default function useChannelsAndMessages({
       }));
     }
 
-    setWorkspaces((prev) =>
-      prev.map((ws) => {
-        if (ws.id === activeWorkspace.id) {
-          return { ...ws, channels: [...ws.channels, newChannel] };
-        }
-        return ws;
-      })
-    );
-
-    setMessages((prev) => ({ ...prev, [channelId]: [] }));
-    addActivity('channel_created', 'Channel #' + newChannel.name + ' created');
-
-    return newChannel;
+    const nextChannels = [...(activeWorkspace.channels || []), newChannel];
+    try {
+      const saved = await workspacesApi.update(activeWorkspace.id, {
+        channels: nextChannels,
+        expectedVersion: activeWorkspace.version || 1,
+      });
+      setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      setMessages((prev) => ({ ...prev, [channelId]: [] }));
+      addActivity('channel_created', 'Channel #' + newChannel.name + ' created');
+      return newChannel;
+    } catch {
+      return null;
+    }
   }, [activeWorkspace, currentUser, setWorkspaces, addActivity]);
 
-  const deleteChannel = useCallback((channelId) => {
+  const deleteChannel = useCallback(async (channelId) => {
     if (!activeWorkspace) return;
-    setWorkspaces((prev) =>
-      prev.map((ws) => {
-        if (ws.id === activeWorkspace.id) {
-          return {
-            ...ws,
-            channels: ws.channels.filter((c) => c.id !== channelId),
-          };
-        }
-        return ws;
-      })
-    );
+    const nextChannels = (activeWorkspace.channels || []).filter((c) => c.id !== channelId);
+    try {
+      const saved = await workspacesApi.update(activeWorkspace.id, {
+        channels: nextChannels,
+        expectedVersion: activeWorkspace.version || 1,
+      });
+      setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+    } catch {
+      // Keep existing state if DynamoDB rejects the update.
+    }
   }, [activeWorkspace, setWorkspaces]);
 
   // ─── Message Actions ───────────────────────────────────
-  const sendMessage = useCallback((channelId, content, attachments) => {
+  const sendMessage = useCallback(async (channelId, content, attachments) => {
     if (!currentUser || !content?.trim()) return;
     const channel = activeWorkspace?.channels?.find((item) => item.id === channelId);
 
@@ -120,19 +120,31 @@ export default function useChannelsAndMessages({
       updatedAt: null,
     };
 
-    setMessages((prev) => ({
-      ...prev,
-      [channelId]: [...(prev[channelId] || []), newMsg],
-    }));
+    const nextMessages = {
+      ...(messages || {}),
+      [channelId]: [...(messages[channelId] || []), newMsg],
+    };
+    setMessages(nextMessages);
+    if (activeWorkspace) {
+      try {
+        const saved = await workspacesApi.update(activeWorkspace.id, {
+          messages: nextMessages,
+          expectedVersion: activeWorkspace.version || 1,
+        });
+        setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      } catch {
+        // Message remains visible locally until the next cloud refresh.
+      }
+    }
     addNotification('CHAT_MESSAGE', `New message in #${channel?.name || 'workspace chat'}`, `${currentUser.name}: ${content.trim()}`, {
       channelId,
       messageId: newMsg.id,
       senderId: currentUser.id,
       workspaceId: activeWorkspaceId,
     });
-  }, [currentUser, activeWorkspaceId, activeWorkspace, addNotification]);
+  }, [currentUser, activeWorkspaceId, activeWorkspace, messages, setWorkspaces, addNotification]);
 
-  const sendTeamMessage = useCallback((teamId, content, attachments) => {
+  const sendTeamMessage = useCallback(async (teamId, content, attachments) => {
     if (!currentUser || !teamId || !content?.trim()) return;
 
     const newMsg = {
@@ -148,10 +160,22 @@ export default function useChannelsAndMessages({
     };
 
     const key = 'team-chat-' + teamId;
-    setMessages((prev) => ({
-      ...prev,
-      [key]: [...(prev[key] || []), newMsg],
-    }));
+    const nextMessages = {
+      ...(messages || {}),
+      [key]: [...(messages[key] || []), newMsg],
+    };
+    setMessages(nextMessages);
+    if (activeWorkspace) {
+      try {
+        const saved = await workspacesApi.update(activeWorkspace.id, {
+          messages: nextMessages,
+          expectedVersion: activeWorkspace.version || 1,
+        });
+        setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      } catch {
+        // Message remains visible locally until the next cloud refresh.
+      }
+    }
     addActivity('team_message_created', 'Team message created', { teamId });
     addNotification('TEAM_MESSAGE', 'New team message', `${currentUser.name}: ${content.trim()}`, {
       teamId,
@@ -159,7 +183,7 @@ export default function useChannelsAndMessages({
       senderId: currentUser.id,
       workspaceId: activeWorkspaceId,
     });
-  }, [currentUser, activeWorkspaceId, addActivity, addNotification]);
+  }, [currentUser, activeWorkspaceId, activeWorkspace, messages, setWorkspaces, addActivity, addNotification]);
 
   return {
     messages,

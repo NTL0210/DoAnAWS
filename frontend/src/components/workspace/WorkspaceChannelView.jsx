@@ -40,7 +40,6 @@ import VoiceChannelView from '@/components/channels/VoiceChannelView';
 import WorkspaceViewTransition from '@/components/workspace/WorkspaceViewTransition';
 import CommandPalette from '@/components/workspace/CommandPalette';
 import { VALID_WORKSPACE_VIEWS, getQueryView } from '@/lib/workspaceViewUtils';
-import usePresence from '@/hooks/usePresence';
 
 export default function WorkspaceChannelView() {
   const router = useRouter();
@@ -85,21 +84,17 @@ export default function WorkspaceChannelView() {
   } = useWorkspace();
   const { voiceLeaveChannel, onlineUsers: voiceOnlineUsers } = useVoiceConnection();
 
-  const { onlineUsers: presenceOnlineUsers, currentStatus } = usePresence();
+  const currentUserPresenceName = currentUser?.name || currentUser?.email || 'You';
 
-  // Merge presence sources: Socket.IO (real cross-user) takes priority,
-  // BroadcastChannel (same-browser) is fallback.
   const socketOnlineUsers = useMemo(() => {
-    // Convert voiceOnlineUsers format to presence format
-    // voiceOnlineUsers: [{ userId, name, avatar, role, online, connectedAt, lastSeenAt }]
-    // presenceOnlineUsers: [{ userId, name, status: 'online'|'idle', lastSeen }]
-    if (!voiceOnlineUsers || voiceOnlineUsers.length === 0) return presenceOnlineUsers;
+    if (!voiceOnlineUsers || voiceOnlineUsers.length === 0) return [];
 
     const socketMap = new Map();
     voiceOnlineUsers.forEach((u) => {
       socketMap.set(u.userId, {
         userId: u.userId,
         name: u.name || u.userId,
+        role: u.role,
         status: u.online ? 'online' : 'offline',
         lastSeen: u.lastSeenAt || u.connectedAt || new Date().toISOString(),
       });
@@ -107,13 +102,20 @@ export default function WorkspaceChannelView() {
 
     // Merge with BroadcastChannel data — socket data takes priority
     const result = Array.from(socketMap.values());
-    (presenceOnlineUsers || []).forEach((u) => {
-      if (!socketMap.has(u.userId)) {
-        result.push(u);
-      }
-    });
     return result;
-  }, [voiceOnlineUsers, presenceOnlineUsers]);
+  }, [voiceOnlineUsers]);
+
+  const currentStatus = useMemo(() => {
+    if (!currentUser?.id) return null;
+    const realtimeUser = socketOnlineUsers.find((u) => u.userId === currentUser.id);
+    return realtimeUser || {
+      userId: currentUser.id,
+      name: currentUserPresenceName,
+      role: currentUser.role,
+      status: 'online',
+      lastSeen: new Date().toISOString(),
+    };
+  }, [currentUser?.id, currentUser?.role, currentUserPresenceName, socketOnlineUsers]);
 
   const [message, setMessage] = useState('');
   const [channelsOpen, setChannelsOpen] = useState(() => loadCollapsedState('channelsOpen', true));
@@ -974,7 +976,7 @@ function VoiceChannelContent({ channel, workspaceMembers, workspaceRole, can }) 
 }
 
 function MemberPanel({ members, currentUser, roleLabels, onlineUsers = [], currentStatus }) {
-  // onlineUsers from usePresence: { userId, name, status: 'online'|'idle', lastSeen }
+  // onlineUsers from the EC2 signaling socket: { userId, name, status, lastSeen }
   const onlineById = useMemo(() => {
     const map = new Map();
     (onlineUsers || []).forEach((u) => map.set(u.userId, u));

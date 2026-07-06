@@ -75,10 +75,16 @@ export function requireWorkspaceRole(
         return;
       }
 
-      // Extract workspaceId from header (x-workspace-id), query, or user context
+      // Extract workspaceId from explicit workspace fields before generic route ids.
+      // Routes like /meetings/:id use params.id for a meeting id, not a workspace id.
       const workspaceId =
         (req.headers["x-workspace-id"] as string | undefined) ||
         (req.query.workspaceId as string | undefined) ||
+        (isRecord(req.body) && typeof req.body.workspaceId === "string"
+          ? req.body.workspaceId
+          : undefined) ||
+        (req.params.workspaceId as string | undefined) ||
+        (req.params.id as string | undefined) ||
         req.user.workspaceId;
 
       if (!workspaceId) {
@@ -140,4 +146,8 @@ export function requireWorkspaceRole(
       next(error);
     }
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

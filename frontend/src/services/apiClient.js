@@ -1,12 +1,7 @@
 /**
  * API Client — Abstraction layer for backend calls
  *
- * Supports two modes:
- *   1. MOCK (default): Uses WorkspaceContext + localStorage directly
- *   2. CLOUD: Calls API Gateway endpoints + Cognito auth
- *
- * Switch modes by setting NEXT_PUBLIC_APP_MODE=cloud in .env
- * or toggling window.__APP_MODE in the browser console.
+ * Calls backend services through API Gateway/Cognito.
  *
  * @module services/apiClient
  */
@@ -14,13 +9,10 @@
 const APP_MODE = getAppMode();
 
 function getAppMode() {
-  if (typeof window !== 'undefined' && window.__APP_MODE) {
-    return window.__APP_MODE;
-  }
   if (typeof process !== 'undefined') {
-    return process.env.NEXT_PUBLIC_APP_MODE || 'mock';
+    return process.env.NEXT_PUBLIC_APP_MODE || 'cloud';
   }
-  return 'mock';
+  return 'cloud';
 }
 
 /**
@@ -29,14 +21,6 @@ function getAppMode() {
  */
 export function isCloudMode() {
   return APP_MODE === 'cloud';
-}
-
-/**
- * Check if the app is running in mock (localStorage) mode.
- * @returns {boolean}
- */
-export function isMockMode() {
-  return APP_MODE !== 'cloud';
 }
 
 /**
@@ -67,7 +51,7 @@ export function getApiGatewayUrl() {
 const TOKEN_KEY = 'meetingAppAuthToken';
 
 /**
- * Store the auth token (from Cognito or mock login).
+ * Store the auth token from Cognito.
  * @param {string} token
  */
 export function setAuthToken(token) {
@@ -102,9 +86,6 @@ export function clearAuthToken() {
 /**
  * Make an authenticated API call to the backend.
  *
- * In mock mode: calls Next.js API routes (pages/api/...)
- * In cloud mode: calls API Gateway endpoint
- *
  * @param {string} path - API path (e.g., '/users', '/meetings')
  * @param {Object} [options]
  * @param {string} [options.method='GET']
@@ -118,14 +99,8 @@ export async function apiRequest(path, options = {}) {
   const token = getAuthToken();
 
   // Build URL
-  let url;
-  if (isCloudMode()) {
-    const baseUrl = getApiGatewayUrl() || '/api';
-    url = `${baseUrl}${path}`;
-  } else {
-    // In mock mode, use Next.js API routes
-    url = `/api${path}`;
-  }
+  const baseUrl = getApiGatewayUrl() || getApiBaseUrl();
+  let url = `${baseUrl}${path}`;
 
   // Add query parameters
   if (params) {
@@ -222,7 +197,6 @@ export default {
   apiRequest,
   api,
   isCloudMode,
-  isMockMode,
   setAuthToken,
   getAuthToken,
   clearAuthToken,

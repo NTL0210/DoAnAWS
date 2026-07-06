@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { generateId } from '@/lib/workspaceData';
-import { analyzeMeeting as serviceAnalyzeMeeting, uploadMeetingFile as serviceUploadMeetingFile } from '@/services/meetingService';
-import { createTasksFromSuggestions as buildTasksFromSuggestions, getTasksByMeeting as serviceGetTasksByMeeting } from '@/services/taskService';
+import { analyzeMeeting as serviceAnalyzeMeeting, createMeeting as serviceCreateMeeting, uploadMeetingFile as serviceUploadMeetingFile } from '@/services/meetingService';
+import { getTasksByMeeting as filterTasksByMeeting } from '@/services/taskService';
 
 const EMPTY_TRASH = { tasks: [], meetings: [], teams: [] };
 
@@ -33,7 +33,7 @@ const EMPTY_TRASH = { tasks: [], meetings: [], teams: [] };
  *   moveWorkspaceTask: (taskId: string, newStatus: string) => void,
  *   // Meeting actions
  *   createMeeting: (meetingData: Object) => Object|null,
- *   uploadMeetingMock: (meetingId: string, file: Object) => Promise<void>,
+ *   uploadMeetingFile: (meetingId: string, file: Object) => Promise<void>,
  *   processMeetingWithAI: (meetingOrId: Object|string) => Promise<void>,
  *   analyzeMeetingWithAI: (meetingOrId: Object|string) => Promise<void>,
  *   updateMeetingSuggestion: (meetingId: string, suggestionId: string, patch: Object) => void,
@@ -86,46 +86,56 @@ export default function useWorkspaceTasksState({
   }, []);
 
   // ─── Meeting Actions ───────────────────────────────────
-  const createMeeting = useCallback((meetingData) => {
+  const createMeeting = useCallback(async (meetingData) => {
     const allowed = canManageAIReview || workspaceRole === 'OWNER';
     if (!activeWorkspace || !currentUser || !allowed) {
       showToast('error', 'You do not have permission to create meetings.');
       return null;
     }
 
-    const newMeeting = {
-      id: 'mtg-' + generateId(),
+    const meetingPayload = {
+      workspaceId: activeWorkspaceId,
+      teamId: meetingData.teamId || undefined,
       title: meetingData.title || 'Untitled Meeting',
-      departmentId: activeWorkspaceId,
-      uploadedBy: currentUser.id,
       transcriptText: meetingData.transcriptText || meetingData.transcript || '',
-      audioUrl: meetingData.audioUrl || null,
-      summary: null,
-      status: 'UPLOADED',
-      suggestions: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      storageRef: meetingData.storageRef || undefined,
+      createdBy: currentUser.id,
     };
 
-    setWorkspaceMeetings((prev) => [newMeeting, ...prev]);
-    addActivity('meeting_created', 'Meeting "' + newMeeting.title + '" uploaded');
-    showToast('success', 'Meeting created successfully.');
-    completeOnboardingStep('meetingUploaded');
-    return newMeeting;
+    try {
+      const saved = await serviceCreateMeeting(meetingPayload);
+      const newMeeting = {
+        ...saved,
+        departmentId: saved.workspaceId || activeWorkspaceId,
+        uploadedBy: saved.createdBy || currentUser.id,
+        suggestions: saved.suggestions || saved.suggestedTasks || [],
+      };
+      setWorkspaceMeetings((prev) => [newMeeting, ...prev]);
+      addActivity('meeting_created', 'Meeting "' + newMeeting.title + '" uploaded');
+      showToast('success', 'Meeting created successfully.');
+      completeOnboardingStep('meetingUploaded');
+      return newMeeting;
+    } catch (err) {
+      showToast('error', err.message || 'Failed to create meeting.');
+      return null;
+    }
   }, [activeWorkspace, currentUser, canManageAIReview, workspaceRole, activeWorkspaceId, addActivity, showToast, completeOnboardingStep]);
 
-  const uploadMeetingMock = useCallback(async (meetingId, file) => {
+  const uploadMeetingFile = useCallback(async (meetingId, file) => {
     const meeting = workspaceMeetings.find((m) => m.id === meetingId);
     if (!meeting) return;
     try {
-      const result = await serviceUploadMeetingFile(meetingId, file);
+      const result = await serviceUploadMeetingFile(meetingId, file, {
+        meetingId,
+        workspaceId: meeting.workspaceId || activeWorkspaceId,
+      });
       setWorkspaceMeetings((prev) =>
         prev.map((m) => (m.id === meetingId ? { ...m, ...result } : m))
       );
     } catch (err) {
       showToast('error', err.message || 'Upload failed');
     }
-  }, [workspaceMeetings, showToast]);
+  }, [workspaceMeetings, activeWorkspaceId, showToast]);
 
   const processMeetingWithAI = useCallback(async (meetingOrId) => {
     const meetingId = typeof meetingOrId === 'string' ? meetingOrId : meetingOrId?.id;
@@ -137,14 +147,14 @@ export default function useWorkspaceTasksState({
     );
 
     try {
-      const transcript = meeting.transcriptText || meeting.transcript || '';
-      const result = await serviceAnalyzeMeeting(transcript, {
+      const result = await serviceAnalyzeMeeting(meetingId, {
+        workspaceId: meeting.workspaceId || activeWorkspaceId,
         members: workspaceMembers,
         currentUserId: currentUser?.id,
       });
 
-      const suggestions = (result?.tasks || []).map((task, idx) => ({
-        id: 'sug-' + generateId(),
+      const suggestions = (result?.suggestedTasks || result?.tasks || []).map((task, idx) => ({
+        id: task.id || 'sug-' + generateId(),
         meetingId,
         title: task.title || 'Untitled Task',
         description: task.description || '',
@@ -162,9 +172,11 @@ export default function useWorkspaceTasksState({
           m.id === meetingId
             ? {
                 ...m,
-                status: 'COMPLETED',
+                ...result,
+                status: result?.status || 'COMPLETED',
                 summary: result.summary || m.summary,
                 suggestions,
+                suggestedTasks: suggestions,
               }
             : m
         )
@@ -178,7 +190,7 @@ export default function useWorkspaceTasksState({
       );
       showToast('error', 'AI processing failed: ' + (err.message || 'Unknown error'));
     }
-  }, [workspaceMeetings, workspaceMembers, currentUser, addActivity, showToast]);
+  }, [workspaceMeetings, activeWorkspaceId, workspaceMembers, currentUser, addActivity, showToast]);
 
   const analyzeMeetingWithAI = processMeetingWithAI;
 
@@ -225,56 +237,60 @@ export default function useWorkspaceTasksState({
   }, []);
 
   const createTasksFromMeeting = useCallback(async (meetingId, selectedSuggestedTaskIds) => {
-    if (!currentUser) return;
+    if (!currentUser) return [];
     const meeting = workspaceMeetings.find((m) => m.id === meetingId);
-    if (!meeting || !meeting.suggestions) return;
+    const meetingSuggestions = meeting?.suggestions || meeting?.suggestedTasks || [];
+    if (!meeting || meetingSuggestions.length === 0) return [];
 
     const suggestions = selectedSuggestedTaskIds
-      ? meeting.suggestions.filter((s) => selectedSuggestedTaskIds.includes(s.id))
-      : meeting.suggestions.filter((s) => s.approved);
+      ? meetingSuggestions.filter((s) => selectedSuggestedTaskIds.includes(s.id))
+      : meetingSuggestions.filter((s) => s.approved);
 
     if (suggestions.length === 0) {
       showToast('info', 'No tasks selected to create.');
-      return;
+      return [];
     }
 
     try {
-      const newTasks = await buildTasksFromSuggestions(suggestions, {
-        meetingId,
-        workspaceId: activeWorkspaceId,
-        createdBy: currentUser.id,
-      });
+      const { tasksApi } = await import('@/services/cloudClient');
+      const newTasks = [];
+      for (const suggestion of suggestions) {
+        const created = await tasksApi.create({
+          workspaceId: activeWorkspaceId,
+          meetingId,
+          title: suggestion.title.trim(),
+          description: suggestion.description || '',
+          assigneeId: suggestion.assigneeId || undefined,
+          priority: ['LOW', 'MEDIUM', 'HIGH'].includes(suggestion.priority) ? suggestion.priority : 'MEDIUM',
+          deadline: suggestion.deadline || undefined,
+          createdBy: currentUser.id,
+        });
+        newTasks.push(created);
+      }
 
       if (newTasks && newTasks.length > 0) {
         setWorkspaceTasks((prev) => [...newTasks, ...prev]);
         addActivity('tasks_created', newTasks.length + ' tasks created from meeting "' + (meeting.title || 'Meeting') + '"');
 
         // Auto-post to team chat
-        const taskList = newTasks.map((t) => `- ${t.title} (${t.priority || 'MEDIUM'})`).join('\n');
-        const systemMsg = {
-          id: 'msg-' + generateId(),
-          type: 'system',
-          content: `**Tasks created from meeting "${meeting.title}"**\n${taskList}`,
-          createdAt: new Date().toISOString(),
-          scope: 'TEAM',
-        };
-
         setWorkspaceMeetings((prev) =>
           prev.map((m) => (m.id === meetingId ? { ...m, suggestions: [] } : m))
         );
 
         showToast('success', `${newTasks.length} task(s) created from meeting.`);
       }
+      return newTasks;
     } catch (err) {
       showToast('error', 'Failed to create tasks: ' + (err.message || 'Unknown error'));
+      return [];
     }
   }, [currentUser, workspaceMeetings, activeWorkspaceId, addActivity, showToast]);
 
   const createTasksFromSuggestions = createTasksFromMeeting;
 
   const getTasksByMeeting = useCallback((meetingId) => {
-    return serviceGetTasksByMeeting(meetingId);
-  }, []);
+    return filterTasksByMeeting(workspaceTasks, meetingId);
+  }, [workspaceTasks]);
 
   // ─── Trash actions ─────────────────────────────────────
   const restoreTrashItem = useCallback((type, id) => {
@@ -310,7 +326,7 @@ export default function useWorkspaceTasksState({
     addWorkspaceTasks,
     moveWorkspaceTask,
     createMeeting,
-    uploadMeetingMock,
+    uploadMeetingFile,
     processMeetingWithAI,
     analyzeMeetingWithAI,
     updateMeetingSuggestion,

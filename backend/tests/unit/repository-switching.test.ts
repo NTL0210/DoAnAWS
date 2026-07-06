@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { buildRepositories } from "../../src/app/repositories.js";
-import { MockMeetingRepository } from "../../src/modules/meetings/meeting.repository.mock.js";
+import { DynamoAuditRepository } from "../../src/modules/audit/audit.repository.dynamodb.js";
 import { DynamoMeetingRepository } from "../../src/modules/meetings/meeting.repository.dynamodb.js";
+import { DynamoTaskRepository } from "../../src/modules/tasks/task.repository.dynamodb.js";
+import { DynamoUserRepository } from "../../src/modules/users/user.repository.dynamodb.js";
 
-describe("repository provider switching", () => {
-  it("builds mock repositories", () => {
-    expect(buildRepositories("mock").meetings).toBeInstanceOf(MockMeetingRepository);
-  });
-
+describe("repository provider", () => {
   it("builds DynamoDB repositories", () => {
-    expect(buildRepositories("dynamodb").meetings).toBeInstanceOf(
-      DynamoMeetingRepository,
-    );
+    const repositories = buildRepositories();
+    expect(repositories.meetings).toBeInstanceOf(DynamoMeetingRepository);
+    expect(repositories.tasks).toBeInstanceOf(DynamoTaskRepository);
+    expect(repositories.users).toBeInstanceOf(DynamoUserRepository);
+    expect(repositories.audit).toBeInstanceOf(DynamoAuditRepository);
   });
 });

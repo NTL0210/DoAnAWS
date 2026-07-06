@@ -2,34 +2,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { FiCalendar, FiCheckCircle, FiClock, FiEye, FiLoader, FiSliders, FiUser } from 'react-icons/fi';
 import { StatusPill } from '../layout/AppShell';
-import { getTasks, getUsers } from '../../services/legacyDataService';
+import { useWorkspace } from '../../context/WorkspaceContext';
 
 export default function TaskList({ filters = {}, compact = false }) {
-  const [tasks, setTasks] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { workspaceTasks, workspaceMembers, loading } = useWorkspace();
   const [localStatus, setLocalStatus] = useState('all');
   const [sortBy, setSortBy] = useState('deadline');
   const [visibleCount, setVisibleCount] = useState(50);
   const [expandedTaskId, setExpandedTaskId] = useState(null);
 
-  useEffect(() => {
-    const loadTasks = async () => {
-      setLoading(true);
-      const [allTasks, allUsers] = await Promise.all([
-        getTasks(), getUsers()
-      ]);
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      setTasks(allTasks);
-      setUsers(allUsers);
-      setLoading(false);
-    };
-
-    loadTasks();
-  }, []);
-
   const visibleTasks = useMemo(() => {
-    let nextTasks = [...tasks];
+    let nextTasks = [...(workspaceTasks || [])];
 
     if (filters.departmentId) nextTasks = nextTasks.filter((task) => task.departmentId === filters.departmentId);
     if (filters.assigneeId) nextTasks = nextTasks.filter((task) => task.assigneeId === filters.assigneeId);
@@ -43,7 +26,7 @@ export default function TaskList({ filters = {}, compact = false }) {
       if (sortBy === 'progress') return (b.progress || 0) - (a.progress || 0);
       return new Date(a.deadline || '2999-01-01') - new Date(b.deadline || '2999-01-01');
     });
-  }, [filters, localStatus, sortBy, tasks]);
+  }, [filters, localStatus, sortBy, workspaceTasks]);
 
   useEffect(() => {
     setVisibleCount(50);
@@ -53,11 +36,11 @@ export default function TaskList({ filters = {}, compact = false }) {
   const renderedTasks = useMemo(() => visibleTasks.slice(0, visibleCount), [visibleTasks, visibleCount]);
 
   const userById = useMemo(() => {
-    return users.reduce((acc, user) => {
-      acc[user.id] = user;
+    return (workspaceMembers || []).reduce((acc, user) => {
+      acc[user.userId || user.id] = user;
       return acc;
     }, {});
-  }, [users]);
+  }, [workspaceMembers]);
 
   if (loading) {
     return (

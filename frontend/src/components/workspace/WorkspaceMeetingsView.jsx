@@ -39,7 +39,7 @@ export default function WorkspaceMeetingsView() {
     meetings,
     createMeeting,
     deleteMeeting,
-    uploadMeetingMock,
+    uploadMeetingFile,
     analyzeMeetingWithAI,
     updateSuggestedTask,
     toggleSuggestedTaskSelection,
@@ -59,6 +59,7 @@ export default function WorkspaceMeetingsView() {
   // Processing job polling
   const processingJob = useProcessingJobPolling(null, {
     meetingId: processingMeetingId,
+    workspaceId: activeWorkspace?.id,
     enabled: Boolean(processingMeetingId),
     onComplete: () => setProcessingMeetingId(null),
     onError: (err) => {
@@ -116,7 +117,7 @@ export default function WorkspaceMeetingsView() {
       return;
     }
 
-    const meeting = createMeeting({
+    const meeting = await createMeeting({
       ...payload,
       audioMinutes: planGuard.estimatedMinutes,
       fileSize: payload.file?.size || 0,
@@ -131,7 +132,7 @@ export default function WorkspaceMeetingsView() {
     setProcessingMeetingId(meeting.id);
 
     if (payload.file) {
-      await uploadMeetingMock(meeting.id, payload.file);
+      await uploadMeetingFile(meeting.id, payload.file);
     }
     await analyzeMeetingWithAI(meeting);
     setProcessingMeetingId(null);
@@ -156,12 +157,12 @@ export default function WorkspaceMeetingsView() {
     setActiveSection('summary');
   };
 
-  const handleCreateSelectedTasks = () => {
+  const handleCreateSelectedTasks = async () => {
     if (!selectedMeeting) return;
     const selectedIds = (selectedMeeting.suggestedTasks || [])
       .filter((task) => task.approved || task.selected)
       .map((task) => task.id);
-    const created = createTasksFromSuggestions(selectedMeeting.id, selectedIds);
+    const created = await createTasksFromSuggestions(selectedMeeting.id, selectedIds);
     if (created.length > 0) {
       setActiveSection('generated');
       selectView('tasks');

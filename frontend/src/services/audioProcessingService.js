@@ -1,5 +1,4 @@
 import { AUDIO_TARGET_FORMAT } from '@/domain/models/AudioProcessingJob';
-import * as apiAdapter from '@/services/adapters/apiAudioProcessingAdapter';
 
 /*
 Production audio pipeline:
@@ -12,11 +11,15 @@ Do not upload 400MB audio through a Next.js API route, expose AWS credentials
 to the browser, or ship ffmpeg in the client bundle.
 */
 
-export function createAudioProcessingJob(record, targetFormat = AUDIO_TARGET_FORMAT.MP3) {
-  return apiAdapter.createAudioProcessingJob(record, targetFormat);
+export function createAudioProcessingJob(_record, targetFormat = AUDIO_TARGET_FORMAT.MP3) {
+  throw new Error(`Audio conversion to ${targetFormat} requires the AWS audio-processing worker. Use Auto-transcribe & Analyze on the original S3 recording.`);
 }
 
-export const getAudioProcessingJob = (jobId) => apiAdapter.getAudioProcessingJob(jobId);
-export const getJobsByRecord = (recordId) => apiAdapter.getJobsByRecord(recordId);
-export const retryAudioProcessingJob = (jobId) => apiAdapter.retryAudioProcessingJob(jobId);
-export const cancelAudioProcessingJob = (jobId) => apiAdapter.cancelAudioProcessingJob(jobId);
+export const getAudioProcessingJob = () => null;
+export const getJobsByRecord = () => [];
+export const retryAudioProcessingJob = () => {
+  throw new Error('Audio conversion worker is not deployed.');
+};
+export const cancelAudioProcessingJob = () => {
+  throw new Error('Audio conversion worker is not deployed.');
+};

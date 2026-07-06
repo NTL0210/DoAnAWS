@@ -1,8 +1,7 @@
 /**
  * Cost and limit constants for AWS usage optimization
  *
- * All values are mock-friendly. In API mode the real AWS limits apply,
- * but these client-side bounds prevent unnecessary requests.
+ * Client-side bounds prevent unnecessary AWS requests.
  */
 
 // ─── File size limits ───────────────────────────────────────────────
@@ -86,7 +85,7 @@ export const ALLOWED_AUDIO_EXTENSIONS = /\.(mp3|wav|m4a|ogg|webm|txt)$/i;
 
 // ─── AI cost estimation ─────────────────────────────────────────────
 /**
- * Rough cost tier thresholds (USD cents per request, mock values).
+ * Rough cost tier thresholds (USD cents per request).
  * In production these would come from the actual model pricing.
  */
 export const AI_COST_TIERS = {

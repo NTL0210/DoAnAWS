@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { motion } from 'framer-motion';
 import { FiLoader, FiCheckCircle, FiAlertTriangle, FiFileText, FiUsers, FiCalendar, FiClock, FiTag, FiPlus } from 'react-icons/fi';
-import { getMeetings, getTasks } from '../../services/legacyDataService';
+import { useWorkspace } from '../../context/WorkspaceContext';
 
 export default function MeetingDetail() {
   const router = useRouter();
@@ -11,8 +11,28 @@ export default function MeetingDetail() {
   const [error, setError] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [showFullTranscript, setShowFullTranscript] = useState(false);
+  const { meetings, workspaceTasks, workspaces, workspaceMembers, loading: contextLoading } = useWorkspace();
 
   const meetingId = router.query.id;
+  const relatedTasks = useMemo(
+    () => (workspaceTasks || []).filter((task) => task.meetingId === meetingId || task.sourceMeetingId === meetingId),
+    [workspaceTasks, meetingId]
+  );
+  const discussionPoints = useMemo(() => {
+    const points = [
+      ...(meeting?.keyDecisions || []),
+      ...(meeting?.actionItems || []),
+    ].filter(Boolean);
+    return points;
+  }, [meeting]);
+  const workspace = useMemo(
+    () => workspaces.find((ws) => ws.id === meeting?.workspaceId || ws.id === meeting?.departmentId) || null,
+    [workspaces, meeting]
+  );
+  const uploader = useMemo(
+    () => workspaceMembers.find((member) => member.userId === meeting?.uploadedBy || member.userId === meeting?.createdBy) || null,
+    [workspaceMembers, meeting]
+  );
   const transcriptLines = useMemo(() => {
     const text = meeting?.transcriptText;
     if (!text) return [];
@@ -29,12 +49,8 @@ export default function MeetingDetail() {
       setError(null);
 
       try {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 800));
-
-        // Get mock data
-        const allMeetings = await getMeetings();
-        const meetingData = allMeetings.find(m => m.id === meetingId);
+        if (contextLoading) return;
+        const meetingData = (meetings || []).find(m => m.id === meetingId);
 
         if (!meetingData) {
           throw new Error('Meeting not found');
@@ -49,7 +65,7 @@ export default function MeetingDetail() {
     };
 
     loadMeeting();
-  }, [meetingId]);
+  }, [meetingId, contextLoading, meetings]);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -140,23 +156,6 @@ export default function MeetingDetail() {
     );
   }
 
-  // Get participants names (mock implementation)
-  const getParticipantNames = () => {
-    // In a real app, this would fetch user details
-    return meeting.participants?.map(p => p.name) || ['John Doe', 'Jane Smith'];
-  };
-
-  // Get related tasks for this meeting
-  const getRelatedTasks = async () => {
-    try {
-      const allTasks = await getTasks();
-      return allTasks.filter(task => task.meetingId === meeting.id);
-    } catch (error) {
-      console.error('Error fetching related tasks:', error);
-      return [];
-    }
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -178,9 +177,7 @@ export default function MeetingDetail() {
                 {meeting.title}
               </h1>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                {meeting.departmentId === 'dept-1' ? 'Frontend Team' :
-                 meeting.departmentId === 'dept-2' ? 'Backend Team' :
-                 meeting.departmentId === 'dept-3' ? 'AI Team' : 'DevOps Team'}
+                {workspace?.name || meeting.workspaceId || meeting.departmentId || 'Workspace'}
               </p>
             </div>
           </div>
@@ -211,9 +208,7 @@ export default function MeetingDetail() {
                   Department
                 </h3>
                 <p className="text-gray-600 dark:text-gray-300">
-                  {meeting.departmentId === 'dept-1' ? 'Frontend Team' :
-                   meeting.departmentId === 'dept-2' ? 'Backend Team' :
-                   meeting.departmentId === 'dept-3' ? 'AI Team' : 'DevOps Team'}
+                  {workspace?.name || meeting.workspaceId || meeting.departmentId || 'Workspace'}
                 </p>
               </div>
               <div>
@@ -229,9 +224,7 @@ export default function MeetingDetail() {
                   Uploaded By
                 </h3>
                 <p className="text-gray-600 dark:text-gray-300">
-                  {meeting.uploadedBy === 'emp-2' ? 'Sarah Chen' :
-                   meeting.uploadedBy === 'emp-5' ? 'Michael Rodriguez' :
-                   meeting.uploadedBy === 'emp-9' ? 'David Kim' : 'Lisa Wang'}
+                  {uploader?.name || meeting.createdBy || meeting.uploadedBy || 'Unknown'}
                 </p>
               </div>
               <div>
@@ -297,38 +290,19 @@ export default function MeetingDetail() {
             </h2>
           </div>
           <div className="p-6">
-            {/* In a real app, we would extract these from the transcript */}
             <div className="space-y-3">
-              <div className="flex items-start space-x-3">
-                <div className="flex-shrink-0">
-                  <FiLoader className="h-4 w-4 text-primary-500 dark:text-primary-400" />
+              {discussionPoints.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">No discussion points recorded for this meeting.</p>
+              ) : discussionPoints.map((point, index) => (
+                <div key={`${point}-${index}`} className="flex items-start space-x-3">
+                  <div className="flex-shrink-0">
+                    <FiCheckCircle className="h-4 w-4 text-primary-500 dark:text-primary-400" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-gray-600 dark:text-gray-300">{point}</p>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="text-gray-600 dark:text-gray-300">
-                    Discussed technical approach for implementing the meeting platform
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start space-x-3">
-                <div className="flex-shrink-0">
-                  <FiLoader className="h-4 w-4 text-primary-500 dark:text-primary-400" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-gray-600 dark:text-gray-300">
-                    Reviewed UI/UX design requirements and accessibility standards
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start space-x-3">
-                <div className="flex-shrink-0">
-                  <FiLoader className="h-4 w-4 text-primary-500 dark:text-primary-400" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-gray-600 dark:text-gray-300">
-                    Planned sprint goals and deliverables for Q3
-                  </p>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         </div>
@@ -354,38 +328,34 @@ export default function MeetingDetail() {
             </div>
           </div>
           <div className="p-6">
-            {/* In a real app, we would fetch the actual tasks for this meeting */}
             <div className="space-y-4">
-              {/* Mock tasks for this meeting */}
-              {[1, 2, 3].map((taskIndex) => (
+              {relatedTasks.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">No tasks created from this meeting yet.</p>
+              ) : relatedTasks.map((task) => (
                 <div
-                  key={taskIndex}
+                  key={task.id}
                   className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border-l-4
                     border-primary-500 dark:border-primary-400"
                 >
                   <div className="flex justify-between items-start mb-2">
                     <h4 className="font-medium text-gray-900 dark:text-gray-100">
-                      Task {taskIndex}: Implement feature for meeting platform
+                      {task.title}
                     </h4>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium
-                      ${taskIndex === 1 ? 'bg-orange-100 text-orange-800' :
-                        taskIndex === 2 ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-green-100 text-green-800'}`}>
-                      {taskIndex === 1 ? 'HIGH' : taskIndex === 2 ? 'MEDIUM' : 'LOW'}
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
+                      {task.priority || 'MEDIUM'}
                     </span>
                   </div>
                   <p className="text-gray-600 dark:text-gray-300 mb-2">
-                    This is a sample task description that would be extracted from the meeting transcript.
-                    It includes action items and responsibilities for team members.
+                    {task.description || 'No description provided.'}
                   </p>
                   <div className="flex items-start space-x-4 text-sm text-gray-500 dark:text-gray-400">
                     <div className="flex items-space-x-2">
                       <FiUsers className="h-4 w-4" />
-                      <span>Assignee: John Doe</span>
+                      <span>Assignee: {workspaceMembers.find((member) => member.userId === task.assigneeId)?.name || 'Unassigned'}</span>
                     </div>
                     <div className="flex items-space-x-2">
                       <FiCalendar className="h-4 w-4" />
-                      <span>Due: {new Date(2026, 5, 15 + taskIndex).toLocaleDateString()}</span>
+                      <span>Due: {task.deadline ? new Date(task.deadline).toLocaleDateString() : 'No deadline'}</span>
                     </div>
                   </div>
                 </div>
@@ -402,17 +372,6 @@ export default function MeetingDetail() {
           >
             Back to Meetings
           </button>
-          {meeting.status === 'COMPLETED' && (
-            <button
-              onClick={() => {
-                // In real app, this would regenerate tasks or refresh data
-                alert('Would regenerate AI insights for this meeting in real implementation');
-              }}
-              className="px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600 transition-colors"
-            >
-              Refresh AI Insights
-            </button>
-          )}
         </div>
       </div>
     </motion.div>

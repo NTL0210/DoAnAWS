@@ -1,22 +1,11 @@
 /**
- * WorkspaceService — business logic for workspaces
- *
- * Supports two modes:
- *   mock  → localStorage via mock repository
- *   cloud → API Gateway + Cognito
- *
- * Extends the existing src/services/workspaceService.js
+ * WorkspaceService - workspace helpers backed by API Gateway and Cognito.
  */
 
 export { canManageAIWorkflow } from './permissionService';
 export { getDefaultPermissionsForRole } from '@/data/defaults/roles';
 
-import { isCloudMode } from '@/config/runtimeConfig';
 import { workspacesApi } from '@/services/cloudClient';
-import { workspaceRepo, teamRepo, channelRepo } from '@/repositories';
-import { DEFAULT_FEATURES } from '@/data/defaults/features';
-import { DEFAULT_TEXT_CHANNELS, DEFAULT_VOICE_CHANNELS } from '@/data/defaults/channels';
-import { DEFAULT_TEAMS } from '@/data/defaults/teams';
 
 /**
  * Generate a URL-friendly slug from a workspace name
@@ -40,174 +29,12 @@ export function generateId() {
 }
 
 /**
- * Create a complete default workspace structure
- * @param {string} name
- * @param {string} ownerId
- * @returns {Object}
- */
-export function createDefaultWorkspaceStructure(name, ownerId) {
-  const wsId = 'ws-' + generateId();
-  const slug = generateWorkspaceSlug(name);
-  const now = new Date().toISOString();
-
-  const textChannels = DEFAULT_TEXT_CHANNELS.map((ch, i) => ({
-    id: wsId + '-ch-' + i,
-    name: ch.name,
-    type: 'text',
-    description: ch.description,
-    isDefault: ch.isDefault,
-  }));
-
-  const voiceChannels = DEFAULT_VOICE_CHANNELS.map((ch, i) => ({
-    id: wsId + '-vc-' + i,
-    name: ch.name,
-    type: 'voice',
-    scope: ch.scope,
-    teamId: ch.teamId,
-    allowedTeamIds: ch.allowedTeamIds,
-    allowedUserIds: ch.allowedUserIds,
-    deniedUserIds: ch.deniedUserIds,
-    isDefault: ch.isDefault,
-    isLocked: ch.isLocked,
-    allowRecording: ch.allowRecording,
-    createdAt: now,
-    updatedAt: now,
-  }));
-
-  const teams = DEFAULT_TEAMS.map((team, i) => ({
-    id: wsId + '-team-' + i,
-    name: team.name,
-    description: team.description,
-    color: team.color,
-    managerId: ownerId,
-    memberIds: [ownerId],
-    createdAt: now,
-    updatedAt: now,
-  }));
-
-  return {
-    id: wsId,
-    name: name.trim(),
-    slug,
-    ownerId,
-    channels: [...textChannels, ...voiceChannels],
-    teams,
-    members: [
-      {
-        userId: ownerId,
-        role: 'OWNER',
-        joinedAt: now,
-        nickname: null,
-      },
-    ],
-    customRoles: [],
-    features: DEFAULT_FEATURES.map((f) => ({ ...f })),
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-export function createCleanWorkspaceStructure(workspaceData, ownerId, options = {}) {
-  const name = typeof workspaceData === 'string' ? workspaceData : workspaceData?.name;
-  const wsId = 'ws-' + generateId();
-  const now = new Date().toISOString();
-  const channels = [];
-
-  if (options.createDefaultTextChannel !== false) {
-    channels.push({
-      id: `${wsId}-ch-general`,
-      workspaceId: wsId,
-      name: 'general',
-      type: 'text',
-      description: 'General discussion',
-      isDefault: true,
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
-
-  if (options.createDefaultVoiceChannel !== false) {
-    channels.push({
-      id: `${wsId}-vc-general`,
-      workspaceId: wsId,
-      name: 'General Voice',
-      type: 'voice',
-      scope: 'WORKSPACE',
-      teamId: null,
-      allowedTeamIds: [],
-      allowedUserIds: [],
-      deniedUserIds: [],
-      isDefault: channels.length === 0,
-      isLocked: false,
-      allowRecording: true,
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
-
-  return {
-    id: wsId,
-    name: name.trim(),
-    description: workspaceData?.description || '',
-    iconColor: workspaceData?.iconColor || 'blue',
-    workspaceType: workspaceData?.workspaceType || 'blank',
-    visibility: workspaceData?.visibility || 'private',
-    billingPlanId: workspaceData?.billingPlanId || 'free',
-    slug: generateWorkspaceSlug(name),
-    ownerId,
-    memberIds: [ownerId],
-    members: [
-      {
-        userId: ownerId,
-        role: 'OWNER',
-        joinedAt: now,
-        nickname: null,
-      },
-    ],
-    teams: [],
-    channels,
-    tasks: [],
-    meetings: [],
-    messages: {},
-    notifications: [],
-    invitations: [],
-    voiceRecords: [],
-    customRoles: [],
-    features: DEFAULT_FEATURES.map((f) => ({ ...f })),
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-/**
- * Create initial activity for a new workspace
- * @param {string} workspaceId
- * @param {string} userName
- * @returns {Array}
- */
-export function createInitialActivity(workspaceId, userName) {
-  const now = new Date().toISOString();
-  return [
-    {
-      id: 'act-' + generateId(),
-      type: 'workspace_created',
-      message: `${userName} created this workspace`,
-      userId: null,
-      timestamp: now,
-    },
-  ];
-}
-
-/**
  * Find all workspaces for a user
  * @param {string} userId
  * @returns {Promise<Object[]>}
  */
 export async function getWorkspacesForUser(userId) {
-  if (isCloudMode()) {
-    return workspacesApi.list({ userId });
-  }
-  return workspaceRepo.findByUserId(userId);
+  return workspacesApi.list({ userId });
 }
 
 /**
@@ -216,10 +43,7 @@ export async function getWorkspacesForUser(userId) {
  * @returns {Promise<Object|null>}
  */
 export async function getWorkspaceById(workspaceId) {
-  if (isCloudMode()) {
-    return workspacesApi.get(workspaceId);
-  }
-  return workspaceRepo.findById(workspaceId);
+  return workspacesApi.get(workspaceId);
 }
 
 /**
@@ -236,23 +60,13 @@ export async function createWorkspace({
   workspaceType,
   visibility,
   iconColor,
-  createDefaultTextChannel = true,
-  createDefaultVoiceChannel = true,
 }) {
-  if (isCloudMode()) {
-    return workspacesApi.create({
-      name,
-      ownerId,
-      description,
-      workspaceType,
-      visibility,
-      iconColor,
-    });
-  }
-  const structure = createCleanWorkspaceStructure(
-    { name, description, workspaceType, visibility, iconColor },
+  return workspacesApi.create({
+    name,
     ownerId,
-    { createDefaultTextChannel, createDefaultVoiceChannel }
-  );
-  return workspaceRepo.create(structure);
+    description,
+    workspaceType,
+    visibility,
+    iconColor,
+  });
 }

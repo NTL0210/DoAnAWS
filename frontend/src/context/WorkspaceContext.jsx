@@ -12,7 +12,7 @@ import {
   MAX_VOICE_RECORDING_SIZE_BYTES,
   WARNING_VOICE_RECORDING_SIZE_BYTES,
 } from '@/lib/voicePermissions';
-import { isCloudMode, isMockMode } from '@/services/apiClient';
+import { isCloudMode } from '@/services/apiClient';
 
 // ─── Hooks ────────────────────────────────────────────────
 import useAuthState, { toHydratedUser } from '@/hooks/workspace/useAuthState';
@@ -29,7 +29,6 @@ import useVoiceState from '@/hooks/workspace/useVoiceState';
 
 // ─── Module-level constants ───────────────────────────────
 const WorkspaceContext = createContext(null);
-const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const STORAGE_KEYS = {
   workspaces: 'meetingAppWorkspaces',
   messages: 'meetingAppMessages',
@@ -37,16 +36,14 @@ const STORAGE_KEYS = {
   meetings: 'meetingAppWorkspaceMeetings',
   trash: 'meetingAppWorkspaceTrash',
 };
-/** Legacy mock-repo keys to purge — passwords were cached here */
-const LEGACY_MOCK_STORAGE_KEYS = [
-  'meetingAppMockUsers',
-  'meetingAppMockWorkspaces',
-  'meetingAppMockTasks',
-  'meetingAppMockMeetings',
+const LOCAL_DATA_KEYS_TO_PURGE = [
+  'meetingAppUser',
+  'user',
+  'meetingAppInvitations',
+  'activeWorkspaceId',
+  'activeChannelId',
+  ...Object.values(STORAGE_KEYS),
 ];
-const EMPTY_TRASH = { tasks: [], meetings: [], teams: [] };
-const STORAGE_VERSION_KEY = 'meetingAppStorageVersion_v2';
-
 const workspaceRoleLabels = {
   OWNER: 'Owner',
   VICE_ADMIN: 'Vice Admin',
@@ -153,8 +150,10 @@ export function WorkspaceProvider({ children }) {
     setWorkspaces: workspaceHook.setWorkspaces,
   });
 
-  // ─── Sync activeWorkspaceIdRef (break circular dep) ────
-  activityHook.activeWorkspaceIdRef.current = workspaceHook.activeWorkspaceId;
+  // ─── Sync active workspace for notifications (break circular dep) ────
+  useEffect(() => {
+    activityHook.syncActiveWorkspaceId(workspaceHook.activeWorkspaceId);
+  }, [activityHook.syncActiveWorkspaceId, workspaceHook.activeWorkspaceId]);
 
   // ─── UI State ──────────────────────────────────────────
   const [workspaceStorageHydrated, setWorkspaceStorageHydrated] = useState(false);
@@ -193,25 +192,14 @@ export function WorkspaceProvider({ children }) {
     let cancelled = false;
     const loadWorkspaceState = async () => {
       try {
-        // One-time cache clear: purge stale localStorage data from the mock-data era
-        if (!localStorage.getItem(STORAGE_VERSION_KEY)) {
-          Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
-          LEGACY_MOCK_STORAGE_KEYS.forEach(key => localStorage.removeItem(key));
-          localStorage.setItem(STORAGE_VERSION_KEY, '1');
+        LOCAL_DATA_KEYS_TO_PURGE.forEach((key) => localStorage.removeItem(key));
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key?.startsWith('meetingApp')) keysToRemove.push(key);
         }
-
-        const storedWorkspaces = localStorage.getItem(STORAGE_KEYS.workspaces);
-        const storedMessages = localStorage.getItem(STORAGE_KEYS.messages);
-        const storedTasks = localStorage.getItem(STORAGE_KEYS.tasks);
-        const storedMeetings = localStorage.getItem(STORAGE_KEYS.meetings);
-        const storedTrash = localStorage.getItem(STORAGE_KEYS.trash);
-
+        keysToRemove.forEach((key) => localStorage.removeItem(key));
         if (cancelled) return;
-        if (storedWorkspaces) workspaceHook.setWorkspaces(JSON.parse(storedWorkspaces));
-        if (storedMessages) channelsMessagesHook.setMessages(JSON.parse(storedMessages));
-        if (storedMeetings) tasksHook.setWorkspaceMeetings(JSON.parse(storedMeetings));
-        if (storedTrash) tasksHook.setTrashItems({ ...EMPTY_TRASH, ...JSON.parse(storedTrash) });
-        if (storedTasks) tasksHook.setWorkspaceTasks(JSON.parse(storedTasks));
 
         // Restore session
         if (isCloudMode()) {
@@ -225,21 +213,13 @@ export function WorkspaceProvider({ children }) {
               if (user?.id) {
                 const hydratedUser = toHydratedUser(user);
                 authHook.setCurrentUser(hydratedUser);
-                localStorage.setItem('meetingAppUser', JSON.stringify({
-                  user: hydratedUser,
-                  createdAt: Date.now(),
-                  expiresAt: Date.now() + SESSION_TTL_MS,
-                }));
-                localStorage.setItem('user', JSON.stringify(hydratedUser));
 
                 // Load workspaces from cloud API
                 try {
                   const wsList = await workspacesApi.list({ userId: user.id });
-                  if (Array.isArray(wsList) && wsList.length > 0) {
-                    workspaceHook.setWorkspaces(wsList);
-                  }
+                  workspaceHook.setWorkspaces(Array.isArray(wsList) ? wsList : []);
                 } catch (wsErr) {
-                  // Workspace list is best-effort; user can create new ones
+                  workspaceHook.setWorkspaces([]);
                 }
 
                 if (!cancelled) setWorkspaceStorageHydrated(true);
@@ -252,28 +232,8 @@ export function WorkspaceProvider({ children }) {
           }
         }
 
-        // Mock/API mode: restore user from localStorage
-        const stored = localStorage.getItem('meetingAppUser');
-        if (stored) {
-          const session = JSON.parse(stored);
-          const user = session?.user || session;
-          if (session?.expiresAt && session.expiresAt <= Date.now()) {
-            localStorage.removeItem('meetingAppUser');
-            return;
-          }
-          const hydratedUser = toHydratedUser(user);
-          authHook.setCurrentUser(hydratedUser);
-          localStorage.setItem('user', JSON.stringify(hydratedUser));
-
-          const savedWs = localStorage.getItem('activeWorkspaceId');
-          if (savedWs) {
-            workspaceHook.setActiveWorkspaceId(savedWs);
-            const savedChannel = localStorage.getItem('activeChannelId_' + savedWs);
-            if (savedChannel) workspaceHook.setActiveChannelId(savedChannel);
-          }
-        }
       } catch {
-        // Mock storage is best-effort. Fall back to seed data.
+        workspaceHook.setWorkspaces([]);
       } finally {
         if (!cancelled) {
           authHook.setLoading(false);
@@ -288,31 +248,6 @@ export function WorkspaceProvider({ children }) {
   }, []);
 
   // ─── Storage persistence effects ───────────────────────
-  useEffect(() => {
-    if (!workspaceStorageHydrated) return;
-    localStorage.setItem(STORAGE_KEYS.workspaces, JSON.stringify(workspaceHook.workspaces));
-  }, [workspaceStorageHydrated, workspaceHook.workspaces]);
-
-  useEffect(() => {
-    if (!workspaceStorageHydrated) return;
-    localStorage.setItem(STORAGE_KEYS.messages, JSON.stringify(channelsMessagesHook.messages));
-  }, [workspaceStorageHydrated, channelsMessagesHook.messages]);
-
-  useEffect(() => {
-    if (!workspaceStorageHydrated) return;
-    localStorage.setItem(STORAGE_KEYS.tasks, JSON.stringify(tasksHook.workspaceTasks));
-  }, [workspaceStorageHydrated, tasksHook.workspaceTasks]);
-
-  useEffect(() => {
-    if (!workspaceStorageHydrated) return;
-    localStorage.setItem(STORAGE_KEYS.meetings, JSON.stringify(tasksHook.workspaceMeetings));
-  }, [workspaceStorageHydrated, tasksHook.workspaceMeetings]);
-
-  useEffect(() => {
-    if (!workspaceStorageHydrated) return;
-    localStorage.setItem(STORAGE_KEYS.trash, JSON.stringify(tasksHook.trashItems));
-  }, [workspaceStorageHydrated, tasksHook.trashItems]);
-
   // ─── Cloud API sync (debounced) ───────────────────────
   // Persist workspace sub-entities (teams, channels, messages, voice)
   // to DynamoDB via cloud API whenever they change.
@@ -360,18 +295,6 @@ export function WorkspaceProvider({ children }) {
   }, [authHook.currentUser, workspaceHook.workspaces, workspaceHook.activeWorkspaceId]);
 
   // ─── Persist workspace selection ───────────────────────
-  useEffect(() => {
-    if (workspaceHook.activeWorkspaceId) {
-      localStorage.setItem('activeWorkspaceId', workspaceHook.activeWorkspaceId);
-    }
-  }, [workspaceHook.activeWorkspaceId]);
-
-  useEffect(() => {
-    if (workspaceHook.activeWorkspaceId && workspaceHook.activeChannelId) {
-      localStorage.setItem('activeChannelId_' + workspaceHook.activeWorkspaceId, workspaceHook.activeChannelId);
-    }
-  }, [workspaceHook.activeWorkspaceId, workspaceHook.activeChannelId]);
-
   // ─── Voice functions moved to useVoiceState hook ──────
 
   // ─── Context Value ─────────────────────────────────────
@@ -467,7 +390,7 @@ export function WorkspaceProvider({ children }) {
       meetings: tasksHook.workspaceMeetings,
       setMeetings: tasksHook.setWorkspaceMeetings,
       createMeeting: tasksHook.createMeeting,
-      uploadMeetingMock: tasksHook.uploadMeetingMock,
+      uploadMeetingFile: tasksHook.uploadMeetingFile,
       analyzeMeetingWithAI: tasksHook.analyzeMeetingWithAI,
       processMeetingWithAI: tasksHook.processMeetingWithAI,
       updateSuggestedTask: tasksHook.updateSuggestedTask,
@@ -571,7 +494,7 @@ export function WorkspaceProvider({ children }) {
       tasksHook.workspaceTasks, tasksHook.addWorkspaceTasks, tasksHook.moveWorkspaceTask,
       tasksHook.trashItems, tasksHook.restoreTrashItem, tasksHook.permanentlyDeleteTrashItem,
       tasksHook.workspaceMeetings, tasksHook.setWorkspaceMeetings,
-      tasksHook.createMeeting, tasksHook.uploadMeetingMock,
+      tasksHook.createMeeting, tasksHook.uploadMeetingFile,
       tasksHook.analyzeMeetingWithAI, tasksHook.processMeetingWithAI,
       tasksHook.updateSuggestedTask, tasksHook.updateMeetingSuggestion,
       tasksHook.toggleSuggestedTaskSelection, tasksHook.removeMeetingSuggestion,

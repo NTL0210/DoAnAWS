@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
   FiCalendar,
@@ -9,54 +9,45 @@ import {
   FiUser,
   FiUsers,
 } from 'react-icons/fi';
-import AppShell, { Panel, StatCard, StatusPill, LoadingState, EmptyState } from '../src/components/layout/AppShell';
-import { getUsers, getTasks as getMockTasks } from '../src/services/legacyDataService';
+import AppShell, { Panel, StatCard, LoadingState, EmptyState } from '../src/components/layout/AppShell';
+import { useWorkspace } from '../src/context/WorkspaceContext';
 
 export default function ManagerEmployees() {
-  const [user, setUser] = useState(null);
-  const [data, setData] = useState({ users: [], tasks: [] });
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      const [users, tasks] = await Promise.all([
-        getUsers(), getMockTasks()
-      ]);
-      const storedUser = JSON.parse(localStorage.getItem('user') || 'null');
-      const fallback = users.find((u) => u.role === 'MANAGER');
-      const currentUser = storedUser?.role === 'MANAGER' ? { ...fallback, ...storedUser } : fallback;
-      await new Promise((r) => setTimeout(r, 300));
-      setUser(currentUser);
-      setData({ users, tasks });
-      setLoading(false);
-    };
-    load();
-  }, []);
+  const { currentUser: user, loading, activeWorkspace, workspaces, workspaceTasks } = useWorkspace();
+  const workspace = activeWorkspace || workspaces.find((ws) =>
+    ws.members?.some((member) => member.userId === user?.id)
+  ) || null;
 
   const dashboard = useMemo(() => {
-    if (!user) return null;
-    const teamMembers = data.users.filter((u) => u.departmentId === user.departmentId && u.role !== 'MANAGER');
-    const deptTasks = data.tasks.filter((t) => t.departmentId === user.departmentId);
+    if (!user || !workspace) return null;
+    const members = (workspace.members || []).filter((member) => member.userId !== user.id);
+    const workspaceId = workspace.id;
+    const tasks = (workspaceTasks || []).filter((task) =>
+      task.workspaceId === workspaceId || task.departmentId === workspaceId
+    );
 
-    const workload = teamMembers.map((member) => {
-      const tasks = deptTasks.filter((t) => t.assigneeId === member.id);
+    const workload = members.map((member) => {
+      const memberTasks = tasks.filter((task) => task.assigneeId === member.userId);
       return {
         ...member,
-        taskCount: tasks.length,
-        completed: tasks.filter((t) => t.status === 'COMPLETED').length,
-        inProgress: tasks.filter((t) => t.status === 'IN_PROGRESS').length,
+        id: member.userId,
+        name: member.name || member.nickname || member.email || member.userId,
+        email: member.email || '',
+        avatar: member.avatar || null,
+        taskCount: memberTasks.length,
+        completed: memberTasks.filter((t) => t.status === 'COMPLETED').length,
+        inProgress: memberTasks.filter((t) => t.status === 'IN_PROGRESS').length,
         overdue: tasks.filter(
-          (t) => t.deadline && new Date(t.deadline) < new Date() && t.status !== 'COMPLETED'
+          (t) => t.assigneeId === member.userId && t.deadline && new Date(t.deadline) < new Date() && t.status !== 'COMPLETED'
         ).length,
-        progress: tasks.length
-          ? Math.round((tasks.filter((t) => t.status === 'COMPLETED').length / tasks.length) * 100)
+        progress: memberTasks.length
+          ? Math.round((memberTasks.filter((t) => t.status === 'COMPLETED').length / memberTasks.length) * 100)
           : 0,
       };
     });
 
     return { teamMembers: workload };
-  }, [user, data]);
+  }, [user, workspace, workspaceTasks]);
 
   if (loading || !dashboard || !user) return <LoadingState label="Loading employees..." />;
 
@@ -74,7 +65,7 @@ export default function ManagerEmployees() {
       user={user}
       eyebrow="People management"
       title="Team members"
-      description={`${metrics.total} members across your department`}
+      description={`${metrics.total} members in ${workspace?.name || 'your workspace'}`}
     >
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Team members" value={metrics.total} detail="Active employees" icon={FiUsers} tone="blue" />
@@ -97,11 +88,17 @@ export default function ManagerEmployees() {
                 className="rounded-lg border border-slate-200/80 bg-[#f4f7fb] p-4 transition hover:border-primary-200 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900/70"
               >
                 <div className="flex items-center gap-3">
-                  <img
-                    src={member.avatar}
-                    alt={member.name}
-                    className="h-12 w-12 rounded-lg border border-slate-200 object-cover dark:border-slate-700"
-                  />
+                  {member.avatar ? (
+                    <img
+                      src={member.avatar}
+                      alt={member.name}
+                      className="h-12 w-12 rounded-lg border border-slate-200 object-cover dark:border-slate-700"
+                    />
+                  ) : (
+                    <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-slate-200 bg-primary-600 text-sm font-black text-white dark:border-slate-700">
+                      {(member.name || 'U').slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
                     <h3 className="font-bold text-slate-900 dark:text-slate-100">{member.name}</h3>
                     <p className="truncate text-xs text-slate-500">Employee</p>

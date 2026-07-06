@@ -44,18 +44,25 @@ describe("hasSufficientRole", () => {
 });
 
 describe("WORKSPACE_ROLES", () => {
-  it("contains exactly OWNER, ADMIN, MEMBER", () => {
-    expect(WORKSPACE_ROLES).toEqual(["OWNER", "ADMIN", "MEMBER"]);
+  it("contains the supported workspace roles in hierarchy order", () => {
+    expect(WORKSPACE_ROLES).toEqual([
+      "OWNER",
+      "ADMIN",
+      "VICE_ADMIN",
+      "MANAGER",
+      "MEMBER",
+      "EMPLOYEE",
+    ]);
   });
 });
 
 describe("ROLE_HIERARCHY", () => {
-  it("assigns OWNER level 3", () => {
-    expect(ROLE_HIERARCHY.OWNER).toBe(3);
+  it("assigns OWNER level 5", () => {
+    expect(ROLE_HIERARCHY.OWNER).toBe(5);
   });
 
-  it("assigns ADMIN level 2", () => {
-    expect(ROLE_HIERARCHY.ADMIN).toBe(2);
+  it("assigns ADMIN level 4", () => {
+    expect(ROLE_HIERARCHY.ADMIN).toBe(4);
   });
 
   it("assigns MEMBER level 1", () => {
