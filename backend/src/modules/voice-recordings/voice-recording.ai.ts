@@ -82,13 +82,29 @@ export async function analyzeStoredAudio(input: { storageKey: string; mimeType: 
   const bucket = getVoiceRecordingBucket();
   const response = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: input.storageKey }));
   const body = response.Body;
-  if (!body) throw new Error("Audio file is empty");
+  if (!body) throw new Error("Meeting file is empty");
   const buffer = Buffer.from(await body.transformToByteArray());
-  if (buffer.length === 0) throw new Error("Audio file is empty");
+  if (buffer.length === 0) throw new Error("Meeting file is empty");
+
+  if (isTextInput(input.mimeType, input.storageKey)) {
+    return analyzeTranscriptText(buffer.toString("utf8"));
+  }
 
   const fileUri = await uploadToGemini(buffer, input.mimeType);
   const raw = await callGeminiWithFile(fileUri, input.mimeType, audioPrompt());
   return normalizeGeminiJson(raw);
+}
+
+export async function analyzeTranscriptText(transcriptText: string): Promise<VoiceAnalysisResult> {
+  if (!env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is required");
+  const trimmed = transcriptText.trim();
+  if (!trimmed) return emptyAnalysis();
+  const raw = await callGeminiWithText(textPrompt(trimmed));
+  const parsed = normalizeGeminiJson(raw);
+  return {
+    ...parsed,
+    transcript: parsed.transcript || trimmed,
+  };
 }
 
 async function uploadToGemini(fileBuffer: Buffer, mimeType: string): Promise<string> {
@@ -123,6 +139,27 @@ async function callGeminiWithFile(fileUri: string, mimeType: string, prompt: str
         ],
       }],
       generationConfig: { temperature: 0.25, maxOutputTokens: 8192 },
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Gemini API failed: HTTP ${response.status}`);
+  }
+  const data = await response.json() as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("Gemini returned empty response");
+  return text;
+}
+
+async function callGeminiWithText(prompt: string): Promise<string> {
+  const model = env.GEMINI_MODEL || "gemini-2.5-flash";
+  const response = await fetch(`${geminiBase}/${model}:generateContent?key=${env.GEMINI_API_KEY}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
     }),
   });
   if (!response.ok) {
@@ -184,12 +221,40 @@ Return only JSON with this shape:
 Use Vietnamese when the conversation is Vietnamese. Only include work that is clearly supported by the audio.`;
 }
 
+function textPrompt(transcriptText: string): string {
+  return `Analyze this meeting transcript for execution.
+Return only JSON with this shape:
+{
+  "transcript": "cleaned full transcript",
+  "summary": "short meeting summary",
+  "keyDecisions": ["decision"],
+  "actionItems": ["action item"],
+  "tasks": [
+    {"title": "task title", "description": "details", "assignee": "", "priority": "HIGH|MEDIUM|LOW", "deadline": ""}
+  ],
+  "risks": ["risk"]
+}
+Use Vietnamese when the transcript is Vietnamese. Only include work that is clearly supported by the transcript.
+
+Transcript:
+${transcriptText}`;
+}
+
 function extensionForMime(mimeType: string): string {
   if (mimeType.includes("mpeg") || mimeType.includes("mp3")) return "mp3";
   if (mimeType.includes("wav")) return "wav";
   if (mimeType.includes("ogg")) return "ogg";
   if (mimeType.includes("mp4") || mimeType.includes("m4a")) return "m4a";
   return "webm";
+}
+
+function isTextInput(mimeType: string, storageKey: string): boolean {
+  const lowerType = mimeType.toLowerCase();
+  const lowerKey = storageKey.toLowerCase();
+  return lowerType.startsWith("text/") ||
+    lowerKey.endsWith(".txt") ||
+    lowerKey.endsWith(".vtt") ||
+    lowerKey.endsWith(".srt");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

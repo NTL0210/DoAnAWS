@@ -18,6 +18,10 @@ Parameters:
     Type: String
     Description: Existing DynamoDB table name from the main backend stack
     AllowedPattern: '^[A-Za-z0-9_.-]{3,255}$'
+  ExistingAudioBucketName:
+    Type: String
+    Description: Existing S3 meeting bundle/audio bucket used by the backend
+    AllowedPattern: '^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$'
 
 Conditions:
   HasNotifyEmail: !Not [!Equals [!Ref NotifyEmail, ""]]
@@ -30,24 +34,6 @@ Globals:
     Architectures: [arm64]
 
 Resources:
-  AudioBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      BucketName: !Sub "ai-meeting-audio-${AWS::AccountId}-${AWS::StackName}"
-      NotificationConfiguration:
-        EventBridgeConfiguration:
-          EventBridgeEnabled: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: ArchiveToGlacier
-            Status: Enabled
-            Prefix: uploads/
-            Transitions:
-              - StorageClass: GLACIER
-                TransitionInDays: 30
-
   NotifyTopic:
     Type: AWS::SNS::Topic
 
@@ -73,7 +59,7 @@ Resources:
             - Effect: Allow
               Action:
                 - s3:GetObject
-              Resource: !Sub "${AudioBucket.Arn}/*"
+              Resource: !Sub "arn:aws:s3:::${ExistingAudioBucketName}/*"
 
   SaveLambda:
     Type: AWS::Serverless::Function
@@ -96,11 +82,11 @@ Resources:
               Action:
                 - s3:GetObject
                 - s3:DeleteObject
-              Resource: !Sub "${AudioBucket.Arn}/*"
+              Resource: !Sub "arn:aws:s3:::${ExistingAudioBucketName}/*"
             - Effect: Allow
               Action:
                 - s3:ListBucket
-              Resource: !GetAtt AudioBucket.Arn
+              Resource: !Sub "arn:aws:s3:::${ExistingAudioBucketName}"
 
   PipelineLogGroup:
     Type: AWS::Logs::LogGroup
@@ -184,7 +170,7 @@ Resources:
         detail-type: [Object Created]
         detail:
           bucket:
-            name: [!Ref AudioBucket]
+            name: [!Ref ExistingAudioBucketName]
           object:
             key: [{ prefix: uploads/ }]
       Targets:
@@ -220,7 +206,7 @@ Resources:
 
 Outputs:
   AudioBucketName:
-    Value: !Ref AudioBucket
+    Value: !Ref ExistingAudioBucketName
   StateMachineArn:
     Value: !Ref PipelineStateMachine
   AiLambdaName:

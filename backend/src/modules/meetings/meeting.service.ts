@@ -8,7 +8,7 @@ import type {
   UpdateMeetingInput
 } from "./meeting.types.js";
 import { createMeetingUploadUrl, mimeTypeForStorageKey } from "./meeting.upload.js";
-import { analyzeStoredAudio } from "../voice-recordings/voice-recording.ai.js";
+import { analyzeStoredAudio, analyzeTranscriptText } from "../voice-recordings/voice-recording.ai.js";
 
 export class MeetingService {
   constructor(private readonly repository: MeetingRepository) {}
@@ -114,7 +114,7 @@ export class MeetingService {
   async process(input: { workspaceId: string; meetingId: string }): Promise<Meeting> {
     const current = await this.get(input);
     const analysis = current.transcriptText.trim()
-      ? extractMeetingWork(current.transcriptText)
+      ? await analyzeTranscriptMeeting(current.transcriptText)
       : await analyzeStoredMeeting(current);
     const updated: Meeting = {
       ...current,
@@ -130,6 +130,38 @@ export class MeetingService {
     };
     await this.repository.update(updated, current.version);
     return updated;
+  }
+}
+
+async function analyzeTranscriptMeeting(transcriptText: string): Promise<{
+  summary: string;
+  actionItems: string[];
+  keyDecisions: string[];
+  risks: string[];
+  suggestedTasks: Meeting["suggestedTasks"];
+  transcriptText: string;
+}> {
+  try {
+    const analysis = await analyzeTranscriptText(transcriptText);
+    return {
+      transcriptText: analysis.transcript || transcriptText,
+      summary: analysis.summary,
+      actionItems: analysis.actionItems,
+      keyDecisions: analysis.keyDecisions,
+      risks: analysis.risks,
+      suggestedTasks: analysis.tasks.slice(0, 10).map((task, index) => ({
+        id: `text-suggestion-${index + 1}`,
+        title: task.title || `Task ${index + 1}`,
+        description: task.description || task.title || "",
+        assigneeId: null,
+        priority: normalizePriority(task.priority),
+        deadline: task.deadline || null,
+        confidence: 0.78,
+        ...(task.description || task.title ? { sourceQuote: task.description || task.title } : {}),
+      })),
+    };
+  } catch {
+    return extractMeetingWork(transcriptText);
   }
 }
 
