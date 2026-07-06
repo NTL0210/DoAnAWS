@@ -20,10 +20,10 @@ export class UserService {
 
   async getOrCreateFromAuth(authUser: AuthUser): Promise<User> {
     const existing = await this.repository.findById(authUser.userId);
-    if (existing) return this.stripPassword(existing);
+    if (existing) return this.stripPassword(await this.syncFromAuth(existing, authUser));
 
     const now = new Date().toISOString();
-    const email = authUser.email?.trim().toLowerCase() || `${authUser.userId}@user.local`;
+    const email = this.normalizeAuthEmail(authUser);
     const name = authUser.name?.trim() || email.split("@")[0] || "User";
     const role = this.normalizeRole(authUser.systemRole);
     const user: User = {
@@ -96,6 +96,42 @@ export class UserService {
   private stripPassword(user: User): User {
     const { password: _, ...rest } = user;
     return rest;
+  }
+
+  private async syncFromAuth(current: User, authUser: AuthUser): Promise<User> {
+    const authEmail = this.normalizeAuthEmail(authUser);
+    const authName = authUser.name?.trim();
+    const shouldSyncEmail = Boolean(
+      authEmail &&
+        authEmail !== current.email.toLowerCase() &&
+        (this.isFallbackEmail(current.email, current.id) || current.email !== authEmail),
+    );
+    const shouldSyncName = Boolean(
+      authName &&
+        (!current.name ||
+          current.name === current.email.split("@")[0] ||
+          this.isFallbackEmail(current.email, current.id)),
+    );
+
+    if (!shouldSyncEmail && !shouldSyncName) return current;
+
+    const updated: User = {
+      ...current,
+      email: shouldSyncEmail ? authEmail : current.email,
+      name: shouldSyncName ? authName! : current.name,
+      version: current.version + 1,
+      updatedAt: new Date().toISOString(),
+    };
+    await this.repository.update(updated, current.version);
+    return updated;
+  }
+
+  private normalizeAuthEmail(authUser: AuthUser): string {
+    return authUser.email?.trim().toLowerCase() || `${authUser.userId}@user.local`;
+  }
+
+  private isFallbackEmail(email: string, userId: string): boolean {
+    return email.trim().toLowerCase() === `${userId}@user.local`;
   }
 
   private normalizeRole(role: string): User["role"] {

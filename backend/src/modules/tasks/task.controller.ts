@@ -69,4 +69,18 @@ export class TaskController {
       next(error);
     }
   };
+
+  delete = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const params = idParamsSchema.parse(req.params);
+      const workspaceId = res.locals.workspaceId ?? "";
+      await this.service.delete({
+        workspaceId,
+        taskId: params.id,
+      });
+      res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  };
 }

@@ -44,6 +44,15 @@ export async function createVoiceUploadUrl(recording: VoiceRecording): Promise<{
   return { uploadUrl, storageKey, bucket };
 }
 
+export async function createVoiceDownloadUrl(recording: VoiceRecording): Promise<string | null> {
+  if (!recording.storageKey) return null;
+  const command = new GetObjectCommand({
+    Bucket: getVoiceRecordingBucket(),
+    Key: recording.storageKey,
+  });
+  return getSignedUrl(s3, command, { expiresIn: 3600 });
+}
+
 export async function analyzeVoiceRecording(recording: VoiceRecording): Promise<{
   transcript: string;
   summary: string;

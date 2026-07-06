@@ -13,6 +13,7 @@ vi.mock("@aws-sdk/lib-dynamodb", () => ({
   PutCommand: vi.fn((input?: unknown) => mockCommand(input)),
   DeleteCommand: vi.fn((input?: unknown) => mockCommand(input)),
   QueryCommand: vi.fn((input?: unknown) => mockCommand(input)),
+  ScanCommand: vi.fn((input?: unknown) => mockCommand(input)),
   BatchWriteCommand: vi.fn((input?: unknown) => mockCommand(input)),
   TransactWriteCommand: vi.fn((input?: unknown) => mockCommand(input)),
 }));
@@ -120,7 +121,7 @@ describe("DynamoUserRepository", () => {
   });
 
   describe("findAll", () => {
-    it("returns all users via GSI1 query", async () => {
+    it("returns all users via entity scan", async () => {
       mockSend.mockResolvedValueOnce({
         Items: [makeUser({ id: "user-1" }), makeUser({ id: "user-2" })],
       });

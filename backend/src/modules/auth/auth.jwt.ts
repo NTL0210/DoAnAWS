@@ -54,11 +54,13 @@ async function verifyCognitoToken(token: string): Promise<AuthUser> {
     if (rawPayload.iss !== expectedIssuer) {
       throw new Error("Invalid issuer");
     }
-    if (rawPayload.token_use !== "access") {
+    const tokenUse = stringVal(rawPayload.token_use);
+    if (tokenUse !== "access" && tokenUse !== "id") {
       throw new Error("Invalid token use");
     }
     const clientId = process.env.COGNITO_CLIENT_ID;
-    if (clientId && rawPayload.client_id !== clientId && rawPayload.aud !== clientId) {
+    const tokenClientId = tokenUse === "id" ? rawPayload.aud : rawPayload.client_id;
+    if (clientId && tokenClientId !== clientId) {
       throw new Error("Invalid audience");
     }
     if (rawPayload.exp && Number(rawPayload.exp) * 1000 < Date.now()) {

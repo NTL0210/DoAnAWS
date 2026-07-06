@@ -12,6 +12,7 @@ export interface TaskRepository {
   }): Promise<PaginatedResult<Task>>;
   create(task: Task): Promise<void>;
   update(task: Task, expectedVersion: number): Promise<void>;
+  delete(params: { workspaceId: string; taskId: string }): Promise<void>;
   batchCreate(tasks: Task[]): Promise<void>;
   createManyForMeetingTransaction(params: {
     workspaceId: string;

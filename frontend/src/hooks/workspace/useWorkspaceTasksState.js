@@ -1,11 +1,40 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { generateId } from '@/lib/workspaceData';
 import { analyzeMeeting as serviceAnalyzeMeeting, createMeeting as serviceCreateMeeting, uploadMeetingFile as serviceUploadMeetingFile } from '@/services/meetingService';
 import { getTasksByMeeting as filterTasksByMeeting } from '@/services/taskService';
+import { isCloudMode } from '@/services/apiClient';
 
 const EMPTY_TRASH = { tasks: [], meetings: [], teams: [] };
+const UI_TO_API_STATUS = {
+  TODO: 'PENDING',
+  REVIEW: 'IN_PROGRESS',
+};
+const API_TO_UI_STATUS = {
+  PENDING: 'TODO',
+};
+
+function normalizeTaskForUi(task) {
+  return {
+    ...task,
+    status: API_TO_UI_STATUS[task.status] || task.status || 'TODO',
+    departmentId: task.departmentId || task.workspaceId,
+  };
+}
+
+function normalizeMeetingForUi(meeting, activeWorkspaceId, currentUserId) {
+  return {
+    ...meeting,
+    departmentId: meeting.departmentId || meeting.workspaceId || activeWorkspaceId,
+    uploadedBy: meeting.uploadedBy || meeting.createdBy || currentUserId,
+    suggestions: meeting.suggestions || meeting.suggestedTasks || [],
+  };
+}
+
+function normalizeTaskStatusForApi(status) {
+  return UI_TO_API_STATUS[status] || status;
+}
 
 /**
  * useWorkspaceTasksState — manages workspace tasks, meetings, trash, and AI workflow actions.
@@ -64,26 +93,126 @@ export default function useWorkspaceTasksState({
   const [workspaceMeetings, setWorkspaceMeetings] = useState([]);
   const [trashItems, setTrashItems] = useState(EMPTY_TRASH);
 
-  // ─── Task Actions ──────────────────────────────────────
-  const addWorkspaceTasks = useCallback((newTasks) => {
-    if (!Array.isArray(newTasks)) return;
-    const tagged = newTasks.map((task) => ({
-      ...task,
-      id: task.id || 'task-' + generateId(),
-      workspaceId: task.workspaceId || activeWorkspaceId,
-      createdAt: task.createdAt || new Date().toISOString(),
-    }));
-    setWorkspaceTasks((prev) => [...tagged, ...prev]);
-  }, [activeWorkspaceId]);
+  useEffect(() => {
+    if (!isCloudMode() || !activeWorkspaceId || !currentUser?.id) {
+      setWorkspaceTasks([]);
+      setWorkspaceMeetings([]);
+      return;
+    }
 
-  const moveWorkspaceTask = useCallback((taskId, newStatus) => {
+    let cancelled = false;
+
+    async function loadWorkspaceExecutionData() {
+      try {
+        const { meetingsApi, tasksApi } = await import('@/services/cloudClient');
+        const [meetingsResult, tasksResult] = await Promise.all([
+          meetingsApi.list({ workspaceId: activeWorkspaceId, limit: 100 }),
+          tasksApi.list({ workspaceId: activeWorkspaceId, limit: 100 }),
+        ]);
+        if (cancelled) return;
+
+        const meetings = Array.isArray(meetingsResult)
+          ? meetingsResult
+          : meetingsResult?.items || [];
+        const tasks = Array.isArray(tasksResult)
+          ? tasksResult
+          : tasksResult?.items || [];
+
+        setWorkspaceMeetings(
+          meetings.map((meeting) => normalizeMeetingForUi(meeting, activeWorkspaceId, currentUser.id))
+        );
+        setWorkspaceTasks(tasks.map(normalizeTaskForUi));
+      } catch (err) {
+        if (!cancelled) {
+          showToast('error', err?.message || 'Failed to load workspace data.');
+          setWorkspaceMeetings([]);
+          setWorkspaceTasks([]);
+        }
+      }
+    }
+
+    loadWorkspaceExecutionData();
+    return () => { cancelled = true; };
+  }, [activeWorkspaceId, currentUser?.id, showToast]);
+
+  // ─── Task Actions ──────────────────────────────────────
+  const addWorkspaceTasks = useCallback(async (newTasks) => {
+    if (!Array.isArray(newTasks)) return;
+    if (!isCloudMode() || !activeWorkspaceId) return;
+
+    try {
+      const { tasksApi } = await import('@/services/cloudClient');
+      const createdTasks = [];
+      for (const task of newTasks) {
+        const created = await tasksApi.create({
+          workspaceId: task.workspaceId || activeWorkspaceId,
+          meetingId: task.meetingId || task.sourceMeetingId || undefined,
+          title: task.title,
+          description: task.description || '',
+          assigneeId: task.assigneeId || undefined,
+          priority: ['LOW', 'MEDIUM', 'HIGH'].includes(task.priority) ? task.priority : 'MEDIUM',
+          deadline: task.deadline || undefined,
+          createdBy: currentUser?.id,
+        });
+        createdTasks.push(normalizeTaskForUi(created));
+      }
+      setWorkspaceTasks((prev) => [...createdTasks, ...prev]);
+      return createdTasks;
+    } catch (err) {
+      showToast('error', err?.message || 'Failed to create task.');
+      return [];
+    }
+  }, [activeWorkspaceId, currentUser?.id, showToast]);
+
+  const moveWorkspaceTask = useCallback(async (taskId, newStatus) => {
+    const current = workspaceTasks.find((task) => task.id === taskId);
+    if (!current) return;
+    const previousStatus = current.status;
+
     setWorkspaceTasks((prev) =>
       prev.map((task) => {
         if (task.id !== taskId) return task;
         return { ...task, status: newStatus, updatedAt: new Date().toISOString() };
       })
     );
-  }, []);
+
+    try {
+      if (!isCloudMode()) return;
+      const { tasksApi } = await import('@/services/cloudClient');
+      const saved = await tasksApi.update(taskId, {
+        workspaceId: current.workspaceId || activeWorkspaceId,
+        status: normalizeTaskStatusForApi(newStatus),
+        expectedVersion: current.version || 1,
+      });
+      setWorkspaceTasks((prev) =>
+        prev.map((task) => (task.id === taskId ? normalizeTaskForUi(saved) : task))
+      );
+    } catch (err) {
+      setWorkspaceTasks((prev) =>
+        prev.map((task) =>
+          task.id === taskId ? { ...task, status: previousStatus } : task
+        )
+      );
+      showToast('error', err?.message || 'Failed to update task status.');
+    }
+  }, [workspaceTasks, activeWorkspaceId, showToast]);
+
+  const deleteWorkspaceTask = useCallback(async (taskId) => {
+    const task = workspaceTasks.find((item) => item.id === taskId);
+    if (!task) return;
+    const previousTasks = workspaceTasks;
+
+    setWorkspaceTasks((prev) => prev.filter((item) => item.id !== taskId));
+
+    try {
+      if (!isCloudMode()) return;
+      const { tasksApi } = await import('@/services/cloudClient');
+      await tasksApi.delete(taskId, { workspaceId: task.workspaceId || activeWorkspaceId });
+    } catch (err) {
+      setWorkspaceTasks(previousTasks);
+      showToast('error', err?.message || 'Failed to delete task.');
+    }
+  }, [workspaceTasks, activeWorkspaceId, showToast]);
 
   // ─── Meeting Actions ───────────────────────────────────
   const createMeeting = useCallback(async (meetingData) => {
@@ -104,12 +233,7 @@ export default function useWorkspaceTasksState({
 
     try {
       const saved = await serviceCreateMeeting(meetingPayload);
-      const newMeeting = {
-        ...saved,
-        departmentId: saved.workspaceId || activeWorkspaceId,
-        uploadedBy: saved.createdBy || currentUser.id,
-        suggestions: saved.suggestions || saved.suggestedTasks || [],
-      };
+      const newMeeting = normalizeMeetingForUi(saved, activeWorkspaceId, currentUser.id);
       setWorkspaceMeetings((prev) => [newMeeting, ...prev]);
       addActivity('meeting_created', 'Meeting "' + newMeeting.title + '" uploaded');
       showToast('success', 'Meeting created successfully.');
@@ -265,7 +389,7 @@ export default function useWorkspaceTasksState({
           deadline: suggestion.deadline || undefined,
           createdBy: currentUser.id,
         });
-        newTasks.push(created);
+        newTasks.push(normalizeTaskForUi(created));
       }
 
       if (newTasks && newTasks.length > 0) {
@@ -325,6 +449,7 @@ export default function useWorkspaceTasksState({
     setTrashItems,
     addWorkspaceTasks,
     moveWorkspaceTask,
+    deleteWorkspaceTask,
     createMeeting,
     uploadMeetingFile,
     processMeetingWithAI,

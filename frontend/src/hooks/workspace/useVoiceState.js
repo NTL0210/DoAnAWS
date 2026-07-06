@@ -13,6 +13,8 @@ import {
 } from '@/lib/voiceAudioQuality';
 import {
   createVoiceRecord as serviceCreateVoiceRecord,
+  deleteVoiceRecord as serviceDeleteVoiceRecord,
+  getVoiceRecordsByChannel as serviceGetVoiceRecordsByChannel,
   sendVoiceRecordToAI as serviceSendVoiceRecordToAI,
 } from '@/services/voiceRecordingService';
 
@@ -91,6 +93,39 @@ export default function useVoiceState({
   useEffect(() => {
     voiceRecordsRef.current = voiceRecords;
   }, [voiceRecords]);
+
+  useEffect(() => {
+    if (!activeWorkspaceId || !activeVoiceChannelId || !currentUser?.id) {
+      setVoiceRecords([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadVoiceRecords() {
+      try {
+        const result = await serviceGetVoiceRecordsByChannel(activeWorkspaceId, activeVoiceChannelId);
+        if (cancelled) return;
+        const records = Array.isArray(result) ? result : result?.items || [];
+        setVoiceRecords(records.map((record) => ({
+          ...record,
+          objectUrl: record.objectUrl || record.url || null,
+          url: record.url || record.objectUrl || null,
+          size: record.size || record.sizeBytes || 0,
+          duration: record.duration || record.durationSeconds || 0,
+          format: record.format || record.mimeType || 'audio/webm',
+        })));
+      } catch (err) {
+        if (!cancelled) {
+          showToast('error', err?.message || 'Failed to load voice recordings.');
+          setVoiceRecords([]);
+        }
+      }
+    }
+
+    loadVoiceRecords();
+    return () => { cancelled = true; };
+  }, [activeWorkspaceId, activeVoiceChannelId, currentUser?.id, showToast]);
 
   // ─── Voice Functions ──────────────────────────────────
   const joinVoiceChannel = useCallback((channelId, options = {}) => {
@@ -619,15 +654,20 @@ export default function useVoiceState({
     updateVoiceChannelPermissions(channelId, { allowRecording });
   }, [updateVoiceChannelPermissions]);
 
-  const deleteVoiceRecord = useCallback((recordId) => {
-    setVoiceRecords((prev) =>
-      prev.map((r) => (r.id === recordId ? { ...r, status: 'DELETED' } : r))
-    );
+  const deleteVoiceRecord = useCallback(async (recordId) => {
+    const previousRecords = voiceRecordsRef.current;
+    setVoiceRecords((prev) => prev.filter((r) => r.id !== recordId));
     const record = voiceRecordsRef.current.find((r) => r.id === recordId);
     if (record?.url && record.url.startsWith('blob:')) {
       URL.revokeObjectURL(record.url);
     }
-  }, []);
+    try {
+      await serviceDeleteVoiceRecord(recordId);
+    } catch (err) {
+      setVoiceRecords(previousRecords);
+      showToast('error', err?.message || 'Failed to delete voice recording.');
+    }
+  }, [showToast]);
 
   const sendVoiceRecordToAI = useCallback(async (recordId) => {
     const record = voiceRecordsRef.current.find((r) => r.id === recordId);

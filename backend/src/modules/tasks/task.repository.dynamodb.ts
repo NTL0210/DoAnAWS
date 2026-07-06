@@ -1,5 +1,6 @@
 import {
   BatchWriteCommand,
+  DeleteCommand,
   GetCommand,
   PutCommand,
   QueryCommand,
@@ -163,6 +164,15 @@ export class DynamoTaskRepository implements TaskRepository {
       if (isConditionalFailure(error)) throw new ConflictError("Task version conflict");
       throw error;
     }
+  }
+
+  async delete(params: { workspaceId: string; taskId: string }): Promise<void> {
+    await ddb.send(
+      new DeleteCommand({
+        TableName: env.DYNAMODB_TABLE_MAIN,
+        Key: { PK: pk(params.workspaceId), SK: sk(params.taskId) },
+      }),
+    );
   }
 
   async batchCreate(tasks: Task[]): Promise<void> {

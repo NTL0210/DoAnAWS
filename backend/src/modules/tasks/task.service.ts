@@ -75,4 +75,8 @@ export class TaskService {
     await this.repository.update(updated, input.patch.expectedVersion);
     return updated;
   }
+
+  async delete(input: { workspaceId: string; taskId: string }): Promise<void> {
+    await this.repository.delete(input);
+  }
 }

@@ -3,6 +3,7 @@ import {
   PutCommand,
   DeleteCommand,
   QueryCommand,
+  ScanCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { env } from "../../config/env.js";
 import { ddb } from "../../infrastructure/aws/dynamodb-client.js";
@@ -94,13 +95,10 @@ export class DynamoUserRepository implements UserRepository {
   }
 
   async findAll(): Promise<User[]> {
-    // Uses a Scan with the entityType filter.
-    // In production, add a GSI for listing all users.
     const result = await ddb.send(
-      new QueryCommand({
+      new ScanCommand({
         TableName: env.DYNAMODB_TABLE_MAIN,
-        IndexName: "GSI1",
-        KeyConditionExpression: "entityType = :et",
+        FilterExpression: "entityType = :et",
         ExpressionAttributeValues: {
           ":et": entityType,
         },
