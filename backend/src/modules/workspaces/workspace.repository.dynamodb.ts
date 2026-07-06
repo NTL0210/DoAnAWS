@@ -1,4 +1,5 @@
 import {
+  BatchGetCommand,
   DeleteCommand,
   GetCommand,
   QueryCommand,
@@ -48,6 +49,8 @@ function toMemberItem(workspaceId: string, member: WorkspaceMember): Record<stri
     PK: memberPk(workspaceId),
     SK: memberSk(member.userId),
     entityType: "WS_MEMBER",
+    GSI2PK: `USER#${member.userId}`,
+    GSI2SK: `WORKSPACE#${workspaceId}`,
     workspaceId,
     userId: member.userId,
     role: member.role,
@@ -114,7 +117,7 @@ export class DynamoWorkspaceRepository implements WorkspaceRepository {
   }
 
   async findByUserId(userId: string): Promise<Workspace[]> {
-    const result = await ddb.send(
+    const ownedResult = await ddb.send(
       new QueryCommand({
         TableName: env.DYNAMODB_TABLE_MAIN,
         IndexName: "GSI1",
@@ -124,7 +127,41 @@ export class DynamoWorkspaceRepository implements WorkspaceRepository {
         },
       }),
     );
-    return (result.Items ?? []).map(fromItem);
+    const membershipResult = await ddb.send(
+      new QueryCommand({
+        TableName: env.DYNAMODB_TABLE_MAIN,
+        IndexName: "GSI2",
+        KeyConditionExpression: "GSI2PK = :pk",
+        ExpressionAttributeValues: {
+          ":pk": gsi1pk(userId),
+        },
+      }),
+    );
+
+    const owned = (ownedResult.Items ?? []).map(fromItem);
+    const ownedIds = new Set(owned.map((workspace) => workspace.id));
+    const memberWorkspaceIds = (membershipResult.Items ?? [])
+      .map((item) => text(item.workspaceId))
+      .filter((workspaceId) => workspaceId && !ownedIds.has(workspaceId));
+
+    if (memberWorkspaceIds.length === 0) return owned;
+
+    const batchResult = await ddb.send(
+      new BatchGetCommand({
+        RequestItems: {
+          [env.DYNAMODB_TABLE_MAIN]: {
+            Keys: memberWorkspaceIds.slice(0, 100).map((workspaceId) => ({
+              PK: pk(workspaceId),
+              SK: sk(),
+            })),
+          },
+        },
+      }),
+    );
+
+    const memberWorkspaces = (batchResult.Responses?.[env.DYNAMODB_TABLE_MAIN] ?? [])
+      .map(fromItem);
+    return [...owned, ...memberWorkspaces];
   }
 
   async create(ws: Workspace): Promise<void> {

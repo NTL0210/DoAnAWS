@@ -5,7 +5,7 @@ import type { WorkspaceRole } from "../auth/auth.types.js";
 import type { WorkspaceRepository } from "../auth/workspace.repository.js";
 import type { MeetingService } from "../meetings/meeting.service.js";
 import type { Meeting } from "../meetings/meeting.types.js";
-import { analyzeVoiceRecording, createVoiceUploadUrl } from "./voice-recording.ai.js";
+import { analyzeVoiceRecording, createVoiceDownloadUrl, createVoiceUploadUrl } from "./voice-recording.ai.js";
 import type { VoiceRecordingRepository } from "./voice-recording.repository.js";
 import type { CreateVoiceRecordingInput, VoiceRecording } from "./voice-recording.types.js";
 
@@ -24,7 +24,14 @@ export class VoiceRecordingService {
     nextToken?: string | undefined;
   }) {
     await this.assertWorkspaceMember(input.workspaceId, input.userId);
-    return this.repository.listByChannel(input);
+    const result = await this.repository.listByChannel(input);
+    const items = await Promise.all(
+      result.items.map(async (recording) => ({
+        ...recording,
+        objectUrl: await createVoiceDownloadUrl(recording),
+      })),
+    );
+    return { ...result, items };
   }
 
   async create(input: CreateVoiceRecordingInput): Promise<VoiceRecording> {

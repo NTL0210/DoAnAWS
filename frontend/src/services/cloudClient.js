@@ -210,7 +210,7 @@ export const tasksApi = {
   get: (id) => request(`/tasks/${id}`),
   create: (data) => request('/tasks', { method: 'POST', body: data }),
   update: (id, data) => request(`/tasks/${id}`, { method: 'PATCH', body: data }),
-  delete: (id) => request(`/tasks/${id}`, { method: 'DELETE' }),
+  delete: (id, params) => request(`/tasks/${id}`, { method: 'DELETE', params }),
 };
 
 // ─── Workspaces API ───────────────────────────────

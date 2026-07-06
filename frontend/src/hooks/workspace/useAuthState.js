@@ -3,6 +3,12 @@
 import { useState, useCallback } from 'react';
 import { isCloudMode, setAuthToken } from '@/services/apiClient';
 
+export function getSessionApiToken(session) {
+  return session?.tokens?.idToken?.toString()
+    || session?.tokens?.accessToken?.toString()
+    || '';
+}
+
 export function toHydratedUser(user) {
   return {
     id: user.id,
@@ -71,7 +77,7 @@ export default function useAuthState() {
     }
 
     const session = await fetchAuthSession();
-    const token = session.tokens?.accessToken?.toString();
+    const token = getSessionApiToken(session);
     if (token) setAuthToken(token);
 
     const { authApi } = await import('@/services/cloudClient');
@@ -107,7 +113,7 @@ export default function useAuthState() {
     await signIn({ username: email, password });
 
     const session = await fetchAuthSession();
-    const token = session.tokens?.accessToken?.toString();
+    const token = getSessionApiToken(session);
     if (token) setAuthToken(token);
 
     const cognitoUser = await getCurrentUser();

@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   DEFAULT_ROLES,
   getUserWorkspacePermissions,
@@ -15,7 +15,7 @@ import {
 import { isCloudMode } from '@/services/apiClient';
 
 // ─── Hooks ────────────────────────────────────────────────
-import useAuthState, { toHydratedUser } from '@/hooks/workspace/useAuthState';
+import useAuthState, { getSessionApiToken, toHydratedUser } from '@/hooks/workspace/useAuthState';
 import useToastState from '@/hooks/workspace/useToastState';
 import useOnboardingState from '@/hooks/workspace/useOnboardingState';
 import useActivityFeed from '@/hooks/workspace/useActivityFeed';
@@ -164,6 +164,7 @@ export function WorkspaceProvider({ children }) {
   const [showCreateTeam, setShowCreateTeam] = useState(false);
   const [showInviteMember, setShowInviteMember] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const lastWorkspaceLoadUserRef = useRef(null);
   const notificationCount = useMemo(
     () => activityHook.aiNotifications.filter((item) => item.isRead === false || item.unread).length,
     [activityHook.aiNotifications]
@@ -203,7 +204,15 @@ export function WorkspaceProvider({ children }) {
 
         // Restore session
         if (isCloudMode()) {
-          const { getAuthToken } = await import('@/services/apiClient');
+          const { getAuthToken, setAuthToken } = await import('@/services/apiClient');
+          try {
+            const { fetchAuthSession } = await import('aws-amplify/auth');
+            const sessionToken = getSessionApiToken(await fetchAuthSession());
+            if (sessionToken) setAuthToken(sessionToken);
+          } catch {
+            // Fall back to the token already persisted by the app.
+          }
+
           const token = getAuthToken();
           if (token) {
             try {
@@ -246,6 +255,38 @@ export function WorkspaceProvider({ children }) {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!workspaceStorageHydrated) return;
+    if (!isCloudMode()) return;
+    const userId = authHook.currentUser?.id;
+    if (!userId) {
+      lastWorkspaceLoadUserRef.current = null;
+      return;
+    }
+    if (lastWorkspaceLoadUserRef.current === userId) return;
+
+    let cancelled = false;
+    lastWorkspaceLoadUserRef.current = userId;
+
+    const loadUserWorkspaces = async () => {
+      try {
+        const { workspacesApi } = await import('@/services/cloudClient');
+        const wsList = await workspacesApi.list({ userId });
+        if (!cancelled) {
+          workspaceHook.setWorkspaces(Array.isArray(wsList) ? wsList : []);
+        }
+      } catch {
+        if (!cancelled) {
+          workspaceHook.setWorkspaces([]);
+        }
+      }
+    };
+
+    loadUserWorkspaces();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceStorageHydrated, authHook.currentUser?.id]);
 
   // ─── Storage persistence effects ───────────────────────
   // ─── Cloud API sync (debounced) ───────────────────────
@@ -381,6 +422,7 @@ export function WorkspaceProvider({ children }) {
       workspaceTasks: tasksHook.workspaceTasks,
       addWorkspaceTasks: tasksHook.addWorkspaceTasks,
       moveWorkspaceTask: tasksHook.moveWorkspaceTask,
+      deleteWorkspaceTask: tasksHook.deleteWorkspaceTask,
       trashItems: tasksHook.trashItems,
       restoreTrashItem: tasksHook.restoreTrashItem,
       permanentlyDeleteTrashItem: tasksHook.permanentlyDeleteTrashItem,
@@ -492,6 +534,7 @@ export function WorkspaceProvider({ children }) {
       rolesPermissionsHook.canAccessVoice, rolesPermissionsHook.canRecordVoice,
       // Tasks
       tasksHook.workspaceTasks, tasksHook.addWorkspaceTasks, tasksHook.moveWorkspaceTask,
+      tasksHook.deleteWorkspaceTask,
       tasksHook.trashItems, tasksHook.restoreTrashItem, tasksHook.permanentlyDeleteTrashItem,
       tasksHook.workspaceMeetings, tasksHook.setWorkspaceMeetings,
       tasksHook.createMeeting, tasksHook.uploadMeetingFile,
