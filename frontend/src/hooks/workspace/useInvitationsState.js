@@ -12,13 +12,17 @@ function notificationToInvitation(notif, currentUser) {
     workspaceName: notif.metadata?.workspaceName || '',
     invitedByUserId: notif.metadata?.invitedBy || '',
     invitedByUserName: notif.metadata?.invitedByUserName || 'Unknown',
-    inviteeEmail: notif.metadata?.invitedEmail || currentUser?.email || '',
+    inviteeEmail: normalizeEmail(notif.metadata?.invitedEmail || currentUser?.email || ''),
     role: notif.metadata?.role || 'EMPLOYEE',
     teamIds: Array.isArray(notif.metadata?.teamIds) ? notif.metadata.teamIds : [],
     status: notif.metadata?.status || notif.status || 'PENDING',
     createdAt: notif.createdAt || new Date().toISOString(),
     backendNotification: notif,
   };
+}
+
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
 }
 
 export default function useInvitationsState({
@@ -92,8 +96,9 @@ export default function useInvitationsState({
 
   const userInvitations = useMemo(() => {
     if (!currentUser?.email) return [];
+    const currentEmail = normalizeEmail(currentUser.email);
     return invitations.filter(
-      (inv) => inv.inviteeEmail === currentUser.email && inv.status === 'PENDING'
+      (inv) => normalizeEmail(inv.inviteeEmail) === currentEmail && inv.status === 'PENDING'
     );
   }, [invitations, currentUser]);
 
@@ -122,16 +127,17 @@ export default function useInvitationsState({
 
     const { invitationsApi } = await import('@/services/cloudClient');
     try {
+      const normalizedInviteeEmail = normalizeEmail(inviteeEmail);
       const result = await invitationsApi.send({
         workspaceId,
         workspaceName: workspace.name,
-        inviteeEmail,
+        inviteeEmail: normalizedInviteeEmail,
         role: role || 'EMPLOYEE',
         teamIds: Array.from(new Set(teamIds || [])),
       });
       const notification = result.notification || result?.data?.notification;
       const createdInvitation = notification
-        ? notificationToInvitation(notification, { email: inviteeEmail })
+        ? notificationToInvitation(notification, { email: normalizedInviteeEmail })
         : null;
 
       if (createdInvitation) {
@@ -141,12 +147,12 @@ export default function useInvitationsState({
         });
         const sock = getGlobalSocket();
         if (sock?.connected) {
-          sock.emit('invitation:send', { inviteeEmail, invitation: createdInvitation });
+          sock.emit('invitation:send', { inviteeEmail: normalizedInviteeEmail, invitation: createdInvitation });
         }
       }
 
-      addActivity('invitation_sent', 'Invitation sent to ' + inviteeEmail);
-      showToast('success', teamIds?.length ? 'Invitation sent and assigned to selected teams.' : 'Invitation sent to ' + inviteeEmail);
+      addActivity('invitation_sent', 'Invitation sent to ' + normalizedInviteeEmail);
+      showToast('success', teamIds?.length ? 'Invitation sent and assigned to selected teams.' : 'Invitation sent to ' + normalizedInviteeEmail);
       return createdInvitation || result;
     } catch (err) {
       console.error('[Invite] Failed to send invitation via API:', err);

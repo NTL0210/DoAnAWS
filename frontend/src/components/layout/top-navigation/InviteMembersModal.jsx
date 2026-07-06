@@ -25,6 +25,8 @@ export default function InviteMembersModal({
                 Email Address
               </label>
               <input
+                id="topnav-invite-email"
+                name="topnavInviteEmail"
                 type="email"
                 className="discord-input"
                 placeholder="Enter email address"
@@ -38,6 +40,8 @@ export default function InviteMembersModal({
                 Role
               </label>
               <select
+                id="topnav-invite-role"
+                name="topnavInviteRole"
                 className="discord-input"
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value)}

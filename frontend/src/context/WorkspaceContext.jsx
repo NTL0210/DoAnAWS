@@ -292,32 +292,8 @@ export function WorkspaceProvider({ children }) {
   // ─── Cloud API sync (debounced) ───────────────────────
   // Persist workspace sub-entities (teams, channels, messages, voice)
   // to DynamoDB via cloud API whenever they change.
-  useEffect(() => {
-    if (!workspaceStorageHydrated) return;
-    if (!isCloudMode()) return;
-    if (!authHook.currentUser?.id) return;
-
-    const timer = setTimeout(async () => {
-      for (const ws of workspaceHook.workspaces) {
-        try {
-          const { workspacesApi } = await import('@/services/cloudClient');
-          await workspacesApi.update(ws.id, {
-            teams: ws.teams,
-            channels: ws.channels,
-            members: ws.members,
-            messages: ws.messages,
-            voiceRecords: ws.voiceRecords,
-            expectedVersion: ws.version ?? 1,
-          });
-        } catch {
-          // Best-effort; next sync will retry
-        }
-      }
-    }, 2000);
-
-    return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceStorageHydrated, workspaceHook.workspaces]);
+  // Workspace changes are persisted by the explicit action that made them.
+  // A background PATCH loop causes stale expectedVersion conflicts after reloads.
 
   // ─── Auto-select workspace when user logs in ──────────
   useEffect(() => {

@@ -174,6 +174,8 @@ export default function KanbanBoard() {
               <div>
                 <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Title</label>
                 <input
+                  id="task-title"
+                  name="taskTitle"
                   type="text"
                   className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   placeholder="Task title"
@@ -186,6 +188,8 @@ export default function KanbanBoard() {
               <div>
                 <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Description</label>
                 <textarea
+                  id="task-description"
+                  name="taskDescription"
                   className="w-full min-h-[80px] resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   placeholder="Task description (optional)"
                   value={newTask.description}
@@ -196,6 +200,8 @@ export default function KanbanBoard() {
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Priority</label>
                   <select
+                    id="task-priority"
+                    name="taskPriority"
                     className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     value={newTask.priority}
                     onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
@@ -209,6 +215,8 @@ export default function KanbanBoard() {
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Deadline</label>
                   <input
+                    id="task-deadline"
+                    name="taskDeadline"
                     type="date"
                     className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     value={newTask.deadline}
@@ -220,6 +228,8 @@ export default function KanbanBoard() {
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Assignee</label>
                   <select
+                    id="task-assignee"
+                    name="taskAssignee"
                     className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     value={newTask.assigneeId}
                     onChange={(e) => setNewTask({ ...newTask, assigneeId: e.target.value })}
