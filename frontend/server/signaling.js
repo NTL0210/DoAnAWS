@@ -126,6 +126,19 @@ function broadcastOnlinePresence(workspaceId) {
   });
 }
 
+function findWorkspaceSocketForUser(workspaceId, userId, exceptSocketId) {
+  for (const [socketId, state] of socketWorkspaceState.entries()) {
+    if (
+      socketId !== exceptSocketId
+      && state.workspaceId === workspaceId
+      && state.userId === userId
+    ) {
+      return socketId;
+    }
+  }
+  return null;
+}
+
 // ─── User room helpers (for real-time messaging) ───────────
 function userRoom(userId) {
   return `user:${userId}`;
@@ -167,7 +180,17 @@ function removeSocketFromWorkspace(socket, reason = 'left') {
   const online = getWorkspaceOnline(workspaceId);
   const current = online.get(userId);
   if (current?.socketId === socket.id) {
-    online.delete(userId);
+    const replacementSocketId = findWorkspaceSocketForUser(workspaceId, userId, socket.id);
+    if (replacementSocketId) {
+      online.set(userId, {
+        ...current,
+        socketId: replacementSocketId,
+        online: true,
+        lastSeenAt: new Date().toISOString(),
+      });
+    } else {
+      online.delete(userId);
+    }
     broadcastOnlinePresence(workspaceId);
   }
   socketWorkspaceState.delete(socket.id);
@@ -303,6 +326,16 @@ io.on('connection', (socket) => {
     });
   });
 
+  socket.on('workspace:presence:heartbeat', ({ workspaceId, userId } = {}) => {
+    if (!workspaceId || !userId) return;
+    const online = getWorkspaceOnline(workspaceId);
+    const current = online.get(userId);
+    if (current) {
+      current.lastSeenAt = new Date().toISOString();
+      current.online = true;
+    }
+  });
+
   socket.on('voice:presence:get', ({ workspaceId } = {}) => {
     if (!workspaceId) return;
     socket.emit('voice:presence:snapshot', {
@@ -431,6 +464,27 @@ io.on('connection', (socket) => {
     unregisterUserSocket(socket);
   });
 });
+
+setInterval(() => {
+  const cutoff = Date.now() - 45000;
+  for (const [workspaceId, online] of workspaceOnlinePresence.entries()) {
+    let changed = false;
+    for (const [userId, presence] of online.entries()) {
+      const lastSeen = Date.parse(presence.lastSeenAt || presence.connectedAt || 0);
+      const socketStillKnown = presence.socketId && socketWorkspaceState.has(presence.socketId);
+      if (!socketStillKnown || Number.isNaN(lastSeen) || lastSeen < cutoff) {
+        const replacementSocketId = findWorkspaceSocketForUser(workspaceId, userId, presence.socketId);
+        if (replacementSocketId) {
+          online.set(userId, { ...presence, socketId: replacementSocketId, lastSeenAt: new Date().toISOString() });
+        } else {
+          online.delete(userId);
+        }
+        changed = true;
+      }
+    }
+    if (changed) broadcastOnlinePresence(workspaceId);
+  }
+}, 15000).unref?.();
 
 httpServer.listen(PORT, () => {
   console.log(`[Signaling] Voice signaling server running on port ${PORT}`);

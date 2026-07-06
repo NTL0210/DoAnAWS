@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { audit } from "../../src/modules/audit/audit.middleware.js";
-import { MockAuditRepository } from "../../src/modules/audit/audit.repository.mock.js";
+import { InMemoryAuditRepository } from "../support/in-memory-repositories.js";
 
 function mockReq(overrides: Record<string, unknown> = {}) {
   return {
@@ -34,7 +34,7 @@ function mockNext() {
 
 describe("audit middleware factory", () => {
   it("calls next immediately without waiting", () => {
-    const repo = new MockAuditRepository();
+    const repo = new InMemoryAuditRepository();
     const middleware = audit("TASK.DELETED", "task", repo);
 
     const req = mockReq({ params: { id: "task-1" } });
@@ -47,7 +47,7 @@ describe("audit middleware factory", () => {
   });
 
   it("records an audit event on successful response (2xx)", async () => {
-    const repo = new MockAuditRepository();
+    const repo = new InMemoryAuditRepository();
     const middleware = audit("TASK.DELETED", "task", repo);
 
     const req = mockReq({ params: { id: "task-42" } });
@@ -69,7 +69,7 @@ describe("audit middleware factory", () => {
   });
 
   it("does not record on non-2xx responses (4xx)", async () => {
-    const repo = new MockAuditRepository();
+    const repo = new InMemoryAuditRepository();
     const middleware = audit("MEETING.CREATED", "meeting", repo);
 
     const req = mockReq({ params: { id: "m-1" } });
@@ -87,7 +87,7 @@ describe("audit middleware factory", () => {
   });
 
   it("extracts targetId from req.params.id as string", async () => {
-    const repo = new MockAuditRepository();
+    const repo = new InMemoryAuditRepository();
     const middleware = audit("USER.UPDATED", "user", repo);
 
     const req = mockReq({ params: { id: "user-99" } });
@@ -124,7 +124,7 @@ describe("audit middleware factory", () => {
   });
 
   it("records with workspaceId from res.locals", async () => {
-    const repo = new MockAuditRepository();
+    const repo = new InMemoryAuditRepository();
     const middleware = audit("MEMBER.ADDED", "member", repo);
 
     const req = mockReq({ params: { id: "new-user" } });

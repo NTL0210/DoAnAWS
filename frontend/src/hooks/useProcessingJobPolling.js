@@ -48,6 +48,7 @@ import { TERMINAL_JOB_STATUSES, POLLING_INTERVALS } from '@/domain/constants/cos
 export default function useProcessingJobPolling(jobId, options = {}) {
   const {
     meetingId,
+    workspaceId,
     enabled = true,
     onComplete,
     onError,
@@ -95,7 +96,7 @@ export default function useProcessingJobPolling(jobId, options = {}) {
       if (jobId) {
         job = await getProcessingJobStatus(jobId);
       } else if (meetingId) {
-        job = await getJobByMeeting(meetingId);
+        job = await getJobByMeeting(meetingId, workspaceId);
       }
 
       if (!job) {
@@ -145,7 +146,7 @@ export default function useProcessingJobPolling(jobId, options = {}) {
         intervalRef.current = null;
       }
     }
-  }, [jobId, meetingId, resolvedJobId, onComplete, onError, onStatusChange]);
+  }, [jobId, meetingId, workspaceId, resolvedJobId, onComplete, onError, onStatusChange]);
 
   // ── Start / stop polling ──────────────────────────────────────────
   useEffect(() => {

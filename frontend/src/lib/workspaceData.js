@@ -245,7 +245,7 @@ export function getWorkspaceRole(workspace, userId) {
  * @returns {string|null}
  */
 export function getMemberRole(workspaceId, userId) {
-  // Replaced: workspace lookup via seed data is removed.
+  // Replaced: workspace lookup via bundled data is removed.
   return null;
 }
 
@@ -276,7 +276,7 @@ export function hasWorkspacePermission(workspace, userId, permission) {
  * @returns {boolean}
  */
 export function hasPermission(workspaceId, userId, permission) {
-  // Replaced: workspace lookup via seed data is removed.
+  // Replaced: workspace lookup via bundled data is removed.
   return false;
 }
 
@@ -308,7 +308,7 @@ export function getUserWorkspacePermissions(workspace, userId) {
  * @returns {string[]}
  */
 export function getUserPermissions(workspaceId, userId) {
-  // Replaced: workspace lookup via seed data is removed.
+  // Replaced: workspace lookup via bundled data is removed.
   return [];
 }
 

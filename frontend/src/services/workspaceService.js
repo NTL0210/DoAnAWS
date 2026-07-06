@@ -1,19 +1,11 @@
 /**
- * WorkspaceService — business logic for workspaces
- *
- * Supports two modes:
- *   mock  → localStorage via mock repository
- *   cloud → API Gateway + Cognito
- *
- * Extends the existing src/services/workspaceService.js
+ * WorkspaceService - workspace helpers backed by API Gateway and Cognito.
  */
 
 export { canManageAIWorkflow } from './permissionService';
 export { getDefaultPermissionsForRole } from '@/data/defaults/roles';
 
-import { isCloudMode } from '@/config/runtimeConfig';
 import { workspacesApi } from '@/services/cloudClient';
-import { workspaceRepo, teamRepo, channelRepo } from '@/repositories';
 import { DEFAULT_FEATURES } from '@/data/defaults/features';
 import { DEFAULT_TEXT_CHANNELS, DEFAULT_VOICE_CHANNELS } from '@/data/defaults/channels';
 import { DEFAULT_TEAMS } from '@/data/defaults/teams';
@@ -204,10 +196,7 @@ export function createInitialActivity(workspaceId, userName) {
  * @returns {Promise<Object[]>}
  */
 export async function getWorkspacesForUser(userId) {
-  if (isCloudMode()) {
-    return workspacesApi.list({ userId });
-  }
-  return workspaceRepo.findByUserId(userId);
+  return workspacesApi.list({ userId });
 }
 
 /**
@@ -216,10 +205,7 @@ export async function getWorkspacesForUser(userId) {
  * @returns {Promise<Object|null>}
  */
 export async function getWorkspaceById(workspaceId) {
-  if (isCloudMode()) {
-    return workspacesApi.get(workspaceId);
-  }
-  return workspaceRepo.findById(workspaceId);
+  return workspacesApi.get(workspaceId);
 }
 
 /**
@@ -236,23 +222,13 @@ export async function createWorkspace({
   workspaceType,
   visibility,
   iconColor,
-  createDefaultTextChannel = true,
-  createDefaultVoiceChannel = true,
 }) {
-  if (isCloudMode()) {
-    return workspacesApi.create({
-      name,
-      ownerId,
-      description,
-      workspaceType,
-      visibility,
-      iconColor,
-    });
-  }
-  const structure = createCleanWorkspaceStructure(
-    { name, description, workspaceType, visibility, iconColor },
+  return workspacesApi.create({
+    name,
     ownerId,
-    { createDefaultTextChannel, createDefaultVoiceChannel }
-  );
-  return workspaceRepo.create(structure);
+    description,
+    workspaceType,
+    visibility,
+    iconColor,
+  });
 }

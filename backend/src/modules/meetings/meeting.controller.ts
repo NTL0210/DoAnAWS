@@ -178,6 +178,20 @@ export class MeetingController {
       next(error);
     }
   };
+
+  process = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const params = idParamsSchema.parse(req.params);
+      const workspaceId = res.locals.workspaceId ?? "";
+      const meeting = await this.service.process({
+        workspaceId,
+        meetingId: params.id,
+      });
+      res.status(200).json(toMeetingResponse(meeting));
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
 function textMetadata(metadata: Record<string, unknown>, key: string): string {

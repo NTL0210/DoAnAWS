@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { ConflictError } from "../../src/shared/errors/app-error.js";
-import { MockMeetingRepository } from "../../src/modules/meetings/meeting.repository.mock.js";
 import { MeetingService } from "../../src/modules/meetings/meeting.service.js";
+import { InMemoryMeetingRepository } from "../support/in-memory-repositories.js";
 
 describe("MeetingService", () => {
   it("creates a meeting without leaking HTTP concerns into service", async () => {
-    const repo = new MockMeetingRepository([]);
+    const repo = new InMemoryMeetingRepository([]);
     const service = new MeetingService(repo);
 
     const meeting = await service.create({
@@ -21,7 +21,7 @@ describe("MeetingService", () => {
   });
 
   it("raises conflict on stale optimistic locking version", async () => {
-    const repo = new MockMeetingRepository([]);
+    const repo = new InMemoryMeetingRepository([]);
     const service = new MeetingService(repo);
     const meeting = await service.create({ workspaceId: "ws-1", title: "Kickoff" });
 

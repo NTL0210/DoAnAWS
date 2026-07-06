@@ -1,16 +1,11 @@
 /**
  * Repository factory — provides repository implementations backed by cloud API.
  *
- * All data now goes through DynamoDB via the cloud API Gateway.
- * In local dev (non-cloud mode), falls back to in-memory/API adapters.
- *
- * Components and services should NEVER import mock repositories directly.
- * Always use this factory:
+ * All data goes through DynamoDB via the cloud API Gateway.
  *
  *   import { workspaceRepo } from '@/repositories';
  */
 
-import { isCloudMode } from '@/config/runtimeConfig';
 import { workspacesApi, usersApi, meetingsApi, tasksApi } from '@/services/cloudClient';
 
 /**

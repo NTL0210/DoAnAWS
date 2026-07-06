@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { AuditService } from "../../src/modules/audit/audit.service.js";
-import { MockAuditRepository } from "../../src/modules/audit/audit.repository.mock.js";
+import { InMemoryAuditRepository } from "../support/in-memory-repositories.js";
 
 describe("AuditService", () => {
   it("records an event with generated id and timestamp", async () => {
-    const repo = new MockAuditRepository();
+    const repo = new InMemoryAuditRepository();
     const service = new AuditService(repo);
 
     const event = await service.record({
@@ -24,7 +24,7 @@ describe("AuditService", () => {
   });
 
   it("includes optional details when provided", async () => {
-    const repo = new MockAuditRepository();
+    const repo = new InMemoryAuditRepository();
     const service = new AuditService(repo);
 
     const event = await service.record({
@@ -44,7 +44,7 @@ describe("AuditService", () => {
   });
 
   it("listByWorkspace returns paginated results", async () => {
-    const repo = new MockAuditRepository();
+    const repo = new InMemoryAuditRepository();
     const service = new AuditService(repo);
 
     for (let i = 0; i < 3; i++) {
@@ -66,7 +66,7 @@ describe("AuditService", () => {
   });
 
   it("listByWorkspace returns empty for unknown workspace", async () => {
-    const repo = new MockAuditRepository();
+    const repo = new InMemoryAuditRepository();
     const service = new AuditService(repo);
 
     const result = await service.listByWorkspace({
@@ -77,7 +77,7 @@ describe("AuditService", () => {
   });
 
   it("delegates to repository for listByWorkspace", async () => {
-    const repo = new MockAuditRepository();
+    const repo = new InMemoryAuditRepository();
     const spy = vi.spyOn(repo, "listByWorkspace");
     const service = new AuditService(repo);
 

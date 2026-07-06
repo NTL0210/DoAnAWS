@@ -3,8 +3,8 @@ import {
   authenticate,
   requireWorkspaceRole,
 } from "../../src/modules/auth/auth.middleware.js";
-import type { MockWorkspaceRepository } from "../../src/modules/auth/workspace.repository.mock.js";
 import type { AuthUser } from "../../src/modules/auth/auth.types.js";
+import type { WorkspaceRepository } from "../../src/modules/auth/workspace.repository.js";
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -12,7 +12,9 @@ function mockReq(overrides: Record<string, unknown> = {}) {
   return {
     headers: {},
     path: "/api/v1/tasks",
+    params: {},
     query: {},
+    body: undefined,
     user: undefined,
     ...overrides,
   } as any;
@@ -113,41 +115,13 @@ describe("authenticate middleware", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it("attaches user to req for a valid mock token", async () => {
-    // Generate a valid mock token inline
-    const header = Buffer.from(
-      JSON.stringify({ alg: "HS256", typ: "JWT" }),
-      "utf8",
-    ).toString("base64");
-    const payload = Buffer.from(
-      JSON.stringify({
-        sub: "user-1",
-        role: "ADMIN",
-        email: "admin@company.com",
-        workspaceId: "ws-1",
-      }),
-      "utf8",
-    ).toString("base64");
-    const token = `${header}.${payload}.mock-signature`;
-
-    const req = mockReq({ headers: { authorization: `Bearer ${token}` } });
-    const { res } = mockRes();
-    const next = mockNext();
-
-    authenticate(req, res, next);
-    await new Promise((r) => setTimeout(r, 10));
-
-    expect(next).toHaveBeenCalledOnce();
-    expect(req.user).toBeDefined();
-    expect(req.user.userId).toBe("user-1");
-  });
 });
 
 // ── requireWorkspaceRole ──────────────────────────────────────
 
 describe("requireWorkspaceRole middleware", () => {
   it("returns 401 when req.user is missing", async () => {
-    const repo = { getMemberRole: vi.fn() } as any as MockWorkspaceRepository;
+    const repo = { getMemberRole: vi.fn() } as any as WorkspaceRepository;
     const middleware = requireWorkspaceRole(repo, "MEMBER");
 
     const req = mockReq({ user: undefined });
@@ -162,7 +136,7 @@ describe("requireWorkspaceRole middleware", () => {
   });
 
   it("returns 400 when workspaceId cannot be resolved", async () => {
-    const repo = { getMemberRole: vi.fn() } as any as MockWorkspaceRepository;
+    const repo = { getMemberRole: vi.fn() } as any as WorkspaceRepository;
     const middleware = requireWorkspaceRole(repo, "MEMBER");
 
     const req = mockReq({
@@ -181,7 +155,7 @@ describe("requireWorkspaceRole middleware", () => {
   it("returns 403 when user is not a workspace member", async () => {
     const repo = {
       getMemberRole: vi.fn().mockResolvedValue(null),
-    } as any as MockWorkspaceRepository;
+    } as any as WorkspaceRepository;
     const middleware = requireWorkspaceRole(repo, "MEMBER");
 
     const req = mockReq({
@@ -201,7 +175,7 @@ describe("requireWorkspaceRole middleware", () => {
   it("returns 403 when user role is insufficient", async () => {
     const repo = {
       getMemberRole: vi.fn().mockResolvedValue("MEMBER"),
-    } as any as MockWorkspaceRepository;
+    } as any as WorkspaceRepository;
     const middleware = requireWorkspaceRole(repo, "ADMIN");
 
     const req = mockReq({
@@ -221,7 +195,7 @@ describe("requireWorkspaceRole middleware", () => {
   it("allows MEMBER access for MEMBER-guarded route", async () => {
     const repo = {
       getMemberRole: vi.fn().mockResolvedValue("MEMBER"),
-    } as any as MockWorkspaceRepository;
+    } as any as WorkspaceRepository;
     const middleware = requireWorkspaceRole(repo, "MEMBER");
 
     const req = mockReq({
@@ -241,7 +215,7 @@ describe("requireWorkspaceRole middleware", () => {
   it("allows ADMIN access for ADMIN-guarded route", async () => {
     const repo = {
       getMemberRole: vi.fn().mockResolvedValue("ADMIN"),
-    } as any as MockWorkspaceRepository;
+    } as any as WorkspaceRepository;
     const middleware = requireWorkspaceRole(repo, "ADMIN");
 
     const req = mockReq({
@@ -259,7 +233,7 @@ describe("requireWorkspaceRole middleware", () => {
   it("allows OWNER access to ADMIN-guarded route (hierarchy)", async () => {
     const repo = {
       getMemberRole: vi.fn().mockResolvedValue("OWNER"),
-    } as any as MockWorkspaceRepository;
+    } as any as WorkspaceRepository;
     const middleware = requireWorkspaceRole(repo, "ADMIN");
 
     const req = mockReq({
@@ -277,7 +251,7 @@ describe("requireWorkspaceRole middleware", () => {
   it("resolves workspaceId from x-workspace-id header", async () => {
     const repo = {
       getMemberRole: vi.fn().mockResolvedValue("MEMBER"),
-    } as any as MockWorkspaceRepository;
+    } as any as WorkspaceRepository;
     const middleware = requireWorkspaceRole(repo, "MEMBER");
 
     const req = mockReq({
@@ -296,7 +270,7 @@ describe("requireWorkspaceRole middleware", () => {
   it("resolves workspaceId from query param", async () => {
     const repo = {
       getMemberRole: vi.fn().mockResolvedValue("MEMBER"),
-    } as any as MockWorkspaceRepository;
+    } as any as WorkspaceRepository;
     const middleware = requireWorkspaceRole(repo, "MEMBER");
 
     const req = mockReq({
@@ -316,7 +290,7 @@ describe("requireWorkspaceRole middleware", () => {
   it("forwards caught errors to next()", async () => {
     const repo = {
       getMemberRole: vi.fn().mockRejectedValue(new Error("DB down")),
-    } as any as MockWorkspaceRepository;
+    } as any as WorkspaceRepository;
     const middleware = requireWorkspaceRole(repo, "MEMBER");
 
     const req = mockReq({

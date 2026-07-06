@@ -304,9 +304,9 @@ export default function AdminSettings() {
             {[
               { label: 'Platform version', value: 'v0.1.0 MVP' },
               { label: 'Frontend', value: 'Next.js 13 + React 18' },
-              { label: 'Backend', value: 'Node.js (mock API)' },
-              { label: 'Database', value: 'DynamoDB (mock)' },
-              { label: 'AI Engine', value: 'Mock AI (GPT-ready)' },
+              { label: 'Backend', value: 'Node.js API' },
+              { label: 'Database', value: 'DynamoDB' },
+              { label: 'AI Engine', value: 'Meeting analysis service' },
               { label: 'Auth', value: 'Local JWT (Cognito-ready)' },
             ].map((item) => (
               <div key={item.label} className="flex items-center justify-between border-b border-slate-100 pb-2 dark:border-slate-800">

@@ -1,38 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   FiArrowLeft,
   FiCalendar,
-  FiCheckCircle,
-  FiClock,
   FiFileText,
   FiLoader,
   FiUser,
 } from 'react-icons/fi';
 import { StatusPill } from '../../src/components/layout/AppShell';
-import { getMeetings } from '../../src/services/legacyDataService';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
 
 export default function MeetingDetailPage() {
   const router = useRouter();
   const { id } = router.query;
-  const [meeting, setMeeting] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [showFullTranscript, setShowFullTranscript] = useState(false);
+  const { meetings, loading, workspaces, workspaceMembers } = useWorkspace();
 
-  useEffect(() => {
-    if (!id) return;
-    const load = async () => {
-      setLoading(true);
-      const meetings = await getMeetings();
-      const found = meetings.find((m) => m.id === id);
-      await new Promise((r) => setTimeout(r, 400));
-      setMeeting(found || null);
-      setLoading(false);
-    };
-    load();
-  }, [id]);
+  const meeting = (meetings || []).find((m) => m.id === id) || null;
+  const workspace = workspaces.find((ws) => ws.id === meeting?.workspaceId || ws.id === meeting?.departmentId);
+  const uploader = workspaceMembers.find((member) => member.userId === meeting?.uploadedBy || member.userId === meeting?.createdBy);
 
   if (loading) {
     return (
@@ -80,9 +68,7 @@ export default function MeetingDetailPage() {
               <div>
                 <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">{meeting.title}</h2>
                 <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                  {meeting.departmentId === 'dept-1' ? 'Frontend Team' :
-                   meeting.departmentId === 'dept-2' ? 'Backend Team' :
-                   meeting.departmentId === 'dept-3' ? 'AI Team' : 'DevOps Team'}
+                  {workspace?.name || meeting.workspaceId || meeting.departmentId || 'Workspace'}
                 </p>
               </div>
               <StatusPill tone={statusTone(meeting.status)}>{meeting.status}</StatusPill>
@@ -94,7 +80,7 @@ export default function MeetingDetailPage() {
               </span>
               <span className="inline-flex items-center gap-2">
                 <FiUser className="h-4 w-4" />
-                {meeting.uploadedBy === 'emp-2' ? 'Sarah Chen' : 'Manager'}
+                {uploader?.name || meeting.createdBy || meeting.uploadedBy || 'Unknown'}
               </span>
               <span className="inline-flex items-center gap-2">
                 <FiFileText className="h-4 w-4" />

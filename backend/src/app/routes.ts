@@ -11,6 +11,9 @@ import { TaskService } from "../modules/tasks/task.service.js";
 import { UserController } from "../modules/users/user.controller.js";
 import { buildUserRouter } from "../modules/users/user.router.js";
 import { UserService } from "../modules/users/user.service.js";
+import { VoiceRecordingController } from "../modules/voice-recordings/voice-recording.controller.js";
+import { buildVoiceRecordingRouter } from "../modules/voice-recordings/voice-recording.router.js";
+import { VoiceRecordingService } from "../modules/voice-recordings/voice-recording.service.js";
 import { WorkspaceController } from "../modules/workspaces/workspace.controller.js";
 import { buildWorkspaceRouter } from "../modules/workspaces/workspace.router.js";
 import { WorkspaceService } from "../modules/workspaces/workspace.service.js";
@@ -33,6 +36,10 @@ export function buildApiRouter(repositories: Repositories): Router {
   const meetingService = new MeetingService(repositories.meetings);
   const meetingController = new MeetingController(meetingService, userService, workspaceService);
   api.use("/meetings", buildMeetingRouter(meetingController, guard));
+
+  const voiceRecordingService = new VoiceRecordingService(repositories.voiceRecordings, meetingService);
+  const voiceRecordingController = new VoiceRecordingController(voiceRecordingService);
+  api.use("/voice-recordings", buildVoiceRecordingRouter(voiceRecordingController, guard));
 
   // ── Tasks ─────────────────────────────────────────────
   const taskService = new TaskService(repositories.tasks);

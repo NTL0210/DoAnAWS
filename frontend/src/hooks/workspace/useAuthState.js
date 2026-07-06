@@ -1,17 +1,8 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { loginUser, registerUser } from '@/services/userService';
-import { isMockMode, isCloudMode, setAuthToken } from '@/services/apiClient';
+import { isCloudMode, setAuthToken } from '@/services/apiClient';
 
-const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
-
-/** Standalone delay helper — avoids calling setTimeout during render */
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/**
- * Normalize a user object from any source (API, localStorage, mock).
- */
 export function toHydratedUser(user) {
   return {
     id: user.id,
@@ -26,76 +17,67 @@ export function toHydratedUser(user) {
   };
 }
 
-/**
- * useAuthState — manages auth state and actions.
- *
- * @returns {{
- *   currentUser: Object|null,
- *   loading: boolean,
- *   login: (email: string, password: string) => Promise<Object>,
- *   register: (name: string, email: string, password: string) => Promise<Object>,
- *   setUser: (user: Object|null) => void,
- *   updateCurrentUser: (updates: Object) => void,
- *   logout: () => void,
- * }}
- */
 export default function useAuthState() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const login = useCallback(async (email, password) => {
-    if (isCloudMode()) {
-      // Dynamic import to avoid loading Amplify Auth in mock mode
-      const { signIn, signOut, fetchAuthSession, getCurrentUser } = await import('aws-amplify/auth');
+    if (!isCloudMode()) {
+      throw new Error('Cloud authentication is required.');
+    }
 
-      // Clear any existing session before signing in to avoid
-      // "There is already a signed in user" error after logout or failed attempts
-      try { await signOut(); } catch (_) { /* ignore — no session to clear */ }
+    const { signIn, signOut, fetchAuthSession, getCurrentUser } = await import('aws-amplify/auth');
 
-      // Cognito sign in — dùng USER_PASSWORD_AUTH để tránh lỗi SRP
-      try {
-        await signIn({
-          username: email,
-          password,
-          options: {
-            authFlowType: 'USER_PASSWORD_AUTH',
-          },
-        });
-      } catch (err) {
-        // Log chi tiết lỗi Cognito để debug
-        console.error('[Auth:login] Cognito signIn failed:', {
-          name: err.name,
-          message: err.message,
-          code: err.code,
-        });
+    try {
+      await signOut();
+    } catch {
+      // No active session.
+    }
 
-        // Map lỗi Cognito sang tiếng Việt dễ hiểu
-        if (err.name === 'UserNotConfirmedException') {
-          throw new Error('Tài khoản chưa được xác thực. Vui lòng kiểm tra email để xác nhận.');
-        }
-        if (err.name === 'NotAuthorizedException') {
-          throw new Error('Email hoặc mật khẩu không đúng.');
-        }
-        if (err.name === 'UserNotFoundException') {
-          throw new Error('Tài khoản không tồn tại.');
-        }
-        if (err.name === 'InvalidParameterException' || err.name === 'InvalidLambdaResponseException') {
-          throw new Error('Lỗi cấu hình Cognito. Liên hệ admin để kiểm tra PreSignUp Lambda.');
-        }
-        if (err.message?.includes('already a signed in user')) {
-          // Đã signOut ở trên, nếu vẫn lỗi thì clear mạnh tay
-          try { await signOut({ global: true }); } catch (_) {}
-          throw new Error('Đã xoá session cũ, vui lòng thử đăng nhập lại.');
-        }
-        throw err; // Giữ nguyên lỗi gốc nếu không mapping được
+    try {
+      await signIn({
+        username: email,
+        password,
+        options: { authFlowType: 'USER_PASSWORD_AUTH' },
+      });
+    } catch (err) {
+      console.error('[Auth:login] Cognito signIn failed:', {
+        name: err.name,
+        message: err.message,
+        code: err.code,
+      });
+
+      if (err.name === 'UserNotConfirmedException') {
+        throw new Error('Tai khoan chua duoc xac thuc. Vui long kiem tra email de xac nhan.');
       }
+      if (err.name === 'NotAuthorizedException') {
+        throw new Error('Email hoac mat khau khong dung.');
+      }
+      if (err.name === 'UserNotFoundException') {
+        throw new Error('Tai khoan khong ton tai.');
+      }
+      if (err.name === 'InvalidParameterException' || err.name === 'InvalidLambdaResponseException') {
+        throw new Error('Loi cau hinh Cognito. Vui long kiem tra PreSignUp Lambda.');
+      }
+      if (err.message?.includes('already a signed in user')) {
+        try {
+          await signOut({ global: true });
+        } catch {
+          // Ignore cleanup failure.
+        }
+        throw new Error('Da xoa session cu, vui long dang nhap lai.');
+      }
+      throw err;
+    }
 
-      // Store access token for API Gateway calls
-      const session = await fetchAuthSession();
-      const token = session.tokens?.accessToken?.toString();
-      if (token) setAuthToken(token);
+    const session = await fetchAuthSession();
+    const token = session.tokens?.accessToken?.toString();
+    if (token) setAuthToken(token);
 
-      // Build user object from Cognito response
+    const { authApi } = await import('@/services/cloudClient');
+    try {
+      return toHydratedUser(await authApi.me());
+    } catch {
       const cognitoUser = await getCurrentUser();
       return {
         id: cognitoUser.userId,
@@ -107,100 +89,71 @@ export default function useAuthState() {
         createdAt: new Date().toISOString(),
       };
     }
-
-    await delay(800);
-    return loginUser(email, password);
   }, []);
 
   const register = useCallback(async (name, email, password) => {
-    if (isCloudMode()) {
-      // Dynamic import to avoid loading Amplify Auth in mock mode
-      const { signUp, signIn, fetchAuthSession, getCurrentUser } = await import('aws-amplify/auth');
-
-      // Step 1: Sign up in Cognito (PostConfirmation Lambda auto-creates DynamoDB user)
-      await signUp({
-        username: email,
-        password,
-        attributes: { email, name, preferred_username: name },
-      });
-
-      // Step 2: Sign in ngay lập tức (PreSignUp Lambda tự động confirm)
-      await signIn({ username: email, password });
-
-      // Step 3: Lưu access token cho API Gateway calls
-      const session = await fetchAuthSession();
-      const token = session.tokens?.accessToken?.toString();
-      if (token) setAuthToken(token);
-
-      // Step 4: Lấy userId thật từ Cognito
-      const cognitoUser = await getCurrentUser();
-
-      // Step 5: Đợi PostConfirmation Lambda tạo user trong DynamoDB (tối đa 3 giây)
-      let userRecord = null;
-      const { usersApi } = await import('@/services/cloudClient');
-      for (let i = 0; i < 6; i++) {
-        await new Promise((r) => setTimeout(r, 500));
-        try {
-          userRecord = await usersApi.get(cognitoUser.userId);
-          if (userRecord) break;
-        } catch {
-          // User chưa được tạo xong — retry
-        }
-      }
-
-      return {
-        id: cognitoUser.userId,
-        email,
-        name: name || email.split('@')[0],
-        avatar: null,
-        role: 'EMPLOYEE',
-        departmentId: null,
-        createdAt: new Date().toISOString(),
-      };
+    if (!isCloudMode()) {
+      throw new Error('Cloud authentication is required.');
     }
 
-    await delay(800);
-    return registerUser(name, email, password);
+    const { signUp, signIn, fetchAuthSession, getCurrentUser } = await import('aws-amplify/auth');
+
+    await signUp({
+      username: email,
+      password,
+      attributes: { email, name, preferred_username: name },
+    });
+
+    await signIn({ username: email, password });
+
+    const session = await fetchAuthSession();
+    const token = session.tokens?.accessToken?.toString();
+    if (token) setAuthToken(token);
+
+    const cognitoUser = await getCurrentUser();
+    const { authApi, usersApi } = await import('@/services/cloudClient');
+    for (let i = 0; i < 6; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      try {
+        const userRecord = await authApi.me();
+        if (userRecord) return toHydratedUser(userRecord);
+      } catch {
+        try {
+          const userRecord = await usersApi.get(cognitoUser.userId);
+          if (userRecord) return toHydratedUser(userRecord);
+        } catch {
+          // The confirmation trigger can take a moment to create the row.
+        }
+      }
+    }
+
+    return {
+      id: cognitoUser.userId,
+      email,
+      name: name || email.split('@')[0],
+      avatar: null,
+      role: 'EMPLOYEE',
+      departmentId: null,
+      createdAt: new Date().toISOString(),
+    };
   }, []);
 
   const setUser = useCallback((user) => {
     setCurrentUser(user);
-    if (user) {
-      // Mock-only account profile persistence. Real auth should use secure server/session storage.
-      localStorage.setItem('meetingAppUser', JSON.stringify({
-        user,
-        createdAt: Date.now(),
-        expiresAt: Date.now() + SESSION_TTL_MS,
-      }));
-      localStorage.setItem('user', JSON.stringify(user));
-    } else {
-      localStorage.removeItem('meetingAppUser');
-      localStorage.removeItem('user');
-    }
   }, []);
 
   const updateCurrentUser = useCallback((updates) => {
     setCurrentUser((prev) => {
       if (!prev) return prev;
       const next = { ...prev, ...updates };
-      localStorage.setItem('meetingAppUser', JSON.stringify({
-        user: next,
-        createdAt: Date.now(),
-        expiresAt: Date.now() + SESSION_TTL_MS,
-      }));
-      localStorage.setItem('user', JSON.stringify(next));
-      // Sync update to API Gateway/Next.js API in non-mock modes
-      if (!isMockMode()) {
-        import('@/services/cloudClient').then((m) => {
-          m.usersApi.update(prev.id, updates).catch(() => {});
-        });
-      }
+      import('@/services/cloudClient').then((m) => {
+        m.usersApi.update(prev.id, updates).catch(() => {});
+      });
       return next;
     });
   }, []);
 
   const logout = useCallback(() => {
-    // Cognito sign out in cloud mode
     if (isCloudMode()) {
       import('aws-amplify/auth').then(({ signOut }) => signOut()).catch(() => {});
     }
@@ -210,19 +163,24 @@ export default function useAuthState() {
     localStorage.removeItem('user');
     localStorage.removeItem('activeWorkspaceId');
     localStorage.removeItem('activeChannelId');
-    // Clear ALL user-specific cached data to prevent account cross-contamination
+
     const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key?.startsWith('voiceSettings_') || key?.startsWith('workspaceSidebar_') || key?.startsWith('workspaces') || key?.startsWith('messages_') || key?.startsWith('aiWorkforce_voiceSettings_')) {
+      if (
+        key?.startsWith('meetingApp') ||
+        key?.startsWith('voiceSettings_') ||
+        key?.startsWith('workspaceSidebar_') ||
+        key?.startsWith('workspaces') ||
+        key?.startsWith('messages_') ||
+        key?.startsWith('aiWorkforce_voiceSettings_')
+      ) {
         keysToRemove.push(key);
       }
     }
     keysToRemove.forEach((key) => localStorage.removeItem(key));
-    // Clear auth token in cloud/api modes
-    if (!isMockMode()) {
-      import('@/services/apiClient').then((m) => m.clearAuthToken());
-    }
+
+    import('@/services/apiClient').then((m) => m.clearAuthToken());
   }, []);
 
   return {

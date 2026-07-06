@@ -10,8 +10,10 @@ import {
   createProcessedLocalRecordingStream,
   createProcessedRecordingStream,
 } from '@/lib/voiceAudioQuality';
-import { createVoiceRecord as serviceCreateVoiceRecord } from '@/services/voiceRecordingService';
-import { generateId } from '@/lib/workspaceData';
+import {
+  createVoiceRecord as serviceCreateVoiceRecord,
+  sendVoiceRecordToAI as serviceSendVoiceRecordToAI,
+} from '@/services/voiceRecordingService';
 
 /**
  * useVoiceState — manages voice presence, recording, and channel permissions.
@@ -416,7 +418,24 @@ export default function useVoiceState({
         return null;
       }
 
-      const processedResult = await createProcessedLocalRecordingStream({ localStream: stream });
+      // Mix local + remote streams for a complete meeting recording
+      const remoteStreamsArr = [];
+      if (options.remoteStreams instanceof Map) {
+        for (const remoteStream of options.remoteStreams.values()) {
+          if (remoteStream?.getAudioTracks?.()?.length > 0) {
+            remoteStreamsArr.push(remoteStream);
+          }
+        }
+      }
+
+      const hasRemote = remoteStreamsArr.length > 0;
+      const processedResult = hasRemote
+        ? createProcessedRecordingStream({
+            localStream: stream,
+            remoteStreams: remoteStreamsArr,
+            settings: options.settings || {},
+          })
+        : await createProcessedLocalRecordingStream({ localStream: stream });
       const processedStream = processedResult.stream;
       const mimeType = options.mimeType || 'audio/webm;codecs=opus';
       const recorderOptions = buildMediaRecorderOptions(mimeType);
@@ -596,26 +615,37 @@ export default function useVoiceState({
       return;
     }
 
-    const meetingId = 'mtg-' + generateId();
-    const newMeeting = {
-      id: meetingId,
-      title: channel?.name ? `Voice Recording - ${channel.name}` : 'Voice Recording',
-      departmentId: activeWorkspaceId,
-      uploadedBy: currentUser?.id,
-      transcriptText: '',
-      audioUrl: record.url || null,
-      summary: null,
-      status: 'PROCESSING',
-      suggestions: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    setWorkspaceMeetings((prev) => [newMeeting, ...prev]);
-    addActivity('voice_record_sent_to_ai', 'Voice record sent for AI processing', { meetingId });
-    showToast('success', 'Voice record sent to AI Meeting Flow.');
-    return newMeeting;
-  }, [voiceChannels, activeWorkspaceId, canManageAIReview, currentUser, canAccessVoice, setWorkspaceMeetings, addActivity, showToast]);
+    try {
+      setVoiceRecords((prev) =>
+        prev.map((item) => (item.id === recordId ? { ...item, aiStatus: 'PROCESSING' } : item))
+      );
+      const result = await serviceSendVoiceRecordToAI(recordId);
+      if (!result?.ok || !result.meeting) {
+        throw new Error(result?.error || 'AI processing request failed.');
+      }
+      const newMeeting = {
+        ...result.meeting,
+        suggestions: result.meeting.suggestedTasks || [],
+        audioUrl: record.url || record.objectUrl || null,
+      };
+      setWorkspaceMeetings((prev) => [newMeeting, ...prev.filter((meeting) => meeting.id !== newMeeting.id)]);
+      setVoiceRecords((prev) =>
+        prev.map((item) =>
+          item.id === recordId
+            ? { ...item, ...(result.recording || {}), aiStatus: 'COMPLETED', meetingId: newMeeting.id }
+            : item
+        )
+      );
+      addActivity('voice_record_sent_to_ai', 'Voice record analyzed by AI', { meetingId: newMeeting.id });
+      showToast('success', 'Voice recording transcribed and analyzed.');
+      return newMeeting;
+    } catch (err) {
+      setVoiceRecords((prev) =>
+        prev.map((item) => (item.id === recordId ? { ...item, aiStatus: 'FAILED' } : item))
+      );
+      showToast('error', err.message || 'AI processing failed.');
+    }
+  }, [voiceChannels, canManageAIReview, canAccessVoice, setWorkspaceMeetings, addActivity, showToast]);
 
   // ─── Voice cleanup on unmount ─────────────────────────
   useEffect(() => {

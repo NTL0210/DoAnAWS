@@ -20,7 +20,7 @@ export async function createMeeting(data) {
 
 export async function uploadMeetingFile(file, metadata) {
   if (isCloudMode()) {
-    return meetingsApi.create({ fileName: file?.name, fileType: file?.type, ...metadata });
+    throw new Error('Meeting file upload is not configured on the backend yet. Paste a transcript or enable storage presigned URLs first.');
   }
   return apiAdapter.uploadMeetingFile(file, metadata);
 }
@@ -28,7 +28,7 @@ export async function uploadMeetingFile(file, metadata) {
 export async function analyzeMeeting(meetingOrId, context) {
   if (isCloudMode()) {
     const meetingId = typeof meetingOrId === 'string' ? meetingOrId : meetingOrId?.id;
-    return meetingsApi.process(meetingId);
+    return meetingsApi.process(meetingId, { workspaceId: context?.workspaceId });
   }
   return apiAdapter.analyzeMeeting(meetingOrId, context);
 }

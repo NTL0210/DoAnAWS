@@ -195,11 +195,11 @@ export const usersApi = {
 
 export const meetingsApi = {
   list: (params) => request('/meetings', { params }),
-  get: (id) => request(`/meetings/${id}`),
+  get: (id, params) => request(`/meetings/${id}`, { params }),
   create: (data) => request('/meetings', { method: 'POST', body: data }),
   update: (id, data) => request(`/meetings/${id}`, { method: 'PATCH', body: data }),
   delete: (id) => request(`/meetings/${id}`, { method: 'DELETE' }),
-  process: (id) => request(`/meetings/${id}/process`, { method: 'POST' }),
+  process: (id, params) => request(`/meetings/${id}/process`, { method: 'POST', params }),
 };
 
 // ─── Tasks API ────────────────────────────────────

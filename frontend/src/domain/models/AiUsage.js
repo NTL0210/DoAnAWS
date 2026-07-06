@@ -7,8 +7,7 @@
  * - promptVersion changed   → AI prompts updated → invalid
  * - modelVersion changed    → AI model upgraded → invalid
  *
- * Used by aiMeetingService. In mock mode stored in-memory;
- * in API mode stored alongside meeting data.
+ * Used by aiMeetingService and stored alongside meeting data.
  */
 
 /**

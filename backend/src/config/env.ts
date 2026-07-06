@@ -5,10 +5,14 @@ const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),
-  DATA_PROVIDER: z.enum(["mock", "dynamodb"]).default("mock"),
+  DATA_PROVIDER: z.enum(["dynamodb"]).default("dynamodb"),
   AWS_REGION: z.string().min(1).default("ap-southeast-1"),
   DYNAMODB_ENDPOINT: z.string().url().optional(),
   DYNAMODB_TABLE_MAIN: z.string().min(1).default("ai-meeting-workforce-dev"),
+  VOICE_RECORDINGS_BUCKET: z.string().min(1).optional(),
+  AUDIO_BUCKET: z.string().min(1).optional(),
+  GEMINI_API_KEY: z.string().min(1).optional(),
+  GEMINI_MODEL: z.string().min(1).default("gemini-2.5-flash"),
   LOG_LEVEL: z.string().default("warn"),
   COST_PROFILE: z.enum(["low-cost", "balanced", "performance"]).default("low-cost"),
   MONTHLY_BUDGET_CREDITS: z.coerce.number().positive().default(50)

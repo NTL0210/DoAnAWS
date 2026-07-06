@@ -48,13 +48,7 @@ export default function WorkspaceAnalytics() {
     const activeTasks = (counts.TODO || 0) + (counts.IN_PROGRESS || 0) + (counts.REVIEW || 0);
     const completionRate = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-    const members = workspaceMembers?.length
-      ? workspaceMembers
-      : [
-          { userId: 'u1', name: 'Alex Johnson', role: 'Owner' },
-          { userId: 'u2', name: 'Sarah Chen', role: 'Manager' },
-          { userId: 'u3', name: 'John Doe', role: 'Employee' },
-        ];
+    const members = workspaceMembers || [];
 
     const workload = members.slice(0, 5).map((member) => {
       const assigned = tasks.filter((task) => task.assigneeId === member.userId);
