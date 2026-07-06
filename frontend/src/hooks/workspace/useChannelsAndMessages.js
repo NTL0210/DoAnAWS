@@ -28,6 +28,7 @@ import { workspacesApi } from '@/services/cloudClient';
  *   deleteChannel: (channelId: string) => void,
  *   sendMessage: (channelId: string, content: string, attachments?: Array) => void,
  *   sendTeamMessage: (teamId: string, content: string, attachments?: Array) => void,
+ *   sendTyping: (targetId: string, channelType?: string) => void,
  * }}
  */
 export default function useChannelsAndMessages({
@@ -41,6 +42,7 @@ export default function useChannelsAndMessages({
   addNotification,
 }) {
   const [messages, setMessages] = useState({});
+  const [typingUsers, setTypingUsers] = useState({});
 
   useEffect(() => {
     setMessages(activeWorkspace?.messages || {});
@@ -50,6 +52,30 @@ export default function useChannelsAndMessages({
     function handleRealtime(event) {
       const detail = event.detail || {};
       if (detail.workspaceId !== activeWorkspaceId) return;
+      if (detail.type === 'CHAT_TYPING') {
+        const payload = detail.payload || {};
+        if (!payload.targetId || payload.userId === currentUser?.id) return;
+        const key = `${payload.channelType || 'channel'}:${payload.targetId}`;
+        setTypingUsers((prev) => ({
+          ...prev,
+          [key]: {
+            userId: payload.userId,
+            name: payload.userName || payload.email || 'Someone',
+            avatar: payload.userAvatar || null,
+            lastTypedAt: Date.now(),
+          },
+        }));
+        setTimeout(() => {
+          setTypingUsers((prev) => {
+            const current = prev[key];
+            if (!current || Date.now() - current.lastTypedAt < 950) return prev;
+            const next = { ...prev };
+            delete next[key];
+            return next;
+          });
+        }, 1000);
+        return;
+      }
       if (detail.type !== 'CHAT_MESSAGE' && detail.type !== 'TEAM_MESSAGE') return;
       const payload = detail.payload || {};
       if (payload.messages) setMessages(payload.messages);
@@ -62,7 +88,7 @@ export default function useChannelsAndMessages({
 
     window.addEventListener('workspace:realtime', handleRealtime);
     return () => window.removeEventListener('workspace:realtime', handleRealtime);
-  }, [activeWorkspaceId, setWorkspaces]);
+  }, [activeWorkspaceId, currentUser?.id, setWorkspaces]);
 
   // ─── Derived ───────────────────────────────────────────
   const channelMessages = useMemo(() => {
@@ -137,6 +163,9 @@ export default function useChannelsAndMessages({
       channelId,
       workspaceId: activeWorkspaceId,
       userId: currentUser.id,
+      userName: currentUser.name || currentUser.email || 'User',
+      userEmail: currentUser.email || '',
+      userAvatar: currentUser.avatar || null,
       content: content.trim(),
       attachments: attachments || [],
       createdAt: new Date().toISOString(),
@@ -180,6 +209,9 @@ export default function useChannelsAndMessages({
       teamId,
       workspaceId: activeWorkspaceId,
       userId: currentUser.id,
+      userName: currentUser.name || currentUser.email || 'User',
+      userEmail: currentUser.email || '',
+      userAvatar: currentUser.avatar || null,
       content: content.trim(),
       attachments: attachments || [],
       createdAt: new Date().toISOString(),
@@ -218,9 +250,26 @@ export default function useChannelsAndMessages({
     });
   }, [currentUser, activeWorkspaceId, activeWorkspace, messages, setWorkspaces, addActivity, addNotification]);
 
+  const sendTyping = useCallback((targetId, channelType = 'channel') => {
+    if (!targetId || !currentUser?.id || !activeWorkspaceId) return;
+    getGlobalSocket()?.emit('workspace:event', {
+      workspaceId: activeWorkspaceId,
+      type: 'CHAT_TYPING',
+      payload: {
+        targetId,
+        channelType,
+        userId: currentUser.id,
+        userName: currentUser.name || currentUser.email || 'User',
+        userAvatar: currentUser.avatar || null,
+        email: currentUser.email || '',
+      },
+    });
+  }, [activeWorkspaceId, currentUser]);
+
   return {
     messages,
     setMessages,
+    typingUsers,
     channelMessages,
     activeTeamMessages,
     teamMessagesKey,
@@ -228,5 +277,6 @@ export default function useChannelsAndMessages({
     deleteChannel,
     sendMessage,
     sendTeamMessage,
+    sendTyping,
   };
 }

@@ -391,8 +391,10 @@ export function WorkspaceProvider({ children }) {
       channelMessages: channelsMessagesHook.channelMessages,
       teamMessagesKey: channelsMessagesHook.teamMessagesKey,
       activeTeamMessages: channelsMessagesHook.activeTeamMessages,
+      typingUsers: channelsMessagesHook.typingUsers,
       sendMessage: channelsMessagesHook.sendMessage,
       sendTeamMessage: channelsMessagesHook.sendTeamMessage,
+      sendTyping: channelsMessagesHook.sendTyping,
 
       // Tasks (shared between Kanban and AI)
       workspaceTasks: tasksHook.workspaceTasks,
