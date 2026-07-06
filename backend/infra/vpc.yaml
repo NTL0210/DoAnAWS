@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: VPC networking layer — 2 AZ, 2 NAT Gateway (HA), Gateway Endpoints S3/DynamoDB
+Description: VPC networking layer - 2 AZ, 1 NAT Gateway, Gateway Endpoints S3/DynamoDB
 
 Parameters:
   VpcCidr:
@@ -81,7 +81,7 @@ Resources:
         - Key: Name
           Value: subnet-private-b
 
-  # ─── 2 NAT Gateway (HA — mỗi AZ 1 cái) ───────────────
+  # Single NAT Gateway for cost-optimized outbound internet access.
   EipA:
     Type: AWS::EC2::EIP
     Properties:
@@ -89,14 +89,6 @@ Resources:
       Tags:
         - Key: Name
           Value: nat-eip-a
-
-  EipB:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: nat-eip-b
 
   NatA:
     Type: AWS::EC2::NatGateway
@@ -106,15 +98,6 @@ Resources:
       Tags:
         - Key: Name
           Value: nat-a
-
-  NatB:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt EipB.AllocationId
-      SubnetId: !Ref PublicB
-      Tags:
-        - Key: Name
-          Value: nat-b
 
   # ─── Route Table Public ───────────────────────────────
   RtPublic:
@@ -181,7 +164,7 @@ Resources:
     Properties:
       RouteTableId: !Ref RtPrivateB
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatB
+      NatGatewayId: !Ref NatA
 
   AssocPrvB:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -224,4 +207,4 @@ Outputs:
     Export:
       Name: app-PrivateSubnets
   NatGatewayIds:
-    Value: !Sub '${NatA},${NatB}'
+    Value: !Ref NatA
