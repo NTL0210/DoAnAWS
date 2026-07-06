@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { generateId } from '@/lib/workspaceData';
 import { normalizeVoiceChannel } from '@/lib/voicePermissions';
+import { getGlobalSocket } from '@/context/VoiceConnectionContext';
 import { workspacesApi } from '@/services/cloudClient';
 
 /**
@@ -40,6 +41,28 @@ export default function useChannelsAndMessages({
   addNotification,
 }) {
   const [messages, setMessages] = useState({});
+
+  useEffect(() => {
+    setMessages(activeWorkspace?.messages || {});
+  }, [activeWorkspace?.id, activeWorkspace?.messages]);
+
+  useEffect(() => {
+    function handleRealtime(event) {
+      const detail = event.detail || {};
+      if (detail.workspaceId !== activeWorkspaceId) return;
+      if (detail.type !== 'CHAT_MESSAGE' && detail.type !== 'TEAM_MESSAGE') return;
+      const payload = detail.payload || {};
+      if (payload.messages) setMessages(payload.messages);
+      if (payload.workspace?.id) {
+        setWorkspaces((prev) =>
+          prev.map((ws) => (ws.id === payload.workspace.id ? payload.workspace : ws))
+        );
+      }
+    }
+
+    window.addEventListener('workspace:realtime', handleRealtime);
+    return () => window.removeEventListener('workspace:realtime', handleRealtime);
+  }, [activeWorkspaceId, setWorkspaces]);
 
   // ─── Derived ───────────────────────────────────────────
   const channelMessages = useMemo(() => {
@@ -132,6 +155,11 @@ export default function useChannelsAndMessages({
           expectedVersion: activeWorkspace.version || 1,
         });
         setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+        getGlobalSocket()?.emit('workspace:event', {
+          workspaceId: activeWorkspaceId,
+          type: 'CHAT_MESSAGE',
+          payload: { message: newMsg, messages: saved.messages || nextMessages, workspace: saved },
+        });
       } catch {
         // Message remains visible locally until the next cloud refresh.
       }
@@ -172,6 +200,11 @@ export default function useChannelsAndMessages({
           expectedVersion: activeWorkspace.version || 1,
         });
         setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+        getGlobalSocket()?.emit('workspace:event', {
+          workspaceId: activeWorkspaceId,
+          type: 'TEAM_MESSAGE',
+          payload: { message: newMsg, messages: saved.messages || nextMessages, workspace: saved },
+        });
       } catch {
         // Message remains visible locally until the next cloud refresh.
       }
