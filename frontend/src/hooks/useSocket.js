@@ -26,8 +26,8 @@ function getDefaultSignalingUrl() {
     return 'http://localhost:3001';
   }
 
+  if (hostname.endsWith('.cloudfront.net')) return window.location.origin;
   if (isCloudModeNoSignalingUrl()) return '';
-  if (hostname.endsWith('.cloudfront.net')) return '';
 
   if (port) return `//${hostname}:3001`;
   return `//${hostname}:3001`;
