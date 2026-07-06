@@ -191,12 +191,12 @@ export default function AppShell({ user, children, eyebrow, title, description, 
   );
 
   return (
-    <div className="min-h-screen bg-background text-foreground dark:bg-slate-950 dark:text-slate-50">
+    <div className="app-tactical-shell min-h-screen bg-background text-foreground dark:bg-slate-950 dark:text-slate-50">
       {/* ========== DARK NARROW SIDEBAR ========== */}
-      <aside className="app-sidebar-rail fixed inset-y-0 left-0 z-30 hidden w-[76px] flex-col items-center border-r border-slate-950 bg-[#111214] py-4 text-slate-400 shadow-2xl lg:flex">
+      <aside className="app-sidebar-rail app-tactical-sidebar fixed inset-y-0 left-0 z-30 hidden w-[76px] flex-col items-center border-r border-slate-950 bg-[#111214] py-4 text-slate-400 shadow-2xl lg:flex">
         {/* Brand icon — static (icon web) */}
         <span
-          className="mb-6 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500 to-blue-500 font-bold shadow-lg shadow-blue-500/20"
+          className="app-brand-mark mb-6 flex h-10 w-10 items-center justify-center rounded-xl font-bold"
           title="AI Meeting Platform"
         >
           <span className="nav-icon-float text-sm">AI</span>
@@ -251,7 +251,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
               {shellUser?.avatar ? (
                 <img src={shellUser.avatar} alt={shellUser.name} className="h-full w-full object-cover" />
               ) : (
-                <div className="flex h-full w-full items-center justify-center bg-primary-600 text-xs font-bold">
+                <div className="flex h-full w-full items-center justify-center bg-orange-600 text-xs font-bold">
                   {initials}
                 </div>
               )}
@@ -280,7 +280,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
       {/* ========== MAIN AREA ========== */}
       <div className="lg:pl-[76px]">
         {/* ========== TOPBAR ========== */}
-        <header className="topbar-glass sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 dark:bg-slate-950/90 dark:border-slate-800/80">
+        <header className="topbar-glass app-tactical-topbar sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 dark:bg-slate-950/90 dark:border-slate-800/80">
           <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
             {/* Brand */}
             <Link
@@ -290,10 +290,10 @@ export default function AppShell({ user, children, eyebrow, title, description, 
               }}
               className="flex min-w-[240px] items-center gap-3"
             >
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-pink-500 to-blue-500 text-xs font-bold text-white">
+              <span className="app-brand-mark flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold text-white">
                 AI
               </span>
-              <span className="text-xl font-black text-blue-600">
+              <span className="app-brand-wordmark text-xl font-black text-orange-600">
                 AI Meeting
               </span>
               <span className="hidden rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-400 md:inline-flex">
@@ -306,10 +306,10 @@ export default function AppShell({ user, children, eyebrow, title, description, 
               <button
                 type="button"
                 onClick={() => setWorkspaceOpen((value) => !value)}
-                className="flex h-10 w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 text-left shadow-sm transition hover:border-blue-200 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-400"
+                className="app-workspace-switch flex h-10 w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 text-left shadow-sm transition hover:border-orange-200 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:hover:border-orange-400"
               >
                 <span className="flex min-w-0 items-center gap-2">
-                  <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-violet-500 text-[10px] font-black text-white">
+                  <span className="app-workspace-mark flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-[10px] font-black text-white">
                     {getInitials(activeWorkspace?.name || 'AI')}
                   </span>
                   <span className="min-w-0">
@@ -349,11 +349,11 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                               onClick={() => handleWorkspaceSelect(workspace.id)}
                               className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
                                 selected
-                                  ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:ring-blue-900'
+                                  ? 'bg-orange-50 text-orange-700 ring-1 ring-orange-100 dark:bg-orange-950/30 dark:text-orange-200 dark:ring-orange-900'
                                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100'
                               }`}
                             >
-                              <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-violet-500 text-xs font-black text-white">
+                              <span className="app-workspace-mark flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-xs font-black text-white">
                                 {getInitials(workspace.name)}
                               </span>
                               <span className="min-w-0 flex-1">
@@ -362,14 +362,13 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                                   {normalizeWorkspaceRole(member?.role) || 'Member'}
                                 </span>
                               </span>
-                              {selected && <span className="h-2 w-2 rounded-full bg-blue-600" />}
+                              {selected && <span className="h-2 w-2 rounded-full bg-orange-600" />}
                             </button>
                           );
                         })
                       ) : (
                         <div className="rounded-xl bg-slate-50 px-4 py-5 text-center dark:bg-slate-800">
                           <p className="text-sm font-bold text-slate-700 dark:text-slate-200">No workspace yet</p>
-                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Create or accept an invite to start.</p>
                           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Create or accept an invite to start.</p>
                         </div>
                       )}
@@ -381,7 +380,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                           setWorkspaceOpen(false);
                           setShowCreateWorkspace(true);
                         }}
-                        className="mb-2 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2.5 text-xs font-black text-white transition hover:bg-blue-700"
+                        className="mb-2 flex w-full items-center justify-center gap-2 rounded-xl bg-orange-600 px-3 py-2.5 text-xs font-black text-white transition hover:bg-orange-700"
                       >
                         <FiPlus className="h-3.5 w-3.5" /> Create Workspace
                       </button>
@@ -403,13 +402,13 @@ export default function AppShell({ user, children, eyebrow, title, description, 
             <div
               className={`search-glow hidden max-w-md flex-1 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all md:flex ${
                 searchFocused
-                  ? 'border-primary-300 bg-white dark:border-primary-700 dark:bg-slate-900'
+                  ? 'border-orange-300 bg-white dark:border-orange-700 dark:bg-slate-900'
                   : 'border-slate-200 bg-[#eef3f8] dark:border-slate-700 dark:bg-slate-800'
               }`}
             >
               <FiSearch
                 className={`h-4 w-4 transition-colors ${
-                  searchFocused ? 'text-primary-500' : 'text-slate-400'
+                  searchFocused ? 'text-orange-500' : 'text-slate-400'
                 }`}
               />
               <input
@@ -443,7 +442,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                   onClick={toggleNotif}
                   className={`relative flex h-10 w-10 items-center justify-center rounded-lg border text-slate-500 transition hover:bg-white hover:shadow-sm active:scale-95 dark:text-slate-400 dark:hover:bg-slate-800 ${
                     notifOpen
-                      ? 'border-primary-200 bg-primary-50 text-primary-600 dark:border-primary-900 dark:bg-primary-900/20 dark:text-primary-400'
+                      ? 'border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-900 dark:bg-orange-950/20 dark:text-orange-300'
                       : 'border-slate-200 bg-[#fbfcfe] dark:border-slate-700 dark:bg-slate-900'
                   }`}
                   title="Notifications"
@@ -474,7 +473,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                           <button
                             type="button"
                             onClick={markAllNotificationsRead}
-                            className="text-xs font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+                            className="text-xs font-semibold text-orange-600 hover:text-orange-700 dark:text-orange-300 dark:hover:text-orange-200"
                           >
                             Mark all read
                           </button>
@@ -510,13 +509,13 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                             type="button"
                             onClick={() => markNotificationRead(n.id)}
                             className={`flex w-full gap-3 px-4 py-3 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800 ${
-                              (n.unread || n.isRead === false) ? 'bg-primary-50/50 dark:bg-primary-900/20' : ''
+                              (n.unread || n.isRead === false) ? 'bg-orange-50/50 dark:bg-orange-950/20' : ''
                             }`}
                           >
                             <div
                               className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${
                                 (n.unread || n.isRead === false)
-                                  ? 'bg-primary-100 text-primary-600 dark:bg-primary-900/40 dark:text-primary-400'
+                                  ? 'bg-orange-100 text-orange-600 dark:bg-orange-950/40 dark:text-orange-300'
                                   : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
                               }`}
                             >
@@ -527,14 +526,14 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                               <p className="truncate text-xs text-slate-500 dark:text-slate-400">{n.message}</p>
                               <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">{n.time || formatNotificationTime(n.createdAt)}</p>
                             </div>
-                            {(n.unread || n.isRead === false) && <span className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-primary-500" />}
+                            {(n.unread || n.isRead === false) && <span className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-orange-500" />}
                           </button>
                         ))}
                       </div>
                       <div className="border-t border-slate-200 px-4 py-2.5 dark:border-slate-800">
                         <Link
                           href="/notifications"
-                          className="block text-center text-xs font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+                          className="block text-center text-xs font-semibold text-orange-600 hover:text-orange-700 dark:text-orange-300 dark:hover:text-orange-200"
                           onClick={() => setNotifOpen(false)}
                         >
                           View all notifications
@@ -551,7 +550,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                 {shellUser?.avatar ? (
                   <img src={shellUser.avatar} alt={shellUser.name} className="h-9 w-9 rounded-lg border border-slate-200 object-cover dark:border-slate-700" />
                 ) : (
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600 text-sm font-bold text-white">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-600 text-sm font-bold text-white">
                     {initials}
                   </div>
                 )}
@@ -577,7 +576,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
             >
               <div className="min-w-0">
                 {eyebrow && (
-                  <p className="text-xs font-bold uppercase tracking-wide text-primary-600 dark:text-primary-400">{eyebrow}</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-orange-600 dark:text-orange-300">{eyebrow}</p>
                 )}
                 {title && (
                   <h1 className="mt-1 text-2xl font-bold tracking-normal text-slate-900 sm:text-3xl dark:text-slate-100">
@@ -615,7 +614,8 @@ export default function AppShell({ user, children, eyebrow, title, description, 
    ============================================ */
 export function StatCard({ label, value, detail, icon: Icon, tone = 'blue' }) {
   const tones = {
-    blue: 'bg-blue-50 text-blue-700 ring-blue-100',
+    blue: 'bg-orange-50 text-orange-700 ring-orange-100',
+    orange: 'bg-orange-50 text-orange-700 ring-orange-100',
     green: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
     amber: 'bg-amber-50 text-amber-700 ring-amber-100',
     red: 'bg-red-50 text-red-700 ring-red-100',
@@ -674,7 +674,8 @@ export function Panel({ title, description, action, children, className = '' }) 
    ============================================ */
 export function StatusPill({ children, tone = 'slate' }) {
   const tones = {
-    blue: 'bg-blue-50 text-blue-700 ring-blue-100',
+    blue: 'bg-orange-50 text-orange-700 ring-orange-100',
+    orange: 'bg-orange-50 text-orange-700 ring-orange-100',
     green: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
     amber: 'bg-amber-50 text-amber-700 ring-amber-100',
     red: 'bg-red-50 text-red-700 ring-red-100',
@@ -695,7 +696,7 @@ export function LoadingState({ label = 'Loading...' }) {
   return (
     <div className="flex min-h-[400px] items-center justify-center">
       <div className="text-center">
-        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-primary-200 border-t-primary-600" />
+        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-orange-200 border-t-orange-600" />
         <p className="mt-4 text-sm font-semibold text-slate-500 dark:text-slate-400">{label}</p>
       </div>
     </div>

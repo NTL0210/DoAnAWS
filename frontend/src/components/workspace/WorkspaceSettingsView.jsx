@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { motion } from 'framer-motion';
-import { FiArchive, FiRotateCcw, FiSave, FiTrash2, FiEdit2 } from 'react-icons/fi';
+import { FiArchive, FiRotateCcw, FiSave, FiTrash2, FiEdit2, FiSettings, FiUsers, FiCalendar } from 'react-icons/fi';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import WorkspaceBillingPanel from '@/components/workspace/WorkspaceBillingPanel';
 import { workspacesApi } from '@/services/cloudClient';
@@ -132,11 +132,14 @@ export default function WorkspaceSettingsView() {
   // Non-manager members see only the billing panel (workspace-scoped plan upgrades)
   if (!canManage) {
     return (
-      <div className="h-full w-full overflow-y-auto p-6 workspace-settings-scroll">
-        <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-6 max-w-4xl mx-auto">
-          Workspace Settings
-        </h1>
-        <div className="max-w-4xl mx-auto">
+      <div className="workspace-settings-page h-full w-full overflow-y-auto p-6 workspace-settings-scroll">
+        <SettingsHero
+          activeWorkspace={activeWorkspace}
+          workspaceRole={workspaceRole}
+          memberCount={workspaceMembers.length}
+          trashCount={getTrashCount(trashItems)}
+        />
+        <div className="max-w-5xl mx-auto">
           <WorkspaceBillingPanel
             activeWorkspace={activeWorkspace}
             usage={billingUsage}
@@ -150,10 +153,15 @@ export default function WorkspaceSettingsView() {
 
   // Full settings for OWNER / VICE_ADMIN / MANAGER
   return (
-    <div className="h-full w-full overflow-y-auto p-6 workspace-settings-scroll">
-      <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-6 max-w-4xl mx-auto">Workspace Settings</h1>
+      <div className="workspace-settings-page h-full w-full overflow-y-auto p-6 workspace-settings-scroll">
+      <SettingsHero
+        activeWorkspace={activeWorkspace}
+        workspaceRole={workspaceRole}
+        memberCount={workspaceMembers.length}
+        trashCount={getTrashCount(trashItems)}
+      />
 
-      <div className="space-y-6 max-w-4xl mx-auto">
+      <div className="space-y-6 max-w-5xl mx-auto">
         {/* ─── General ─── */}
         <motion.section
           initial={{ opacity: 0, y: 10 }}
@@ -413,6 +421,78 @@ function TrashGroup({ title, type, items = [], members, onRestore, onPermanentDe
       )}
     </div>
   );
+}
+
+function SettingsHero({ activeWorkspace, workspaceRole, memberCount, trashCount }) {
+  const created = activeWorkspace?.createdAt
+    ? new Date(activeWorkspace.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : 'Not available';
+
+  return (
+    <section className="workspace-settings-hero relative overflow-hidden rounded-2xl p-6 text-white shadow-xl">
+      <div className="workspace-settings-hero-grid" />
+      <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex items-start gap-4">
+          <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-white/12 text-lg font-black text-white shadow-lg ring-1 ring-white/20">
+            {getSettingsInitials(activeWorkspace?.name)}
+          </div>
+          <div className="min-w-0">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-blue-100">
+              <FiSettings className="h-3.5 w-3.5" />
+              Workspace Settings
+            </div>
+            <h1 className="truncate text-2xl font-black md:text-3xl">{activeWorkspace?.name || 'Workspace'}</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+              Control workspace identity, billing, cleanup, and governance from one place.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 text-left">
+          <SettingsHeroChip icon={FiUsers} label="Members" value={memberCount} />
+          <SettingsHeroChip icon={FiSettings} label="Role" value={formatRole(workspaceRole)} />
+          <SettingsHeroChip icon={FiCalendar} label="Created" value={created} />
+        </div>
+      </div>
+      <div className="relative z-10 mt-5 flex flex-wrap gap-2">
+        <span className="rounded-full bg-emerald-400/12 px-3 py-1 text-[11px] font-black text-emerald-100 ring-1 ring-emerald-300/20">
+          {trashCount} archived items
+        </span>
+        <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-black text-blue-100 ring-1 ring-white/15">
+          Cloud synced
+        </span>
+      </div>
+    </section>
+  );
+}
+
+function SettingsHeroChip({ icon: Icon, label, value }) {
+  return (
+    <div className="min-w-[92px] rounded-xl border border-white/12 bg-white/10 px-3 py-2 shadow-sm backdrop-blur">
+      <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wide text-slate-300">
+        <Icon className="h-3 w-3" />
+        {label}
+      </div>
+      <div className="mt-1 truncate text-xs font-black text-white">{value}</div>
+    </div>
+  );
+}
+
+function getSettingsInitials(name) {
+  if (!name) return 'WS';
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
+}
+
+function formatRole(role) {
+  return String(role || 'Member')
+    .toLowerCase()
+    .replace(/(^|_)([a-z])/g, (_, prefix, letter) => `${prefix ? ' ' : ''}${letter.toUpperCase()}`);
 }
 
 function getTrashCount(trashItems) {
