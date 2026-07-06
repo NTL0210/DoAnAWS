@@ -1,5 +1,5 @@
 {
-    "ETag": "E1I7TFXKDRQDZL",
+    "ETag": "E1C8TH2NPKC3A1",
     "DistributionConfig": {
         "CallerReference": "c6b9b8cf-5d37-43bb-98f6-3b6065fd47e2",
         "Aliases": {
@@ -7,8 +7,35 @@
         },
         "DefaultRootObject": "index.html",
         "Origins": {
-            "Quantity": 1,
+            "Quantity": 2,
             "Items": [
+                {
+                    "Id": "app-alb-realtime-origin",
+                    "DomainName": "app-alb-667982074.ap-southeast-1.elb.amazonaws.com",
+                    "OriginPath": "",
+                    "CustomHeaders": {
+                        "Quantity": 0
+                    },
+                    "CustomOriginConfig": {
+                        "HTTPPort": 80,
+                        "HTTPSPort": 443,
+                        "OriginProtocolPolicy": "http-only",
+                        "OriginSslProtocols": {
+                            "Quantity": 1,
+                            "Items": [
+                                "TLSv1.2"
+                            ]
+                        },
+                        "OriginReadTimeout": 60,
+                        "OriginKeepaliveTimeout": 60
+                    },
+                    "ConnectionAttempts": 3,
+                    "ConnectionTimeout": 10,
+                    "OriginShield": {
+                        "Enabled": false
+                    },
+                    "OriginAccessControlId": ""
+                },
                 {
                     "Id": "aws-meting-frontend.s3.ap-southeast-1.amazonaws.com-mqt9w55tsry",
                     "DomainName": "aws-meting-frontend.s3.ap-southeast-1.amazonaws.com",
@@ -72,7 +99,55 @@
             }
         },
         "CacheBehaviors": {
-            "Quantity": 0
+            "Quantity": 1,
+            "Items": [
+                {
+                    "PathPattern": "/socket.io/*",
+                    "TargetOriginId": "app-alb-realtime-origin",
+                    "TrustedSigners": {
+                        "Enabled": false,
+                        "Quantity": 0
+                    },
+                    "TrustedKeyGroups": {
+                        "Enabled": false,
+                        "Quantity": 0
+                    },
+                    "ViewerProtocolPolicy": "redirect-to-https",
+                    "AllowedMethods": {
+                        "Quantity": 7,
+                        "Items": [
+                            "HEAD",
+                            "DELETE",
+                            "POST",
+                            "GET",
+                            "OPTIONS",
+                            "PUT",
+                            "PATCH"
+                        ],
+                        "CachedMethods": {
+                            "Quantity": 2,
+                            "Items": [
+                                "HEAD",
+                                "GET"
+                            ]
+                        }
+                    },
+                    "SmoothStreaming": false,
+                    "Compress": false,
+                    "LambdaFunctionAssociations": {
+                        "Quantity": 0
+                    },
+                    "FunctionAssociations": {
+                        "Quantity": 0
+                    },
+                    "FieldLevelEncryptionId": "",
+                    "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+                    "OriginRequestPolicyId": "b689b0a8-53d0-40ab-baf2-68738e2966ac",
+                    "GrpcConfig": {
+                        "Enabled": false
+                    }
+                }
+            ]
         },
         "CustomErrorResponses": {
             "Quantity": 2,

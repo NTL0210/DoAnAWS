@@ -8,24 +8,6 @@
                     "Quantity":  2,
                     "Items":  [
                                   {
-                                      "Id":  "aws-meting-frontend.s3.ap-southeast-1.amazonaws.com-mqt9w55tsry",
-                                      "DomainName":  "aws-meting-frontend.s3.ap-southeast-1.amazonaws.com",
-                                      "OriginPath":  "",
-                                      "CustomHeaders":  {
-                                                            "Quantity":  0
-                                                        },
-                                      "S3OriginConfig":  {
-                                                             "OriginAccessIdentity":  "",
-                                                             "OriginReadTimeout":  30
-                                                         },
-                                      "ConnectionAttempts":  3,
-                                      "ConnectionTimeout":  10,
-                                      "OriginShield":  {
-                                                           "Enabled":  false
-                                                       },
-                                      "OriginAccessControlId":  "E29GKWX17YBMVF"
-                                  },
-                                  {
                                       "Id":  "app-alb-realtime-origin",
                                       "DomainName":  "app-alb-667982074.ap-southeast-1.elb.amazonaws.com",
                                       "OriginPath":  "",
@@ -49,7 +31,26 @@
                                       "ConnectionTimeout":  10,
                                       "OriginShield":  {
                                                            "Enabled":  false
-                                                       }
+                                                       },
+                                      "OriginAccessControlId":  ""
+                                  },
+                                  {
+                                      "Id":  "aws-meting-frontend.s3.ap-southeast-1.amazonaws.com-mqt9w55tsry",
+                                      "DomainName":  "aws-meting-frontend.s3.ap-southeast-1.amazonaws.com",
+                                      "OriginPath":  "",
+                                      "CustomHeaders":  {
+                                                            "Quantity":  0
+                                                        },
+                                      "S3OriginConfig":  {
+                                                             "OriginAccessIdentity":  "",
+                                                             "OriginReadTimeout":  30
+                                                         },
+                                      "ConnectionAttempts":  3,
+                                      "ConnectionTimeout":  10,
+                                      "OriginShield":  {
+                                                           "Enabled":  false
+                                                       },
+                                      "OriginAccessControlId":  "E29GKWX17YBMVF"
                                   }
                               ]
                 },
@@ -99,7 +100,7 @@
                            "Quantity":  1,
                            "Items":  [
                                          {
-                                             "PathPattern":  "/socket.io/*",
+                                             "PathPattern":  "/socket.io*",
                                              "TargetOriginId":  "app-alb-realtime-origin",
                                              "TrustedSigners":  {
                                                                     "Enabled":  false,
