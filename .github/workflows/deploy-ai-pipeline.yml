@@ -120,6 +120,7 @@ jobs:
           SNS_NOTIFY_EMAIL: ${{ secrets.SNS_NOTIFY_EMAIL }}
           TABLE_NAME: ${{ secrets.TABLE_NAME }}
           S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          AUDIO_BUCKET_NAME: ${{ vars.AUDIO_BUCKET || secrets.AUDIO_BUCKET || 'ai-meeting-workforce-audio' }}
         run: |
           normalize_secret() {
             printf '%s' "$1" | tr -d '\r\n[:space:]'
@@ -159,11 +160,13 @@ jobs:
           TABLE_NAME=$(normalize_secret "$TABLE_NAME")
           SNS_NOTIFY_EMAIL=$(normalize_secret "$SNS_NOTIFY_EMAIL")
           S3_BUCKET=$(normalize_secret "$S3_BUCKET")
+          AUDIO_BUCKET_NAME=$(normalize_secret "$AUDIO_BUCKET_NAME")
 
           require_secret GEMINI_API_KEY "$GEMINI_API_KEY"
           require_secret TABLE_NAME "$TABLE_NAME"
           require_secret SNS_NOTIFY_EMAIL "$SNS_NOTIFY_EMAIL"
           require_secret S3_BUCKET "$S3_BUCKET"
+          require_secret AUDIO_BUCKET_NAME "$AUDIO_BUCKET_NAME"
 
           if ! printf '%s' "$TABLE_NAME" | grep -Eq '^[A-Za-z0-9_.-]{3,255}$'; then
             echo "::error::TABLE_NAME has an invalid DynamoDB table-name format after normalization"
@@ -185,6 +188,7 @@ jobs:
             "GeminiModel=gemini-2.5-flash"
             "NotifyEmail=$SNS_NOTIFY_EMAIL"
             "ExistingTableName=$TABLE_NAME"
+            "ExistingAudioBucketName=$AUDIO_BUCKET_NAME"
           )
 
           sam build --template template-ai-pipeline.yml
