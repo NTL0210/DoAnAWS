@@ -1,14 +1,14 @@
 .workspace-frame {
   background:
-    radial-gradient(circle at 14% 0%, rgba(59, 130, 246, 0.11), transparent 30%),
-    radial-gradient(circle at 88% 6%, rgba(20, 184, 166, 0.1), transparent 24%),
+    radial-gradient(circle at 14% 0%, rgba(255, 107, 53, 0.1), transparent 30%),
+    radial-gradient(circle at 88% 6%, rgba(15, 23, 42, 0.08), transparent 24%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 245, 249, 0.98));
 }
 
 .dark .workspace-frame {
   background:
-    radial-gradient(circle at 14% 0%, rgba(59, 130, 246, 0.15), transparent 30%),
-    radial-gradient(circle at 88% 6%, rgba(20, 184, 166, 0.11), transparent 24%),
+    radial-gradient(circle at 14% 0%, rgba(255, 107, 53, 0.14), transparent 30%),
+    radial-gradient(circle at 88% 6%, rgba(148, 163, 184, 0.06), transparent 24%),
     linear-gradient(180deg, rgba(16, 18, 24, 0.98), rgba(12, 14, 18, 0.99));
 }
 
@@ -19,7 +19,7 @@
 .workspace-sidebar-surface {
   border-color: var(--workspace-sidebar-border);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(241, 245, 249, 0.8));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 247, 237, 0.5), rgba(241, 245, 249, 0.8));
   box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.74);
   backdrop-filter: blur(18px);
 }
@@ -65,7 +65,7 @@
   inset: 6px auto 6px 6px;
   width: 3px;
   border-radius: 999px;
-  background: linear-gradient(180deg, #2563eb, #8b5cf6);
+  background: linear-gradient(180deg, #ff6b35, #e83b12);
   opacity: 0;
   transform: scaleY(0.42);
   transition: opacity var(--workspace-transition-fast), transform var(--workspace-transition-fast);
@@ -100,7 +100,7 @@
 .workspace-menu-item.is-active {
   color: var(--workspace-item-active-text);
   background: var(--workspace-item-active);
-  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  box-shadow: 0 12px 30px rgba(255, 107, 53, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .workspace-menu-item.is-locked {
@@ -121,11 +121,11 @@
 
 .dark .workspace-menu-item:hover .workspace-menu-icon,
 .dark .workspace-menu-item:focus-visible .workspace-menu-icon {
-  color: rgb(186 230 253);
+  color: rgb(253 186 116);
 }
 
 .workspace-menu-item.is-active .workspace-menu-icon {
-  color: #2563eb;
+  color: #e83b12;
 }
 
 .workspace-menu-badge {
@@ -144,13 +144,13 @@
 }
 
 .workspace-menu-item.is-active .workspace-menu-badge {
-  color: #1d4ed8;
-  background: rgba(191, 219, 254, 0.92);
+  color: #c2410c;
+  background: rgba(255, 237, 213, 0.92);
 }
 
 .dark .workspace-menu-item.is-active .workspace-menu-badge {
-  background: rgba(37, 99, 235, 0.35);
-  color: rgb(191 219 254);
+  background: rgba(154, 52, 18, 0.35);
+  color: rgb(254 215 170);
 }
 
 .workspace-icon-action {
@@ -161,7 +161,7 @@
 
 .workspace-icon-action:hover,
 .workspace-icon-action:focus-visible {
-  color: #2563eb;
+  color: #e83b12;
   background: rgba(255, 255, 255, 0.72);
   transform: translateY(-1px);
   outline: none;
@@ -189,18 +189,18 @@
 
 .workspace-add-team:hover,
 .workspace-add-team:focus-visible {
-  color: #2563eb;
-  border-color: rgba(37, 99, 235, 0.32);
-  background: rgba(239, 246, 255, 0.88);
-  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.1);
+  color: #e83b12;
+  border-color: rgba(255, 107, 53, 0.36);
+  background: rgba(255, 247, 237, 0.9);
+  box-shadow: 0 10px 24px rgba(255, 107, 53, 0.12);
   transform: translateY(-1px);
   outline: none;
 }
 
 .dark .workspace-add-team:hover,
 .dark .workspace-add-team:focus-visible {
-  background: rgba(37, 99, 235, 0.18);
-  border-color: rgba(96, 165, 250, 0.4);
+  background: rgba(154, 52, 18, 0.22);
+  border-color: rgba(255, 107, 53, 0.42);
 }
 
 .workspace-card-25d {
@@ -214,8 +214,8 @@
 }
 
 .workspace-card-25d:hover {
-  border-color: rgba(59, 130, 246, 0.28);
-  box-shadow: var(--workspace-card-shadow-hover), 0 0 0 1px rgba(59, 130, 246, 0.08);
+  border-color: rgba(255, 107, 53, 0.3);
+  box-shadow: var(--workspace-card-shadow-hover), 0 0 0 1px rgba(255, 107, 53, 0.09);
   transform: perspective(900px) rotateX(1.2deg) translateY(-3px);
 }
 
@@ -319,6 +319,99 @@
 .dark .workspace-role-pill.is-owner {
   background: rgba(245, 158, 11, 0.18);
   color: rgb(252 211 77);
+}
+
+.workspace-settings-page {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(255, 107, 53, 0.08), transparent 28%),
+    radial-gradient(circle at 82% 8%, rgba(15, 23, 42, 0.06), transparent 26%),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.7), rgba(241, 245, 249, 0.42));
+}
+
+.dark .workspace-settings-page {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(255, 107, 53, 0.08), transparent 28%),
+    radial-gradient(circle at 82% 8%, rgba(59, 130, 246, 0.11), transparent 26%),
+    linear-gradient(180deg, rgba(13, 16, 23, 0.96), rgba(9, 12, 18, 0.98));
+}
+
+.workspace-settings-hero {
+  max-width: 64rem;
+  margin-inline: auto;
+  margin-bottom: 1.5rem;
+  background:
+    radial-gradient(circle at 76% 24%, rgba(255, 107, 53, 0.28), transparent 30%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(17, 24, 39, 0.92) 54%, rgba(30, 64, 175, 0.62));
+  isolation: isolate;
+}
+
+.workspace-settings-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+  opacity: 0.46;
+  transform: translateX(-80%);
+  animation: dashboard-shimmer 4.8s ease-in-out infinite;
+}
+
+.workspace-settings-hero-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(90deg, black, transparent 88%);
+  opacity: 0.58;
+}
+
+.workspace-settings-page .max-w-5xl > section,
+.workspace-settings-page .max-w-5xl > div:not(.workspace-settings-hero) {
+  border-color: rgba(203, 213, 225, 0.7) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.78)) !important;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(18px);
+}
+
+.dark .workspace-settings-page .max-w-5xl > section,
+.dark .workspace-settings-page .max-w-5xl > div:not(.workspace-settings-hero) {
+  border-color: rgba(51, 65, 85, 0.72) !important;
+  background:
+    linear-gradient(135deg, rgba(20, 24, 33, 0.92), rgba(15, 18, 26, 0.78)) !important;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.workspace-settings-page label {
+  letter-spacing: 0.04em;
+}
+
+.workspace-settings-page input,
+.workspace-settings-page code,
+.workspace-settings-page section p.rounded-lg,
+.workspace-settings-page section div.rounded-lg {
+  transition: border-color var(--workspace-transition-fast), box-shadow var(--workspace-transition-fast), background var(--workspace-transition-fast), transform var(--workspace-transition-fast);
+}
+
+.workspace-settings-page input:focus {
+  border-color: rgba(255, 107, 53, 0.62) !important;
+  box-shadow: 0 0 0 4px rgba(255, 107, 53, 0.12) !important;
+}
+
+.workspace-settings-page section div.rounded-lg:hover,
+.workspace-settings-page section p.rounded-lg:hover {
+  border-color: rgba(59, 130, 246, 0.26);
+}
+
+.workspace-settings-page button {
+  transform: translateZ(0);
+}
+
+.workspace-settings-page button:hover {
+  transform: translateY(-1px);
 }
 
 /* Hide scrollbar inside workspace settings view */

@@ -20,6 +20,84 @@
   transform: scale(0.96);
 }
 
+/* --- Tactical app shell, aligned with the login experience --- */
+.app-tactical-shell {
+  min-height: 100vh;
+  isolation: isolate;
+  background:
+    linear-gradient(90deg, rgba(255, 107, 53, 0.035) 0 1px, transparent 1px),
+    linear-gradient(180deg, rgba(100, 116, 139, 0.045) 0 1px, transparent 1px),
+    linear-gradient(180deg, rgba(238, 243, 248, 0.98), rgba(226, 232, 240, 0.92));
+  background-size: 34px 34px, 34px 34px, auto;
+}
+
+.dark .app-tactical-shell {
+  background:
+    linear-gradient(90deg, rgba(255, 107, 53, 0.055) 0 1px, transparent 1px),
+    linear-gradient(180deg, rgba(148, 163, 184, 0.055) 0 1px, transparent 1px),
+    #070b11;
+}
+
+.app-tactical-sidebar {
+  border-right-color: rgba(255, 107, 53, 0.2) !important;
+  background:
+    linear-gradient(180deg, rgba(10, 15, 23, 0.98), rgba(8, 12, 18, 0.98)),
+    linear-gradient(90deg, rgba(255, 107, 53, 0.08) 0 1px, transparent 1px) !important;
+  box-shadow: 18px 0 46px rgba(2, 6, 23, 0.28), inset -1px 0 0 rgba(255, 107, 53, 0.08) !important;
+}
+
+.app-tactical-sidebar::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  background: repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0, rgba(255, 255, 255, 0.025) 1px, transparent 1px, transparent 5px);
+  opacity: 0.55;
+}
+
+.app-tactical-shell .sidebar-orb {
+  display: none;
+}
+
+.app-tactical-shell .app-brand-mark {
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  border: 1px solid rgba(255, 107, 53, 0.48);
+  background: linear-gradient(135deg, rgba(255, 107, 53, 0.95), #e83b12) !important;
+  color: #ffffff !important;
+  box-shadow: 0 16px 34px rgba(255, 107, 53, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.28) !important;
+}
+
+.app-tactical-shell .app-brand-wordmark {
+  color: #e83b12 !important;
+  letter-spacing: 0;
+}
+
+.dark .app-tactical-shell .app-brand-wordmark {
+  color: #ff8a57 !important;
+}
+
+.app-tactical-shell .app-workspace-switch {
+  border-color: rgba(255, 107, 53, 0.18) !important;
+  background: rgba(255, 255, 255, 0.86) !important;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+}
+
+.dark .app-tactical-shell .app-workspace-switch {
+  background: rgba(10, 15, 23, 0.86) !important;
+  border-color: rgba(255, 107, 53, 0.22) !important;
+}
+
+.app-tactical-shell .app-workspace-switch:hover,
+.app-tactical-shell .app-workspace-switch:focus-visible {
+  border-color: rgba(255, 107, 53, 0.5) !important;
+  box-shadow: 0 18px 42px rgba(255, 107, 53, 0.12);
+}
+
+.app-tactical-shell .app-workspace-mark {
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  background: linear-gradient(135deg, #ff6b35, #e83b12) !important;
+}
+
 /* --- 3D Nav Item --- */
 .nav-item-3d {
   position: relative;
@@ -189,6 +267,46 @@
   animation: active-dot-pulse 2s ease-in-out infinite;
 }
 
+.app-tactical-shell .nav-item-3d::before {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 107, 53, 0.22) 0%,
+    rgba(232, 59, 18, 0.14) 52%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+}
+
+.app-tactical-shell .nav-item-3d:hover {
+  box-shadow:
+    0 12px 30px rgba(255, 107, 53, 0.18),
+    0 4px 12px rgba(232, 59, 18, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.app-tactical-shell .nav-item-3d.is-active {
+  background: rgba(255, 107, 53, 0.16) !important;
+  color: #ffffff !important;
+  box-shadow:
+    0 14px 28px rgba(255, 107, 53, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.app-tactical-shell .nav-item-3d.is-active::after {
+  border-color: rgba(255, 107, 53, 0.48);
+}
+
+.app-tactical-shell .nav-item-3d:hover .nav-icon-float,
+.app-tactical-shell .nav-item-3d:hover .nav-icon-spin,
+.app-tactical-shell .nav-item-3d:hover .nav-icon-bob,
+.app-tactical-shell .nav-item-3d:hover .nav-icon-pulse {
+  filter: drop-shadow(0 0 8px rgba(255, 107, 53, 0.62));
+}
+
+.app-tactical-shell .nav-dot-active {
+  background: #ff6b35;
+  box-shadow: 0 0 14px rgba(255, 107, 53, 0.72);
+}
+
 /* --- Float animation for cards --- */
 .float-card {
   animation: float-card 5s ease-in-out infinite;
@@ -201,12 +319,41 @@
   -webkit-backdrop-filter: blur(20px) saturate(1.3);
 }
 
+.app-tactical-topbar {
+  position: sticky;
+  border-bottom-color: rgba(255, 107, 53, 0.16) !important;
+  background: rgba(248, 250, 252, 0.84) !important;
+  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.08);
+}
+
+.dark .app-tactical-topbar {
+  background: rgba(7, 11, 17, 0.84) !important;
+  border-bottom-color: rgba(255, 107, 53, 0.18) !important;
+}
+
+.app-tactical-topbar::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1px;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(255, 107, 53, 0.66), transparent);
+}
+
 /* --- Search bar glow on focus --- */
 .search-glow:focus-within {
   box-shadow:
     0 0 0 2px rgba(59, 130, 246, 0.15),
     0 0 24px rgba(59, 130, 246, 0.08);
   border-color: rgba(59, 130, 246, 0.3);
+}
+
+.app-tactical-shell .search-glow:focus-within {
+  box-shadow:
+    0 0 0 2px rgba(255, 107, 53, 0.16),
+    0 0 24px rgba(255, 107, 53, 0.1);
+  border-color: rgba(255, 107, 53, 0.48) !important;
 }
 
 /* --- Badge micro-bounce --- */
