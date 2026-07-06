@@ -61,8 +61,10 @@ export default function WorkspaceChannelView() {
     selectView,
     channelMessages,
     activeTeamMessages,
+    typingUsers,
     sendMessage,
     sendTeamMessage,
+    sendTyping,
     currentUser,
     can,
     canAccessTeam,
@@ -315,6 +317,16 @@ export default function WorkspaceChannelView() {
     setMessage('');
   };
 
+  const handleChannelMessageChange = useCallback((value) => {
+    setMessage(value);
+    if (currentChannel?.id && value.trim()) sendTyping(currentChannel.id, 'channel');
+  }, [currentChannel?.id, sendTyping]);
+
+  const handleTeamMessageChange = useCallback((value) => {
+    setMessage(value);
+    if (activeTeamId && value.trim()) sendTyping(activeTeamId, 'team');
+  }, [activeTeamId, sendTyping]);
+
   const handleAttachChannelFile = useCallback((channelId, file) => {
     if (!channelId || !file) return;
     sendMessage(channelId, `Attached ${file.name}`, [createMessageAttachment(file)]);
@@ -361,10 +373,11 @@ export default function WorkspaceChannelView() {
           channelType="team"
           messages={activeTeamMessages}
           message={message}
-          setMessage={setMessage}
+          setMessage={handleTeamMessageChange}
           handleSend={handleSendTeamMessage}
           currentUser={currentUser}
           workspaceMembers={workspaceMembers}
+          typingUser={typingUsers?.[`team:${activeTeamId}`] || null}
           placeholder={`Message team ${activeTeam.name}`}
           emptyTitle={`Start the conversation with ${activeTeam.name}`}
           emptySubtitle="Messages here stay inside this team."
@@ -384,10 +397,11 @@ export default function WorkspaceChannelView() {
           channel={currentChannel}
           messages={channelMessages}
           message={message}
-          setMessage={setMessage}
+          setMessage={handleChannelMessageChange}
           handleSend={handleSendMessage}
           currentUser={currentUser}
           workspaceMembers={workspaceMembers}
+          typingUser={typingUsers?.[`channel:${currentChannel.id}`] || null}
           onAttachFile={(file) => handleAttachChannelFile(currentChannel.id, file)}
           onOpenSettings={() => openWorkspaceView('settings')}
           onOpenNotifications={() => showToast('info', '🔔 Notification preferences can be configured in workspace settings.')}
@@ -754,6 +768,7 @@ function TextChannelContent({
   onOpenSettings,
   onOpenNotifications,
   onAttachFile,
+  typingUser,
 }) {
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -847,7 +862,13 @@ function TextChannelContent({
               </div>
             )}
             {visibleMessages.map((msg) => {
-              const user = memberMap[msg.userId] || {};
+              const member = memberMap[msg.userId] || {};
+              const user = {
+                ...member,
+                name: member.name || member.nickname || msg.userName || msg.userEmail || 'Unknown',
+                email: member.email || msg.userEmail || '',
+                avatar: member.avatar || msg.userAvatar || null,
+              };
               return (
                 <MessageItem key={msg.id} msg={msg} user={user} />
               );
@@ -859,6 +880,7 @@ function TextChannelContent({
       </div>
 
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+        <TypingIndicator user={typingUser} />
         <form onSubmit={handleSend} className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1.5 focus-within:border-blue-200 dark:focus-within:border-blue-800 focus-within:bg-white dark:focus-within:bg-slate-900 focus-within:ring-4 focus-within:ring-blue-50 dark:focus-within:ring-blue-900/20">
           <button
             type="button"
@@ -894,9 +916,7 @@ function TextChannelContent({
 const MessageItem = memo(function MessageItem({ msg, user }) {
   return (
     <article className="group flex gap-3 rounded-xl px-3 py-2 transition hover:bg-slate-50 dark:hover:bg-slate-800/60">
-      <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 text-[10px] font-black text-white">
-        {getInitials(user.name)}
-      </div>
+      <AvatarBubble user={user} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-2">
           <span className="text-sm font-black text-slate-900 dark:text-slate-100">{user.name || 'Unknown'}</span>
@@ -917,6 +937,43 @@ const MessageItem = memo(function MessageItem({ msg, user }) {
     </article>
   );
 });
+
+function TypingIndicator({ user }) {
+  const name = user?.name || 'Someone';
+  return (
+    <div className="h-5 px-2 pb-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500">
+      {user ? (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="font-black text-slate-500 dark:text-slate-300">{name}</span>
+          <span>is typing</span>
+          <span className="inline-flex items-center gap-0.5" aria-hidden="true">
+            <span className="h-1 w-1 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.2s]" />
+            <span className="h-1 w-1 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.1s]" />
+            <span className="h-1 w-1 animate-bounce rounded-full bg-slate-400" />
+          </span>
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function AvatarBubble({ user }) {
+  const name = user?.name || user?.email || 'Unknown';
+  if (user?.avatar) {
+    return (
+      <img
+        src={user.avatar}
+        alt=""
+        className="mt-0.5 h-8 w-8 flex-shrink-0 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-700"
+      />
+    );
+  }
+  return (
+    <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 text-[10px] font-black text-white">
+      {getInitials(name)}
+    </div>
+  );
+}
 
 function VoiceChannelContent({ channel, workspaceMembers, workspaceRole, can }) {
   const canRecord = can('meetings.record') || workspaceRole === 'OWNER' || workspaceRole === 'MANAGER';
@@ -976,6 +1033,153 @@ function VoiceChannelContent({ channel, workspaceMembers, workspaceRole, can }) 
 }
 
 function MemberPanel({ members, currentUser, roleLabels, onlineUsers = [], currentStatus }) {
+  const onlineById = useMemo(() => {
+    const map = new Map();
+    (onlineUsers || []).forEach((u) => map.set(u.userId, u));
+    if (currentStatus) map.set(currentStatus.userId, currentStatus);
+    return map;
+  }, [onlineUsers, currentStatus]);
+
+  const getRoleRank = useCallback((role) => {
+    switch (String(role || '').toUpperCase()) {
+      case 'OWNER': return 0;
+      case 'VICE_ADMIN': return 1;
+      case 'MANAGER': return 2;
+      case 'EMPLOYEE': return 3;
+      default: return 4;
+    }
+  }, []);
+
+  const getRoleGroupLabel = useCallback((role) => {
+    const normalized = String(role || '').toUpperCase();
+    if (normalized === 'OWNER') return 'Owner';
+    if (normalized === 'VICE_ADMIN') return 'Vice Admin';
+    if (normalized === 'MANAGER') return 'Managers';
+    return 'Members';
+  }, []);
+
+  const allMembers = useMemo(() => {
+    const byId = new Map();
+    members.forEach((member) => byId.set(member.userId, member));
+    if (currentUser?.id && !byId.has(currentUser.id)) {
+      byId.set(currentUser.id, { userId: currentUser.id, name: currentUser.name, avatar: currentUser.avatar, role: 'OWNER' });
+    }
+    onlineById.forEach((presence, userId) => {
+      if (!byId.has(userId)) byId.set(userId, { userId, name: presence.name, avatar: presence.avatar, role: presence.role });
+    });
+    return Array.from(byId.values());
+  }, [currentUser, members, onlineById]);
+
+  const memberProfiles = useMemo(() => allMembers
+    .map((member) => {
+      const presence = onlineById.get(member.userId) || {};
+      const role = member.role || presence.role || 'Member';
+      const status = presence.status === 'idle'
+        ? 'idle'
+        : presence.status === 'online'
+          ? 'online'
+          : 'offline';
+      return {
+        ...member,
+        name: member.nickname || member.name || presence.name || (member.userId === currentUser?.id ? currentUser.name : 'Unknown'),
+        avatar: member.avatar || presence.avatar || (member.userId === currentUser?.id ? currentUser?.avatar : null) || null,
+        role,
+        status,
+        roleRank: getRoleRank(role),
+      };
+    })
+    .sort((a, b) => {
+      if (a.roleRank !== b.roleRank) return a.roleRank - b.roleRank;
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    }), [allMembers, currentUser, getRoleRank, onlineById]);
+
+  const statusGroups = useMemo(() => ([
+    { key: 'online', label: 'Online', members: memberProfiles.filter((member) => member.status === 'online') },
+    { key: 'idle', label: 'Idle', members: memberProfiles.filter((member) => member.status === 'idle') },
+    { key: 'offline', label: 'Offline', members: memberProfiles.filter((member) => member.status === 'offline') },
+  ]), [memberProfiles]);
+
+  const onlineCount = statusGroups.find((group) => group.key === 'online')?.members.length || 0;
+
+  const groupByRole = useCallback((groupMembers) => {
+    const grouped = new Map();
+    groupMembers.forEach((member) => {
+      const label = getRoleGroupLabel(member.role);
+      if (!grouped.has(label)) grouped.set(label, []);
+      grouped.get(label).push(member);
+    });
+    return Array.from(grouped.entries()).map(([label, groupedMembers]) => ({ label, members: groupedMembers }));
+  }, [getRoleGroupLabel]);
+
+  const renderMember = (member, index) => {
+    const isOnline = member.status === 'online';
+    const isIdle = member.status === 'idle';
+    const isOwner = String(member.role || '').toUpperCase() === 'OWNER';
+    return (
+      <div key={member.userId || index} className={`workspace-member-row flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition ${isOwner ? 'is-owner' : ''}`}>
+        <span className={`workspace-member-avatar relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-black text-white ${isOnline ? 'is-online' : isIdle ? 'is-idle' : 'is-offline'}`}>
+          {member.avatar ? (
+            <img src={member.avatar} alt="" className="h-full w-full rounded-full object-cover" />
+          ) : (
+            getInitials(member.name)
+          )}
+          <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white dark:border-slate-900 ${
+            isOnline ? 'bg-emerald-500' : isIdle ? 'bg-amber-400' : 'bg-slate-400 dark:bg-slate-500'
+          }`} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5">
+            <span className={`block truncate text-xs font-black ${isOnline || isIdle ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500'}`}>{member.name}</span>
+            {isOwner && <FiStar className="h-3 w-3 flex-shrink-0 text-amber-400" />}
+            {isIdle && <span className="text-[9px] font-bold text-amber-500 dark:text-amber-400">Idle</span>}
+          </span>
+          <span className="mt-0.5 flex items-center gap-1.5">
+            <span className={`workspace-role-pill ${isOwner ? 'is-owner' : ''}`}>
+              {roleLabels[member.role] || member.role}
+            </span>
+          </span>
+        </span>
+      </div>
+    );
+  };
+
+  return (
+    <aside className="hidden w-[230px] flex-shrink-0 border-l border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 xl:flex xl:flex-col">
+      <div className="border-b border-slate-200 dark:border-slate-800 px-4 py-3.5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-black text-slate-900 dark:text-slate-100">Members</h3>
+          <span className="rounded-full bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 text-[10px] font-black text-emerald-600 dark:text-emerald-400">
+            {onlineCount} online
+          </span>
+        </div>
+      </div>
+      <div className="discord-scroll flex-1 overflow-y-auto p-3">
+        <div className="space-y-4">
+          {statusGroups.map((statusGroup) => (
+            statusGroup.members.length > 0 ? (
+              <section key={statusGroup.key} className="space-y-1">
+                <div className="flex items-center justify-between px-2 text-[10px] font-black uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                  <span>{statusGroup.label}</span>
+                  <span>{statusGroup.members.length}</span>
+                </div>
+                {groupByRole(statusGroup.members).map((roleGroup) => (
+                  <div key={`${statusGroup.key}-${roleGroup.label}`} className="space-y-0.5">
+                    <div className="px-2 pt-1 text-[9px] font-black uppercase tracking-wide text-slate-300 dark:text-slate-600">
+                      {roleGroup.label}
+                    </div>
+                    {roleGroup.members.map((member, index) => renderMember(member, index))}
+                  </div>
+                ))}
+              </section>
+            ) : null
+          ))}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function LegacyMemberPanel({ members, currentUser, roleLabels, onlineUsers = [], currentStatus }) {
   // onlineUsers from the EC2 signaling socket: { userId, name, status, lastSeen }
   const onlineById = useMemo(() => {
     const map = new Map();
@@ -1103,7 +1307,7 @@ function getInitials(name) {
 function formatTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 }
 
 function createMessageAttachment(file) {
