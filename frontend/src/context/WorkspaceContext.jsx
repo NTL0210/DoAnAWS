@@ -150,8 +150,10 @@ export function WorkspaceProvider({ children }) {
     setWorkspaces: workspaceHook.setWorkspaces,
   });
 
-  // ─── Sync activeWorkspaceIdRef (break circular dep) ────
-  activityHook.activeWorkspaceIdRef.current = workspaceHook.activeWorkspaceId;
+  // ─── Sync active workspace for notifications (break circular dep) ────
+  useEffect(() => {
+    activityHook.syncActiveWorkspaceId(workspaceHook.activeWorkspaceId);
+  }, [activityHook.syncActiveWorkspaceId, workspaceHook.activeWorkspaceId]);
 
   // ─── UI State ──────────────────────────────────────────
   const [workspaceStorageHydrated, setWorkspaceStorageHydrated] = useState(false);

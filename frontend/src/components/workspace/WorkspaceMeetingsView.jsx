@@ -107,10 +107,6 @@ export default function WorkspaceMeetingsView() {
 
   const handleAnalyze = async (payload) => {
     setError('');
-    if (payload.file) {
-      setError('Meeting file upload is not configured on the backend yet. Paste the transcript to analyze this meeting.');
-      return;
-    }
     const planGuard = validateMeetingProcessing({
       plan: billingPlan,
       usage: billingUsage,

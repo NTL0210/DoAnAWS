@@ -142,16 +142,24 @@ export default function useAuthState() {
     setCurrentUser(user);
   }, []);
 
-  const updateCurrentUser = useCallback((updates) => {
-    setCurrentUser((prev) => {
-      if (!prev) return prev;
-      const next = { ...prev, ...updates };
-      import('@/services/cloudClient').then((m) => {
-        m.usersApi.update(prev.id, updates).catch(() => {});
-      });
-      return next;
-    });
-  }, []);
+  const updateCurrentUser = useCallback(async (updates) => {
+    if (!currentUser) return null;
+    const previous = currentUser;
+    const optimistic = { ...previous, ...updates };
+    setCurrentUser(optimistic);
+
+    try {
+      if (!isCloudMode()) return optimistic;
+      const { usersApi } = await import('@/services/cloudClient');
+      const saved = await usersApi.update(previous.id, updates);
+      const hydrated = toHydratedUser(saved);
+      setCurrentUser(hydrated);
+      return hydrated;
+    } catch (error) {
+      setCurrentUser(previous);
+      throw error;
+    }
+  }, [currentUser]);
 
   const logout = useCallback(() => {
     if (isCloudMode()) {

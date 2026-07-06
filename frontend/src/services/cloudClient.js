@@ -199,6 +199,7 @@ export const meetingsApi = {
   create: (data) => request('/meetings', { method: 'POST', body: data }),
   update: (id, data) => request(`/meetings/${id}`, { method: 'PATCH', body: data }),
   delete: (id) => request(`/meetings/${id}`, { method: 'DELETE' }),
+  createUploadUrl: (id, data, params) => request(`/meetings/${id}/upload-url`, { method: 'POST', body: data, params }),
   process: (id, params) => request(`/meetings/${id}/process`, { method: 'POST', params }),
 };
 

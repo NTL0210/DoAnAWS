@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { NotFoundError } from "../../shared/errors/app-error.js";
+import { ForbiddenError, NotFoundError } from "../../shared/errors/app-error.js";
+import { hasSufficientRole } from "../auth/auth.types.js";
+import type { WorkspaceRole } from "../auth/auth.types.js";
+import type { WorkspaceRepository } from "../auth/workspace.repository.js";
 import type { MeetingService } from "../meetings/meeting.service.js";
 import type { Meeting } from "../meetings/meeting.types.js";
 import { analyzeVoiceRecording, createVoiceUploadUrl } from "./voice-recording.ai.js";
@@ -10,18 +13,22 @@ export class VoiceRecordingService {
   constructor(
     private readonly repository: VoiceRecordingRepository,
     private readonly meetingService: MeetingService,
+    private readonly workspaceRepository: WorkspaceRepository,
   ) {}
 
   async list(input: {
     workspaceId: string;
     channelId: string;
+    userId: string;
     limit: number;
     nextToken?: string | undefined;
   }) {
+    await this.assertWorkspaceMember(input.workspaceId, input.userId);
     return this.repository.listByChannel(input);
   }
 
   async create(input: CreateVoiceRecordingInput): Promise<VoiceRecording> {
+    await this.assertWorkspaceMember(input.workspaceId, input.createdBy);
     const now = new Date().toISOString();
     const id = randomUUID();
     const record: VoiceRecording = {
@@ -90,6 +97,7 @@ export class VoiceRecordingService {
 
   async sendToAi(input: { id: string; userId: string }): Promise<{ recording: VoiceRecording; meeting: Meeting }> {
     const record = await this.getOwned(input.id, input.userId);
+    await this.assertWorkspaceMember(record.workspaceId, input.userId, "MANAGER");
     if (!record.storageKey) throw new Error("Voice recording has not been uploaded");
 
     const processing: VoiceRecording = {
@@ -156,8 +164,22 @@ export class VoiceRecordingService {
   private async getOwned(id: string, userId: string): Promise<VoiceRecording> {
     const record = await this.repository.getById(id);
     if (!record || record.status === "DELETED") throw new NotFoundError("Voice recording not found");
+    await this.assertWorkspaceMember(record.workspaceId, userId);
     if (record.createdBy !== userId) throw new NotFoundError("Voice recording not found");
     return record;
+  }
+
+  private async assertWorkspaceMember(
+    workspaceId: string,
+    userId: string,
+    requiredRole: WorkspaceRole = "MEMBER",
+  ): Promise<WorkspaceRole> {
+    const role = await this.workspaceRepository.getMemberRole(workspaceId, userId);
+    if (!role) throw new ForbiddenError("You are not a member of this workspace");
+    if (!hasSufficientRole(role, requiredRole)) {
+      throw new ForbiddenError(`Insufficient permissions. Required: ${requiredRole}`);
+    }
+    return role;
   }
 }
 

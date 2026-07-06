@@ -9,6 +9,7 @@ export interface WorkspaceMember {
 
 export interface WorkspaceChannel {
   id: string;
+  workspaceId?: string;
   name: string;
   type: "text" | "voice";
   description?: string;

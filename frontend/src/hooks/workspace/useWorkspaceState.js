@@ -1,14 +1,10 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
-import {
-  generateId,
-  getWorkspaceRole,
-} from '@/lib/workspaceData';
+import { getWorkspaceRole } from '@/lib/workspaceData';
 import { normalizeVoiceChannel } from '@/lib/voicePermissions';
-import { canManageAIWorkflow, createCleanWorkspaceStructure } from '@/services/workspaceService';
+import { canManageAIWorkflow } from '@/services/workspaceService';
 import { isCloudMode } from '@/services/apiClient';
-import { createInitialActivity } from '@/lib/workspaceData';
 
 /**
  * useWorkspaceState — manages workspace state, derived values, and workspace/view actions.
@@ -52,8 +48,6 @@ import { createInitialActivity } from '@/lib/workspaceData';
 export default function useWorkspaceState({
   currentUser,
   showToast,
-  addActivity,
-  initOnboarding,
 }) {
   // ─── Workspace State ───────────────────────────────────
   const [workspaces, setWorkspaces] = useState([]);
@@ -122,55 +116,41 @@ export default function useWorkspaceState({
   }, [currentUser, workspaceRole]);
 
   // ─── Workspace Actions ─────────────────────────────────
-  const createWorkspace = useCallback(async (workspaceData, options = {}) => {
+  const createWorkspace = useCallback(async (workspaceData) => {
     if (!currentUser) return null;
 
-    if (isCloudMode()) {
-      try {
-        const { workspacesApi } = await import('@/services/cloudClient');
-        const name = typeof workspaceData === 'string' ? workspaceData : workspaceData?.name;
-        const saved = await workspacesApi.create({
-          name,
-          ownerId: currentUser.id,
-          description: workspaceData?.description,
-          workspaceType: workspaceData?.workspaceType,
-          visibility: workspaceData?.visibility,
-          iconColor: workspaceData?.iconColor,
-        });
-        if (saved?.id) {
-          // Re-hydrate channels/teams from local defaults since the API
-          // returns the bare workspace without default channels/teams
-          const full = createCleanWorkspaceStructure(workspaceData, currentUser.id, options);
-          const merged = { ...full, ...saved, channels: full.channels, teams: full.teams };
-          setWorkspaces((prev) => [...prev, merged]);
-          setActiveWorkspaceId(merged.id);
-          setActiveTeamId(null);
-          const firstText = merged.channels.find((c) => c.type === 'text');
-          setActiveChannelId(firstText?.id || null);
-          setActiveView('home');
-          showToast('success', 'Workspace "' + merged.name + '" created successfully!');
-          return merged;
-        }
-      } catch {
-        showToast('error', 'Failed to create workspace. Please try again.');
-        return null;
-      }
+    if (!isCloudMode()) {
+      showToast('error', 'Cloud API mode is required to create workspaces.');
+      return null;
     }
 
-    const newWorkspace = createCleanWorkspaceStructure(workspaceData, currentUser.id, options);
+    try {
+      const { workspacesApi } = await import('@/services/cloudClient');
+      const name = typeof workspaceData === 'string' ? workspaceData : workspaceData?.name;
+      const saved = await workspacesApi.create({
+        name,
+        ownerId: currentUser.id,
+        description: workspaceData?.description,
+        workspaceType: workspaceData?.workspaceType,
+        visibility: workspaceData?.visibility,
+        iconColor: workspaceData?.iconColor,
+      });
+      if (saved?.id) {
+        setWorkspaces((prev) => [...prev, saved]);
+        setActiveWorkspaceId(saved.id);
+        setActiveTeamId(null);
+        const firstText = (saved.channels || []).find((c) => c.type === 'text');
+        setActiveChannelId(firstText?.id || null);
+        setActiveView('home');
+        showToast('success', 'Workspace "' + saved.name + '" created successfully!');
+        return saved;
+      }
+    } catch {
+      showToast('error', 'Failed to create workspace. Please try again.');
+      return null;
+    }
 
-    setWorkspaces((prev) => [...prev, newWorkspace]);
-    setActiveWorkspaceId(newWorkspace.id);
-    setActiveTeamId(null);
-
-    // Auto-select first text channel
-    const firstText = newWorkspace.channels.find((c) => c.type === 'text');
-    setActiveChannelId(firstText?.id || null);
-    setActiveView('home');
-
-    showToast('success', 'Workspace "' + newWorkspace.name + '" created successfully!');
-
-    return newWorkspace;
+    return null;
   }, [currentUser, showToast]);
 
   const selectWorkspace = useCallback((workspaceId) => {

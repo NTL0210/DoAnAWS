@@ -98,10 +98,15 @@ export function VoiceConnectionProvider({ children, currentUser, workspaceId, wo
       if (eventWorkspaceId !== workspaceId) return;
       setOnlineUsers(nextOnlineUsers || []);
     };
+    const handleWorkspaceEvent = (event) => {
+      if (event?.workspaceId !== workspaceId) return;
+      window.dispatchEvent(new CustomEvent('workspace:realtime', { detail: event }));
+    };
     socket.socket.on('voice:presence:snapshot', handleSnapshot);
     socket.socket.on('voice:presence:update', handleUpdate);
     socket.socket.on('workspace:presence:snapshot', handleWorkspacePresence);
     socket.socket.on('workspace:presence:update', handleWorkspacePresence);
+    socket.socket.on('workspace:event', handleWorkspaceEvent);
     socket.socket.emit('workspace:join', { workspaceId, user: currentUser });
     const heartbeat = setInterval(() => {
       socket.socket?.emit('workspace:presence:heartbeat', {
@@ -114,6 +119,7 @@ export function VoiceConnectionProvider({ children, currentUser, workspaceId, wo
       socket.socket?.off('voice:presence:update', handleUpdate);
       socket.socket?.off('workspace:presence:snapshot', handleWorkspacePresence);
       socket.socket?.off('workspace:presence:update', handleWorkspacePresence);
+      socket.socket?.off('workspace:event', handleWorkspaceEvent);
       clearInterval(heartbeat);
     };
   }, [currentUser, socket.connected, socket.socket, workspaceId]);

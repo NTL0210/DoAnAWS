@@ -3,6 +3,7 @@
 import { useCallback } from 'react';
 import { generateId } from '@/lib/workspaceData';
 import { getWorkspacePlan, getWorkspaceUsageSnapshot, validateWorkspaceCapacity } from '@/services/billingService';
+import { workspacesApi } from '@/services/cloudClient';
 
 /**
  * useMembersAndTeams — manages member and team CRUD actions.
@@ -38,40 +39,47 @@ export default function useMembersAndTeams({
   completeOnboardingStep,
 }) {
   // ─── Member Actions ────────────────────────────────────
-  const updateMemberRole = useCallback((workspaceId, userId, newRole) => {
-    setWorkspaces((prev) =>
-      prev.map((ws) => {
-        if (ws.id !== workspaceId) return ws;
-        return {
-          ...ws,
-          members: (ws.members || []).map((m) =>
-            m.userId === userId ? { ...m, role: newRole } : m
-          ),
-        };
-      })
+  const updateMemberRole = useCallback(async (workspaceId, userId, newRole) => {
+    const workspace = workspaces.find((w) => w.id === workspaceId);
+    if (!workspace) return;
+    const members = (workspace.members || []).map((m) =>
+      m.userId === userId ? { ...m, role: newRole } : m
     );
-    addActivity('member_role_updated', 'Member role updated');
-  }, [setWorkspaces, addActivity]);
+    try {
+      const saved = await workspacesApi.update(workspaceId, {
+        members,
+        expectedVersion: workspace.version || 1,
+      });
+      setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      addActivity('member_role_updated', 'Member role updated');
+    } catch {
+      showToast('error', 'Failed to update member role.');
+    }
+  }, [workspaces, setWorkspaces, addActivity, showToast]);
 
-  const removeMember = useCallback((workspaceId, userId) => {
-    setWorkspaces((prev) =>
-      prev.map((ws) => {
-        if (ws.id !== workspaceId) return ws;
-        return {
-          ...ws,
-          members: (ws.members || []).filter((m) => m.userId !== userId),
-          teams: (ws.teams || []).map((team) => ({
-            ...team,
-            memberIds: (team.memberIds || []).filter((id) => id !== userId),
-          })),
-        };
-      })
-    );
-    addActivity('member_removed', 'Member removed from workspace');
-  }, [setWorkspaces, addActivity]);
+  const removeMember = useCallback(async (workspaceId, userId) => {
+    const workspace = workspaces.find((w) => w.id === workspaceId);
+    if (!workspace) return;
+    const members = (workspace.members || []).filter((m) => m.userId !== userId);
+    const teams = (workspace.teams || []).map((team) => ({
+      ...team,
+      memberIds: (team.memberIds || []).filter((id) => id !== userId),
+    }));
+    try {
+      const saved = await workspacesApi.update(workspaceId, {
+        members,
+        teams,
+        expectedVersion: workspace.version || 1,
+      });
+      setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      addActivity('member_removed', 'Member removed from workspace');
+    } catch {
+      showToast('error', 'Failed to remove member.');
+    }
+  }, [workspaces, setWorkspaces, addActivity, showToast]);
 
   // ─── Team CRUD Actions ─────────────────────────────────
-  const createTeam = useCallback((workspaceId, teamData) => {
+  const createTeam = useCallback(async (workspaceId, teamData) => {
     if (!currentUser) return null;
 
     const workspace = workspaces.find((w) => w.id === workspaceId);
@@ -106,97 +114,117 @@ export default function useMembersAndTeams({
       updatedAt: new Date().toISOString(),
     };
 
-    addActivity('team_created', 'Team "' + newTeam.name + '" created');
-    completeOnboardingStep('teamCreated');
-    showToast('success', 'Team "' + newTeam.name + '" created!');
+    try {
+      const saved = await workspacesApi.update(workspaceId, {
+        teams: [...(workspace.teams || []), newTeam],
+        expectedVersion: workspace.version || 1,
+      });
+      setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      addActivity('team_created', 'Team "' + newTeam.name + '" created');
+      completeOnboardingStep('teamCreated');
+      showToast('success', 'Team "' + newTeam.name + '" created!');
+      return newTeam;
+    } catch {
+      showToast('error', 'Failed to create team.');
+      return null;
+    }
+  }, [currentUser, workspaces, workspaceMeetings, setWorkspaces, addActivity, showToast, completeOnboardingStep]);
 
-    return newTeam;
-  }, [currentUser, workspaces, workspaceMeetings, addActivity, showToast, completeOnboardingStep]);
-
-  const updateTeam = useCallback((workspaceId, teamId, teamData) => {
-    setWorkspaces((prev) =>
-      prev.map((ws) => {
-        if (ws.id !== workspaceId) return ws;
-        return {
-          ...ws,
-          teams: (ws.teams || []).map((t) =>
-            t.id === teamId
-              ? { ...t, ...teamData, updatedAt: new Date().toISOString() }
-              : t
-          ),
-        };
-      })
+  const updateTeam = useCallback(async (workspaceId, teamId, teamData) => {
+    const workspace = workspaces.find((w) => w.id === workspaceId);
+    if (!workspace) return;
+    const teams = (workspace.teams || []).map((t) =>
+      t.id === teamId ? { ...t, ...teamData, updatedAt: new Date().toISOString() } : t
     );
-    addActivity('team_updated', 'Team updated');
-  }, [setWorkspaces, addActivity]);
+    try {
+      const saved = await workspacesApi.update(workspaceId, {
+        teams,
+        expectedVersion: workspace.version || 1,
+      });
+      setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      addActivity('team_updated', 'Team updated');
+    } catch {
+      showToast('error', 'Failed to update team.');
+    }
+  }, [workspaces, setWorkspaces, addActivity, showToast]);
 
-  const deleteTeam = useCallback((workspaceId, teamId) => {
-    setWorkspaces((prev) =>
-      prev.map((ws) => {
-        if (ws.id !== workspaceId) return ws;
-        return {
-          ...ws,
-          teams: (ws.teams || []).filter((t) => t.id !== teamId),
-        };
-      })
-    );
-    addActivity('team_deleted', 'Team deleted');
-  }, [setWorkspaces, addActivity]);
+  const deleteTeam = useCallback(async (workspaceId, teamId) => {
+    const workspace = workspaces.find((w) => w.id === workspaceId);
+    if (!workspace) return;
+    const teams = (workspace.teams || []).filter((t) => t.id !== teamId);
+    try {
+      const saved = await workspacesApi.update(workspaceId, {
+        teams,
+        expectedVersion: workspace.version || 1,
+      });
+      setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      addActivity('team_deleted', 'Team deleted');
+    } catch {
+      showToast('error', 'Failed to delete team.');
+    }
+  }, [workspaces, setWorkspaces, addActivity, showToast]);
 
-  const addMemberToTeam = useCallback((workspaceId, teamId, userId) => {
-    setWorkspaces((prev) =>
-      prev.map((ws) => {
-        if (ws.id !== workspaceId) return ws;
-        return {
-          ...ws,
-          teams: (ws.teams || []).map((t) => {
-            if (t.id !== teamId) return t;
-            const members = t.memberIds || [];
-            return members.includes(userId) ? t : { ...t, memberIds: [...members, userId] };
-          }),
-        };
-      })
-    );
-    addActivity('team_member_added', 'Member added to team');
-  }, [setWorkspaces, addActivity]);
+  const addMemberToTeam = useCallback(async (workspaceId, teamId, userId) => {
+    const workspace = workspaces.find((w) => w.id === workspaceId);
+    if (!workspace) return;
+    const teams = (workspace.teams || []).map((t) => {
+      if (t.id !== teamId) return t;
+      const members = t.memberIds || [];
+      return members.includes(userId) ? t : { ...t, memberIds: [...members, userId] };
+    });
+    try {
+      const saved = await workspacesApi.update(workspaceId, {
+        teams,
+        expectedVersion: workspace.version || 1,
+      });
+      setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      addActivity('team_member_added', 'Member added to team');
+    } catch {
+      showToast('error', 'Failed to add member to team.');
+    }
+  }, [workspaces, setWorkspaces, addActivity, showToast]);
 
-  const removeMemberFromTeam = useCallback((workspaceId, teamId, userId) => {
-    setWorkspaces((prev) =>
-      prev.map((ws) => {
-        if (ws.id !== workspaceId) return ws;
-        return {
-          ...ws,
-          teams: (ws.teams || []).map((t) =>
-            t.id === teamId
-              ? { ...t, memberIds: (t.memberIds || []).filter((id) => id !== userId) }
-              : t
-          ),
-        };
-      })
+  const removeMemberFromTeam = useCallback(async (workspaceId, teamId, userId) => {
+    const workspace = workspaces.find((w) => w.id === workspaceId);
+    if (!workspace) return;
+    const teams = (workspace.teams || []).map((t) =>
+      t.id === teamId ? { ...t, memberIds: (t.memberIds || []).filter((id) => id !== userId) } : t
     );
-    addActivity('team_member_removed', 'Member removed from team');
-  }, [setWorkspaces, addActivity]);
+    try {
+      const saved = await workspacesApi.update(workspaceId, {
+        teams,
+        expectedVersion: workspace.version || 1,
+      });
+      setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      addActivity('team_member_removed', 'Member removed from team');
+    } catch {
+      showToast('error', 'Failed to remove member from team.');
+    }
+  }, [workspaces, setWorkspaces, addActivity, showToast]);
 
-  const assignTeamManager = useCallback((workspaceId, teamId, managerId) => {
-    setWorkspaces((prev) =>
-      prev.map((ws) => {
-        if (ws.id !== workspaceId) return ws;
-        return {
-          ...ws,
-          teams: (ws.teams || []).map((t) => {
-            if (t.id !== teamId) return t;
-            const members = t.memberIds || [];
-            return {
-              ...t,
-              managerId,
-              memberIds: members.includes(managerId) ? members : [...members, managerId],
-            };
-          }),
-        };
-      })
-    );
-    addActivity('team_manager_assigned', 'Team manager assigned');
-  }, [setWorkspaces, addActivity]);
+  const assignTeamManager = useCallback(async (workspaceId, teamId, managerId) => {
+    const workspace = workspaces.find((w) => w.id === workspaceId);
+    if (!workspace) return;
+    const teams = (workspace.teams || []).map((t) => {
+      if (t.id !== teamId) return t;
+      const members = t.memberIds || [];
+      return {
+        ...t,
+        managerId,
+        memberIds: members.includes(managerId) ? members : [...members, managerId],
+      };
+    });
+    try {
+      const saved = await workspacesApi.update(workspaceId, {
+        teams,
+        expectedVersion: workspace.version || 1,
+      });
+      setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      addActivity('team_manager_assigned', 'Team manager assigned');
+    } catch {
+      showToast('error', 'Failed to assign team manager.');
+    }
+  }, [workspaces, setWorkspaces, addActivity, showToast]);
 
   return {
     updateMemberRole,

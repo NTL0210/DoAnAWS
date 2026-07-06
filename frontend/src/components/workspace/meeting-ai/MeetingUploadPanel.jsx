@@ -4,7 +4,7 @@ import {
   MAX_AI_AUDIO_SIZE_BYTES,
   WARNING_AI_AUDIO_SIZE_BYTES,
 } from '@/domain/constants/costConstants';
-import { computeFileHash, checkFileExists } from '@/services/storageService';
+import { computeFileHash } from '@/services/storageService';
 import { estimateAudioMinutesFromFile, formatPlanLimit } from '@/services/billingService';
 
 const MAX_FILE_SIZE = MAX_AI_AUDIO_SIZE_BYTES; // 400 MB
@@ -97,12 +97,6 @@ export default function MeetingUploadPanel({
     try {
       const hash = await computeFileHash(selected);
       setFileHash(hash);
-      if (hash) {
-        const exists = await checkFileExists(hash);
-        if (exists.exists) {
-          setDuplicateWarning('This file appears to have been uploaded before. Check the meeting history to avoid duplicates.');
-        }
-      }
     } catch {
       // Silently ignore hash failures
     }

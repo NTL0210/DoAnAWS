@@ -7,6 +7,8 @@ import type {
   Meeting,
   UpdateMeetingInput
 } from "./meeting.types.js";
+import { createMeetingUploadUrl, mimeTypeForStorageKey } from "./meeting.upload.js";
+import { analyzeStoredAudio } from "../voice-recordings/voice-recording.ai.js";
 
 export class MeetingService {
   constructor(private readonly repository: MeetingRepository) {}
@@ -65,6 +67,7 @@ export class MeetingService {
       status: input.patch.status ?? current.status,
       transcriptText: input.patch.transcriptText ?? current.transcriptText,
       summary: input.patch.summary ?? current.summary,
+      storageRef: input.patch.storageRef ?? current.storageRef,
       keyDecisions: input.patch.keyDecisions ?? current.keyDecisions,
       risks: input.patch.risks ?? current.risks,
       actionItems: input.patch.actionItems ?? current.actionItems,
@@ -76,13 +79,50 @@ export class MeetingService {
     return updated;
   }
 
+  async createUpload(input: {
+    workspaceId: string;
+    meetingId: string;
+    fileName: string;
+    contentType?: string | undefined;
+  }): Promise<{
+    uploadUrl: string;
+    storageKey: string;
+    bucket: string;
+    meeting: Meeting;
+  }> {
+    const current = await this.get({
+      workspaceId: input.workspaceId,
+      meetingId: input.meetingId,
+    });
+    const upload = await createMeetingUploadUrl({
+      workspaceId: input.workspaceId,
+      meetingId: input.meetingId,
+      fileName: input.fileName,
+      contentType: input.contentType || "application/octet-stream",
+    });
+    const updated = await this.update({
+      workspaceId: input.workspaceId,
+      meetingId: input.meetingId,
+      patch: {
+        storageRef: upload.storageKey,
+        expectedVersion: current.version,
+      },
+    });
+    return { ...upload, meeting: updated };
+  }
+
   async process(input: { workspaceId: string; meetingId: string }): Promise<Meeting> {
     const current = await this.get(input);
-    const analysis = extractMeetingWork(current.transcriptText);
+    const analysis = current.transcriptText.trim()
+      ? extractMeetingWork(current.transcriptText)
+      : await analyzeStoredMeeting(current);
     const updated: Meeting = {
       ...current,
       status: "AI_REVIEW_READY",
+      transcriptText: analysis.transcriptText ?? current.transcriptText,
       summary: analysis.summary,
+      keyDecisions: analysis.keyDecisions ?? current.keyDecisions,
+      risks: analysis.risks ?? current.risks,
       actionItems: analysis.actionItems,
       suggestedTasks: analysis.suggestedTasks,
       version: current.version + 1,
@@ -93,9 +133,51 @@ export class MeetingService {
   }
 }
 
+async function analyzeStoredMeeting(meeting: Meeting): Promise<{
+  summary: string;
+  actionItems: string[];
+  keyDecisions: string[];
+  risks: string[];
+  suggestedTasks: Meeting["suggestedTasks"];
+  transcriptText: string;
+}> {
+  if (!meeting.storageRef) {
+    return {
+      ...extractMeetingWork(""),
+      keyDecisions: [],
+      risks: [],
+      transcriptText: "",
+    };
+  }
+  const analysis = await analyzeStoredAudio({
+    storageKey: meeting.storageRef,
+    mimeType: mimeTypeForStorageKey(meeting.storageRef),
+  });
+  return {
+    transcriptText: analysis.transcript,
+    summary: analysis.summary,
+    actionItems: analysis.actionItems,
+    keyDecisions: analysis.keyDecisions,
+    risks: analysis.risks,
+    suggestedTasks: analysis.tasks.slice(0, 10).map((task, index) => ({
+      id: `meeting-suggestion-${index + 1}`,
+      title: task.title || `Task ${index + 1}`,
+      description: task.description || task.title || "",
+      assigneeId: null,
+      priority: normalizePriority(task.priority),
+      deadline: task.deadline || null,
+      confidence: 0.72,
+      ...(task.description || task.title ? { sourceQuote: task.description || task.title } : {}),
+    })),
+  };
+}
+
 function extractMeetingWork(transcriptText: string): {
   summary: string;
   actionItems: string[];
+  keyDecisions: string[];
+  risks: string[];
+  transcriptText: string;
   suggestedTasks: Meeting["suggestedTasks"];
 } {
   const sentences = transcriptText
@@ -123,7 +205,7 @@ function extractMeetingWork(transcriptText: string): {
     sourceQuote: sentence
   }));
 
-  return { summary, actionItems, suggestedTasks };
+  return { summary, actionItems, keyDecisions: [], risks: [], transcriptText, suggestedTasks };
 }
 
 function toTaskTitle(sentence: string): string {
@@ -136,5 +218,12 @@ function toTaskTitle(sentence: string): string {
 function inferPriority(sentence: string): "LOW" | "MEDIUM" | "HIGH" {
   if (/\b(urgent|critical|blocked|must|asap)\b/i.test(sentence)) return "HIGH";
   if (/\b(nice to have|later|optional)\b/i.test(sentence)) return "LOW";
+  return "MEDIUM";
+}
+
+function normalizePriority(value?: string): "LOW" | "MEDIUM" | "HIGH" {
+  const priority = String(value || "").toUpperCase();
+  if (priority === "HIGH") return "HIGH";
+  if (priority === "LOW") return "LOW";
   return "MEDIUM";
 }

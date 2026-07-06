@@ -125,7 +125,7 @@ export default function useWorkspaceTasksState({
     const meeting = workspaceMeetings.find((m) => m.id === meetingId);
     if (!meeting) return;
     try {
-      const result = await serviceUploadMeetingFile(file, {
+      const result = await serviceUploadMeetingFile(meetingId, file, {
         meetingId,
         workspaceId: meeting.workspaceId || activeWorkspaceId,
       });

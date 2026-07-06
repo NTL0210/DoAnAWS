@@ -25,6 +25,7 @@ import { generateId } from '@/lib/workspaceData';
  *   setWorkspaceNotificationSettings: Function,
  *   setWorkspaceNotificationsEnabled: (workspaceId: string, enabled: boolean) => void,
  *   toggleWorkspaceNotifications: (workspaceId?: string) => void,
+ *   syncActiveWorkspaceId: (workspaceId: string|null) => void,
  *   activeWorkspaceIdRef: React.MutableRefObject,
  * }}
  */
@@ -32,6 +33,7 @@ export default function useActivityFeed({ currentUser }) {
   const [activityFeed, setActivityFeed] = useState([]);
   const [aiNotifications, setAiNotifications] = useState([]);
   const [workspaceNotificationSettings, setWorkspaceNotificationSettings] = useState({});
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState(null);
   const activeWorkspaceIdRef = useRef(null);
 
   // ─── Load notification settings from localStorage ──────
@@ -97,7 +99,13 @@ export default function useActivityFeed({ currentUser }) {
     setAiNotifications((prev) => prev.map((item) => ({ ...item, isRead: true, unread: false })));
   }, []);
 
-  const workspaceNotificationsEnabled = workspaceNotificationSettings[activeWorkspaceIdRef.current] !== false;
+  const workspaceNotificationsEnabled = !activeWorkspaceId || workspaceNotificationSettings[activeWorkspaceId] !== false;
+
+  const syncActiveWorkspaceId = useCallback((workspaceId) => {
+    const nextWorkspaceId = workspaceId || null;
+    activeWorkspaceIdRef.current = nextWorkspaceId;
+    setActiveWorkspaceId(nextWorkspaceId);
+  }, []);
 
   const setWorkspaceNotificationsEnabled = useCallback((workspaceId, enabled) => {
     if (!workspaceId) return;
@@ -130,6 +138,7 @@ export default function useActivityFeed({ currentUser }) {
     setWorkspaceNotificationSettings,
     setWorkspaceNotificationsEnabled,
     toggleWorkspaceNotifications,
+    syncActiveWorkspaceId,
     activeWorkspaceIdRef,
   };
 }

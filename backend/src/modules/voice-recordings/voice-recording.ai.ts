@@ -59,17 +59,35 @@ export async function analyzeVoiceRecording(recording: VoiceRecording): Promise<
   }>;
 }> {
   if (!recording.storageKey) throw new Error("Voice recording storageKey is missing");
+  return analyzeStoredAudio({ storageKey: recording.storageKey, mimeType: recording.mimeType });
+}
+
+export async function analyzeStoredAudio(input: { storageKey: string; mimeType: string }): Promise<{
+  transcript: string;
+  summary: string;
+  keyDecisions: string[];
+  actionItems: string[];
+  risks: string[];
+  tasks: Array<{
+    title?: string;
+    description?: string;
+    assignee?: string;
+    priority?: string;
+    deadline?: string;
+  }>;
+}> {
+  if (!input.storageKey) throw new Error("Audio storageKey is missing");
   if (!env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is required");
 
   const bucket = getVoiceRecordingBucket();
-  const response = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: recording.storageKey }));
+  const response = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: input.storageKey }));
   const body = response.Body;
-  if (!body) throw new Error("Voice recording file is empty");
+  if (!body) throw new Error("Audio file is empty");
   const buffer = Buffer.from(await body.transformToByteArray());
-  if (buffer.length === 0) throw new Error("Voice recording file is empty");
+  if (buffer.length === 0) throw new Error("Audio file is empty");
 
-  const fileUri = await uploadToGemini(buffer, recording.mimeType);
-  const raw = await callGeminiWithFile(fileUri, recording.mimeType, audioPrompt());
+  const fileUri = await uploadToGemini(buffer, input.mimeType);
+  const raw = await callGeminiWithFile(fileUri, input.mimeType, audioPrompt());
   return normalizeGeminiJson(raw);
 }
 

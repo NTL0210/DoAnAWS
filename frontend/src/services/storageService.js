@@ -1,4 +1,3 @@
-import { runtimeConfig } from '@/config/runtimeConfig';
 import {
   ALLOWED_AUDIO_MIME_TYPES,
   ALLOWED_AUDIO_EXTENSIONS,
@@ -6,17 +5,7 @@ import {
 } from '@/domain/constants/costConstants';
 
 export async function requestPresignedUploadUrl(metadata) {
-  const fileName = sanitizeFileName(metadata?.fileName || 'meeting-file');
-  const fileType = metadata?.fileType || 'application/octet-stream';
-  const fileSize = metadata?.fileSize || 0;
-
-  const response = await fetch(`${runtimeConfig.apiBaseUrl}/storage/presign-upload`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fileName, fileType, fileSize }),
-  });
-  if (!response.ok) throw new Error('Unable to request upload URL');
-  return response.json();
+  throw new Error(`Use the AWS meeting or voice upload service for ${metadata?.fileName || 'files'}.`);
 }
 
 export async function uploadFileToStorage(file, uploadUrl) {
@@ -31,30 +20,17 @@ export async function uploadFileToStorage(file, uploadUrl) {
 
 export async function requestSignedDownloadUrl(storageKey) {
   if (!storageKey) return null;
-  const response = await fetch(
-    `${runtimeConfig.apiBaseUrl}/storage/presign-download?key=${encodeURIComponent(storageKey)}`
-  );
-  if (!response.ok) return null;
-  const data = await response.json();
-  return data.downloadUrl || null;
+  return null;
 }
 
 export async function deleteStoredFile(storageKey) {
   if (!storageKey) return { ok: false };
-  const response = await fetch(
-    `${runtimeConfig.apiBaseUrl}/storage/file?key=${encodeURIComponent(storageKey)}`,
-    { method: 'DELETE' }
-  );
-  return { ok: response.ok };
+  return { ok: false };
 }
 
 export async function getFileMetadata(storageKey) {
   if (!storageKey) return null;
-  const response = await fetch(
-    `${runtimeConfig.apiBaseUrl}/storage/file?key=${encodeURIComponent(storageKey)}`
-  );
-  if (!response.ok) return null;
-  return response.json();
+  return null;
 }
 
 export function validateFileBeforeUpload(file) {
@@ -86,11 +62,7 @@ export function validateFileBeforeUpload(file) {
 
 export async function checkFileExists(fileHash) {
   if (!fileHash) return { exists: false };
-  const response = await fetch(
-    `${runtimeConfig.apiBaseUrl}/storage/check?hash=${encodeURIComponent(fileHash)}`
-  );
-  if (!response.ok) return { exists: false };
-  return response.json();
+  return { exists: false };
 }
 
 export function registerFileHash(fileHash, storageKey) {
@@ -123,13 +95,9 @@ export async function computeFileHash(file) {
   return Math.abs(hash).toString(16).padStart(8, '0');
 }
 
-function sanitizeFileName(name = 'meeting-file') {
-  return name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
-}
-
 export const requestUploadUrl = requestPresignedUploadUrl;
 
 export function getFileUrl(fileKey) {
   if (!fileKey) return null;
-  return `${runtimeConfig.apiBaseUrl}/storage/file?key=${encodeURIComponent(fileKey)}`;
+  return null;
 }

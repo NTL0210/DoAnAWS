@@ -37,7 +37,11 @@ export function buildApiRouter(repositories: Repositories): Router {
   const meetingController = new MeetingController(meetingService, userService, workspaceService);
   api.use("/meetings", buildMeetingRouter(meetingController, guard));
 
-  const voiceRecordingService = new VoiceRecordingService(repositories.voiceRecordings, meetingService);
+  const voiceRecordingService = new VoiceRecordingService(
+    repositories.voiceRecordings,
+    meetingService,
+    repositories.workspaces,
+  );
   const voiceRecordingController = new VoiceRecordingController(voiceRecordingService);
   api.use("/voice-recordings", buildVoiceRecordingRouter(voiceRecordingController, guard));
 

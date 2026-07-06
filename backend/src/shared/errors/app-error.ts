@@ -2,6 +2,7 @@ export type ErrorCode =
   | "BAD_REQUEST"
   | "VALIDATION_ERROR"
   | "NOT_FOUND"
+  | "FORBIDDEN"
   | "CONFLICT"
   | "INTERNAL_ERROR"
   | "DEPENDENCY_NOT_READY";
@@ -34,5 +35,11 @@ export class NotFoundError extends AppError {
 export class ConflictError extends AppError {
   constructor(message: string) {
     super({ code: "CONFLICT", message, statusCode: 409 });
+  }
+}
+
+export class ForbiddenError extends AppError {
+  constructor(message: string) {
+    super({ code: "FORBIDDEN", message, statusCode: 403 });
   }
 }

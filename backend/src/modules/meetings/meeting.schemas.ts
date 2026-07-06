@@ -21,7 +21,18 @@ export const updateMeetingSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   status: meetingStatusSchema.optional(),
   summary: z.string().max(20_000).optional(),
+  storageRef: z.string().max(500).optional(),
+  transcriptText: z.string().max(200_000).optional(),
+  keyDecisions: z.array(z.string().max(1_000)).optional(),
+  risks: z.array(z.string().max(1_000)).optional(),
+  actionItems: z.array(z.string().max(1_000)).optional(),
   expectedVersion: z.coerce.number().int().positive()
+});
+
+export const createMeetingUploadUrlSchema = z.object({
+  fileName: z.string().min(1).max(255),
+  contentType: z.string().min(1).max(255).optional(),
+  fileSize: z.coerce.number().int().nonnegative().optional(),
 });
 
 export const listMeetingsSchema = z.object({

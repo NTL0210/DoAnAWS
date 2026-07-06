@@ -9,43 +9,55 @@
  * the meeting processing job lifecycle for async AI analysis.
  */
 
-import { isApiMode, isCloudMode } from '@/config/runtimeConfig';
+import { isCloudMode } from '@/config/runtimeConfig';
 import { meetingsApi } from '@/services/cloudClient';
-import * as apiAdapter from '@/services/adapters/apiMeetingAdapter';
 
 export async function createMeeting(data) {
-  if (isCloudMode()) return meetingsApi.create(data);
-  return apiAdapter.createMeeting(data);
+  if (!isCloudMode()) throw new Error('Cloud API mode is required.');
+  return meetingsApi.create(data);
 }
 
-export async function uploadMeetingFile(file, metadata) {
+export async function uploadMeetingFile(meetingId, file, metadata = {}) {
   if (isCloudMode()) {
-    throw new Error('Meeting file upload is not configured on the backend yet. Paste a transcript or enable storage presigned URLs first.');
+    const { uploadUrl, storageKey, meeting } = await meetingsApi.createUploadUrl(
+      meetingId,
+      {
+        fileName: file?.name || 'meeting-file',
+        contentType: file?.type || 'application/octet-stream',
+        fileSize: file?.size || 0,
+      },
+      { workspaceId: metadata.workspaceId }
+    );
+    const upload = await fetch(uploadUrl, {
+      method: 'PUT',
+      body: file,
+      headers: file?.type ? { 'Content-Type': file.type } : undefined,
+    });
+    if (!upload.ok) throw new Error('Meeting file upload failed.');
+    return meeting || { storageRef: storageKey };
   }
-  return apiAdapter.uploadMeetingFile(file, metadata);
+  throw new Error('Cloud API mode is required.');
 }
 
 export async function analyzeMeeting(meetingOrId, context) {
-  if (isCloudMode()) {
-    const meetingId = typeof meetingOrId === 'string' ? meetingOrId : meetingOrId?.id;
-    return meetingsApi.process(meetingId, { workspaceId: context?.workspaceId });
-  }
-  return apiAdapter.analyzeMeeting(meetingOrId, context);
+  if (!isCloudMode()) throw new Error('Cloud API mode is required.');
+  const meetingId = typeof meetingOrId === 'string' ? meetingOrId : meetingOrId?.id;
+  return meetingsApi.process(meetingId, { workspaceId: context?.workspaceId });
 }
 
 export async function getMeetingById(meetingId) {
-  if (isCloudMode()) return meetingsApi.get(meetingId);
-  return apiAdapter.getMeetingById(meetingId);
+  if (!isCloudMode()) throw new Error('Cloud API mode is required.');
+  return meetingsApi.get(meetingId);
 }
 
 export async function getMeetingsByWorkspace(workspaceId) {
-  if (isCloudMode()) return meetingsApi.list({ workspaceId });
-  return apiAdapter.getMeetingsByWorkspace(workspaceId);
+  if (!isCloudMode()) throw new Error('Cloud API mode is required.');
+  return meetingsApi.list({ workspaceId });
 }
 
 export async function updateMeeting(meetingId, updates) {
-  if (isCloudMode()) return meetingsApi.update(meetingId, updates);
-  return apiAdapter.updateMeeting(meetingId, updates);
+  if (!isCloudMode()) throw new Error('Cloud API mode is required.');
+  return meetingsApi.update(meetingId, updates);
 }
 
 /**

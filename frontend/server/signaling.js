@@ -336,6 +336,16 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('workspace:event', ({ workspaceId, type, payload } = {}) => {
+    if (!workspaceId || !type) return;
+    socket.to(workspaceRoom(workspaceId)).emit('workspace:event', {
+      workspaceId,
+      type,
+      payload: payload || null,
+      emittedAt: new Date().toISOString(),
+    });
+  });
+
   socket.on('voice:presence:get', ({ workspaceId } = {}) => {
     if (!workspaceId) return;
     socket.emit('voice:presence:snapshot', {

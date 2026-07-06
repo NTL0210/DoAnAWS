@@ -12,7 +12,7 @@ export class VoiceRecordingController {
         res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "workspaceId and channelId are required" } });
         return;
       }
-      const result = await this.service.list({ workspaceId, channelId, limit: 50 });
+      const result = await this.service.list({ workspaceId, channelId, userId: req.user!.userId, limit: 50 });
       res.json(result);
     } catch (error) {
       next(error);

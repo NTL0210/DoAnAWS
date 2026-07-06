@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { toMeetingResponse } from "./meeting.mapper.js";
 import {
   createMeetingSchema,
+  createMeetingUploadUrlSchema,
   idParamsSchema,
   listMeetingsSchema,
   listNotificationsSchema,
@@ -179,6 +180,28 @@ export class MeetingController {
     }
   };
 
+  createUploadUrl = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const params = idParamsSchema.parse(req.params);
+      const body = createMeetingUploadUrlSchema.parse(req.body);
+      const workspaceId = res.locals.workspaceId ?? queryString(req.query.workspaceId) ?? "";
+      const result = await this.service.createUpload({
+        workspaceId,
+        meetingId: params.id,
+        fileName: body.fileName,
+        contentType: body.contentType,
+      });
+      res.status(200).json({
+        uploadUrl: result.uploadUrl,
+        storageKey: result.storageKey,
+        bucket: result.bucket,
+        meeting: toMeetingResponse(result.meeting),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   process = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const params = idParamsSchema.parse(req.params);
@@ -197,4 +220,10 @@ export class MeetingController {
 function textMetadata(metadata: Record<string, unknown>, key: string): string {
   const value = metadata[key];
   return typeof value === "string" ? value : "";
+}
+
+function queryString(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value) && typeof value[0] === "string") return value[0].trim();
+  return "";
 }
