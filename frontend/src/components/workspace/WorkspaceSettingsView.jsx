@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { motion } from 'framer-motion';
 import { FiArchive, FiRotateCcw, FiSave, FiTrash2, FiEdit2 } from 'react-icons/fi';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import WorkspaceBillingPanel from '@/components/workspace/WorkspaceBillingPanel';
+import { workspacesApi } from '@/services/cloudClient';
 import {
   getPlanById,
   getPlanRank,
@@ -23,6 +24,7 @@ export default function WorkspaceSettingsView() {
     showToast,
     workspaces,
     setWorkspaces,
+    selectWorkspace,
     workspaceMembers,
     meetings,
     trashItems,
@@ -33,6 +35,12 @@ export default function WorkspaceSettingsView() {
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState(activeWorkspace?.name || '');
   const [pendingPermanentDelete, setPendingPermanentDelete] = useState(null);
+  const [deleteWorkspaceStep, setDeleteWorkspaceStep] = useState(0);
+  const [deletingWorkspace, setDeletingWorkspace] = useState(false);
+
+  useEffect(() => {
+    setName(activeWorkspace?.name || '');
+  }, [activeWorkspace?.name]);
 
   const canManage = can('workspace.manage') || workspaceRole === 'OWNER';
   const isMember = workspaceRole !== null;
@@ -42,15 +50,19 @@ export default function WorkspaceSettingsView() {
     members: workspaceMembers,
   });
 
-  const handleSaveName = () => {
+  const handleSaveName = async () => {
     if (!name.trim() || !activeWorkspace) return;
-    setWorkspaces((prev) =>
-      prev.map((ws) =>
-        ws.id === activeWorkspace.id ? { ...ws, name: name.trim() } : ws
-      )
-    );
-    setEditingName(false);
-    showToast('success', 'Workspace name updated!');
+    try {
+      const saved = await workspacesApi.update(activeWorkspace.id, {
+        name: name.trim(),
+        expectedVersion: activeWorkspace.version || 1,
+      });
+      setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      setEditingName(false);
+      showToast('success', 'Workspace name updated!');
+    } catch (err) {
+      showToast('error', err?.message || 'Failed to update workspace name.');
+    }
   };
 
   const handlePlanChange = (planId) => {
@@ -88,6 +100,25 @@ export default function WorkspaceSettingsView() {
       ? `🚀 Workspace upgraded to ${targetPlan.name}! Thank you for supporting this workspace.`
       : `Workspace switched to ${targetPlan.name}.`
     );
+  };
+
+  const handleDeleteWorkspace = async () => {
+    if (!activeWorkspace || deletingWorkspace) return;
+    setDeletingWorkspace(true);
+    try {
+      await workspacesApi.delete(activeWorkspace.id);
+      const nextWorkspaces = workspaces.filter((ws) => ws.id !== activeWorkspace.id);
+      setWorkspaces(nextWorkspaces);
+      setDeleteWorkspaceStep(0);
+      if (nextWorkspaces[0]) {
+        selectWorkspace(nextWorkspaces[0].id);
+      }
+      showToast('success', 'Workspace deleted.');
+    } catch (err) {
+      showToast('error', err?.message || 'Failed to delete workspace.');
+    } finally {
+      setDeletingWorkspace(false);
+    }
   };
 
   if (!isMember) {
@@ -139,6 +170,8 @@ export default function WorkspaceSettingsView() {
               {editingName ? (
                 <div className="flex gap-2">
                   <input
+                    id="workspace-name"
+                    name="workspaceName"
                     type="text"
                     className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
                     value={name}
@@ -288,11 +321,13 @@ export default function WorkspaceSettingsView() {
               Irreversible actions. Be careful.
             </p>
             <button
-              disabled
-              className="flex items-center gap-2 rounded-lg border border-red-300 dark:border-red-900/30 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-red-600 dark:text-red-400 opacity-50 cursor-not-allowed"
+              type="button"
+              onClick={() => setDeleteWorkspaceStep(1)}
+              disabled={deletingWorkspace}
+              className="flex items-center gap-2 rounded-lg border border-red-300 dark:border-red-900/30 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-red-600 dark:text-red-400 transition hover:bg-red-100 dark:hover:bg-red-900/20 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <FiTrash2 className="h-4 w-4" />
-              Delete Workspace (coming soon)
+              {deletingWorkspace ? 'Deleting...' : 'Delete Workspace'}
             </button>
           </motion.section>
         )}
@@ -308,6 +343,28 @@ export default function WorkspaceSettingsView() {
             permanentlyDeleteTrashItem(pendingPermanentDelete.type, pendingPermanentDelete.id);
             setPendingPermanentDelete(null);
           }}
+        />
+      ) : null}
+
+      {deleteWorkspaceStep === 1 ? (
+        <ConfirmDialog
+          title="Delete this workspace?"
+          message={`This will delete "${activeWorkspace?.name || 'this workspace'}" and remove it from your workspace list.`}
+          confirmLabel="Continue"
+          cancelLabel="Cancel"
+          onCancel={() => setDeleteWorkspaceStep(0)}
+          onConfirm={() => setDeleteWorkspaceStep(2)}
+        />
+      ) : null}
+
+      {deleteWorkspaceStep === 2 ? (
+        <ConfirmDialog
+          title="Final confirmation"
+          message={`This is the second confirmation. Deleting "${activeWorkspace?.name || 'this workspace'}" cannot be undone.`}
+          confirmLabel={deletingWorkspace ? 'Deleting...' : 'Delete permanently'}
+          cancelLabel="Keep workspace"
+          onCancel={() => setDeleteWorkspaceStep(0)}
+          onConfirm={handleDeleteWorkspace}
         />
       ) : null}
     </div>

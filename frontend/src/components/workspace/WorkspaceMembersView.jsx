@@ -106,6 +106,8 @@ export default function WorkspaceMembersView() {
             <div className="flex flex-wrap gap-3">
               <div className="flex-1 min-w-[200px]">
                 <input
+                  id="workspace-invite-email"
+                  name="workspaceInviteEmail"
                   type="email"
                   className="w-full rounded-lg border border-primary-200 dark:border-primary-800 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
                   placeholder="Enter email address"
@@ -115,6 +117,8 @@ export default function WorkspaceMembersView() {
                 />
               </div>
               <select
+                id="workspace-invite-role"
+                name="workspaceInviteRole"
                 className="rounded-lg border border-primary-200 dark:border-primary-800 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-primary-500"
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value)}
@@ -138,6 +142,8 @@ export default function WorkspaceMembersView() {
                 {(workspaceTeams || []).map((team) => (
                   <label key={team.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-primary-100 dark:border-primary-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
                     <input
+                      id={`workspace-invite-team-${team.id}`}
+                      name="workspaceInviteTeams"
                       type="checkbox"
                       className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
                       checked={selectedTeamIds.includes(team.id)}
