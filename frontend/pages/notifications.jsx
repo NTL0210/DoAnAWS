@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   FiBell,
+  FiCheck,
   FiCheckCircle,
   FiClock,
   FiFileText,
-  FiLoader,
   FiUserPlus,
+  FiX,
 } from 'react-icons/fi';
 import AppShell, { Panel, LoadingState, EmptyState } from '../src/components/layout/AppShell';
 import { useWorkspace } from '../src/context/WorkspaceContext';
@@ -29,6 +30,9 @@ export default function EmployeeNotifications() {
     aiNotifications,
     markNotificationRead,
     markAllNotificationsRead,
+    userInvitations,
+    acceptInvitation,
+    declineInvitation,
   } = useWorkspace();
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState([]);
@@ -76,17 +80,58 @@ export default function EmployeeNotifications() {
     markNotificationRead(id);
   };
 
-  if (loading || authLoading) return <LoadingState label="Loading notifications..." />;
-  if (!currentUser) return <LoadingState label="Please log in first." />;
+  const handleAcceptInvitation = useCallback(async (invitationId) => {
+    await acceptInvitation(invitationId);
+    setNotifications((prev) =>
+      prev.map((n) =>
+        n.id === invitationId
+          ? { ...n, isRead: true, metadata: { ...(n.metadata || {}), status: 'ACCEPTED' } }
+          : n
+      )
+    );
+  }, [acceptInvitation]);
 
+  const handleDeclineInvitation = useCallback(async (invitationId) => {
+    await declineInvitation(invitationId);
+    setNotifications((prev) =>
+      prev.map((n) =>
+        n.id === invitationId
+          ? { ...n, isRead: true, metadata: { ...(n.metadata || {}), status: 'DECLINED' } }
+          : n
+      )
+    );
+  }, [declineInvitation]);
+
+  const pendingInvitationIds = useMemo(
+    () => new Set((userInvitations || []).map((invitation) => invitation.id)),
+    [userInvitations]
+  );
+  const notificationItems = useMemo(
+    () => notifications
+      .filter((notification) => !pendingInvitationIds.has(notification.id))
+      .map((notification) => ({ kind: 'notification', id: notification.id, notification })),
+    [notifications, pendingInvitationIds]
+  );
+  const inviteItems = useMemo(
+    () => (userInvitations || []).map((invitation) => ({ kind: 'invitation', id: invitation.id, invitation })),
+    [userInvitations]
+  );
+  const allItems = useMemo(
+    () => [...inviteItems, ...notificationItems],
+    [inviteItems, notificationItems]
+  );
   const filtered =
     filter === 'all'
-      ? notifications
+      ? allItems
       : filter === 'unread'
-        ? notifications.filter((n) => !n.isRead)
-        : notifications;
+        ? allItems.filter((item) => item.kind === 'invitation' || !item.notification.isRead)
+        : allItems;
 
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const unreadCount =
+    inviteItems.length + notificationItems.filter((item) => !item.notification.isRead).length;
+
+  if (loading || authLoading) return <LoadingState label="Loading notifications..." />;
+  if (!currentUser) return <LoadingState label="Please log in first." />;
 
   return (
     <AppShell
@@ -110,7 +155,7 @@ export default function EmployeeNotifications() {
       <Panel title={`Notifications (${filtered.length})`} description="Stay updated on tasks, meetings, and activity">
         <div className="mb-5 flex flex-wrap gap-2">
           {[
-            { key: 'all', label: 'All', count: notifications.length },
+            { key: 'all', label: 'All', count: allItems.length },
             { key: 'unread', label: 'Unread', count: unreadCount },
           ].map((f) => (
             <button
@@ -136,7 +181,57 @@ export default function EmployeeNotifications() {
           />
         ) : (
           <div className="space-y-2">
-            {filtered.map((n, idx) => {
+            {filtered.map((item, idx) => {
+              if (item.kind === 'invitation') {
+                const invitation = item.invitation;
+                return (
+                  <motion.div
+                    key={invitation.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: idx * 0.03 }}
+                    className="flex w-full items-start gap-4 rounded-lg border border-blue-200/80 bg-blue-50/70 p-4 text-left dark:border-blue-900/60 dark:bg-blue-950/20"
+                  >
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">
+                      <FiUserPlus className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                          Invitation to {invitation.workspaceName || 'Workspace'}
+                        </h3>
+                        <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />
+                      </div>
+                      <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                        {invitation.invitedByUserName || 'A teammate'} invited you to join as {formatRoleLabel(invitation.role)}.
+                      </p>
+                      <p className="mt-1.5 text-xs text-slate-400">
+                        {invitation.createdAt ? new Date(invitation.createdAt).toLocaleString() : ''}
+                      </p>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleAcceptInvitation(invitation.id)}
+                          className="inline-flex h-9 items-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white transition hover:bg-emerald-700"
+                        >
+                          <FiCheck className="h-4 w-4" />
+                          Accept
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeclineInvitation(invitation.id)}
+                          className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-[#fbfcfe] px-4 text-sm font-bold text-slate-700 transition hover:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                        >
+                          <FiX className="h-4 w-4" />
+                          Decline
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              }
+
+              const n = item.notification;
               const config = typeConfig[n.type] || typeConfig.INFO;
               return (
                 <motion.button
@@ -177,4 +272,9 @@ export default function EmployeeNotifications() {
       </Panel>
     </AppShell>
   );
+}
+
+function formatRoleLabel(role) {
+  const normalized = String(role || 'EMPLOYEE').replace(/_/g, ' ').toLowerCase();
+  return normalized.replace(/\b\w/g, (char) => char.toUpperCase());
 }

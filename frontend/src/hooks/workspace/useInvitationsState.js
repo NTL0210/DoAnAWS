@@ -72,7 +72,7 @@ export default function useInvitationsState({
     async function pollInvitations() {
       try {
         const { notificationsApi } = await import('@/services/cloudClient');
-        const result = await notificationsApi.list({ unreadOnly: 'true' });
+        const result = await notificationsApi.list();
         const data = result.notifications || result || [];
         const incoming = Array.isArray(data) ? data : [];
         const inviteNotifs = incoming.filter(
