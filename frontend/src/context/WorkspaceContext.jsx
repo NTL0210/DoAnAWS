@@ -303,7 +303,7 @@ export function WorkspaceProvider({ children }) {
       );
       if (userWs.length > 0) {
         workspaceHook.setActiveWorkspaceId(userWs[0].id);
-        const general = userWs[0].channels.find(
+        const general = userWs[0].channels?.find(
           (c) => c.isDefault && c.type === 'text'
         );
         if (general) workspaceHook.setActiveChannelId(general.id);

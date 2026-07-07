@@ -9,7 +9,7 @@
  * @module dynamodb/repositories/workspaceRepository
  */
 
-import { getItem, putItem, updateItem, deleteItem, queryItems } from '../client.js';
+import { getItem, putItem, updateItem, deleteItem, queryItems, batchGetItems } from '../client.js';
 import { ENTITY, pk, sk } from '../entityTypes.js';
 
 /**
@@ -66,6 +66,9 @@ function memberRecord(workspaceId, userId, role = 'EMPLOYEE') {
     userId,
     role,
     joinedAt: now,
+    // GSI1: lookup workspaces by member userId
+    GSI1PK: `MEMBER#${userId}`,
+    GSI1SK: `WS#${workspaceId}`,
   };
 }
 
@@ -96,6 +99,49 @@ export async function findByOwner(ownerId) {
     },
   });
   return items.map(fromRecord).filter(Boolean);
+}
+
+/**
+ * Find workspaces where a user is a member (not owner).
+ * Queries GSI1 by MEMBER#{userId} and fetches full workspace metadata.
+ *
+ * @param {string} userId
+ * @returns {Promise<Object[]>}
+ */
+export async function findByMember(userId) {
+  const { items } = await queryItems({
+    IndexName: 'GSI1',
+    KeyConditionExpression: 'GSI1PK = :pk',
+    ExpressionAttributeValues: {
+      ':pk': `MEMBER#${userId}`,
+    },
+  });
+
+  if (items.length === 0) return [];
+
+  // Batch-get full workspace metadata for each member record
+  const workspaceKeys = items.map((item) => ({
+    PK: pk(ENTITY.WORKSPACE, item.workspaceId),
+    SK: sk('META', item.workspaceId),
+  }));
+
+  const workspaceRecords = await batchGetItems(workspaceKeys);
+  return workspaceRecords.map(fromRecord).filter(Boolean);
+}
+
+/**
+ * Find all workspaces a user has access to (owns + member).
+ * @param {string} userId
+ * @returns {Promise<Object[]>}
+ */
+export async function findByUserId(userId) {
+  const [owned, member] = await Promise.all([findByOwner(userId), findByMember(userId)]);
+  const seen = new Set();
+  return [...owned, ...member].filter((ws) => {
+    if (seen.has(ws.id)) return false;
+    seen.add(ws.id);
+    return true;
+  });
 }
 
 /**
@@ -205,4 +251,4 @@ export async function delete_(id) {
   });
 }
 
-export default { findById, findByOwner, getMembers, addMember, removeMember, create, update, delete_ };
+export default { findById, findByOwner, findByMember, findByUserId, getMembers, addMember, removeMember, create, update, delete_ };
