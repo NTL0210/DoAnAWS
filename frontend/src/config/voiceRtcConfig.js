@@ -66,17 +66,34 @@ export function getVoiceRtcConfig() {
   const turnCredential = process.env.NEXT_PUBLIC_TURN_CREDENTIAL;
 
   if (turnUrlsEnv && turnUsername && turnCredential) {
-    const turnUrls = turnUrlsEnv
-      .split(',')
-      .map((url) => url.trim())
-      .filter(isValidTurnUrl);
+    try {
+      const turnUrls = turnUrlsEnv
+        .split(',')
+        .map((url) => url.trim())
+        .filter((url) => {
+          const isValid = isValidTurnUrl(url);
+          if (!isValid && DEBUG) {
+            console.warn('[Voice/ICE] Invalid TURN URL filtered out:', url);
+          }
+          return isValid;
+        });
 
-    if (turnUrls.length > 0) {
-      iceServers.push({
-        urls: turnUrls,
-        username: turnUsername,
-        credential: turnCredential,
-      });
+      if (turnUrls.length > 0) {
+        iceServers.push({
+          urls: turnUrls,
+          username: turnUsername,
+          credential: turnCredential,
+        });
+        if (DEBUG) {
+          console.info('[Voice/ICE] Added TURN servers:', turnUrls.length);
+        }
+      } else if (DEBUG) {
+        console.warn('[Voice/ICE] No valid TURN URLs found after filtering');
+      }
+    } catch (err) {
+      if (DEBUG) {
+        console.error('[Voice/ICE] Error processing TURN config:', err.message);
+      }
     }
   }
 
@@ -93,9 +110,37 @@ export function getVoiceRtcConfig() {
 }
 
 function isValidTurnUrl(url) {
-  if (!url || /[<>\s]/.test(url)) return false;
-  if (!url.startsWith('turn:') && !url.startsWith('turns:')) return false;
-  return /^turns?:[^:/?#[\]@]+:\d{2,5}(?:\?transport=(udp|tcp))?$/i.test(url);
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  
+  // Check for invalid characters
+  if (/[<>\s]/.test(trimmed)) return false;
+  
+  // Must start with turn: or turns:
+  if (!trimmed.startsWith('turn:') && !trimmed.startsWith('turns:')) return false;
+  
+  // Parse the URL to validate format
+  try {
+    // More lenient regex that allows various hostname formats
+    // turn:hostname:port[?transport=tcp|udp]
+    // turns:hostname:port[?transport=tcp|udp]
+    const match = trimmed.match(/^turns?:([a-zA-Z0-9.-]+):(\d+)(?:\?transport=(udp|tcp))?$/i);
+    if (!match) return false;
+    
+    const hostname = match[1];
+    const port = parseInt(match[2], 10);
+    
+    // Validate port is in valid range
+    if (port < 1 || port > 65535) return false;
+    
+    // Validate hostname is not empty and contains valid characters
+    if (!hostname || hostname.length === 0) return false;
+    if (/[/\s<>]/.test(hostname)) return false;
+    
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ─── Fetch ICE servers from API (production) ────────────────────────────

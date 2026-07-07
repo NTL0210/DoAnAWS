@@ -105,6 +105,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
     markAllNotificationsRead,
     workspaceNotificationsEnabled,
     toggleWorkspaceNotifications,
+    logout,
   } = useWorkspace();
 
   const accessibleWorkspaces = useMemo(() => {
@@ -148,12 +149,23 @@ export default function AppShell({ user, children, eyebrow, title, description, 
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const handleLogout = useCallback(() => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('meetingAppUser');
-    localStorage.removeItem('activeWorkspaceId');
-    window.location.href = '/login';
-  }, []);
+  const handleLogout = useCallback(async () => {
+    try {
+      // Call logout from context to clear all state and auth
+      await logout();
+    } catch (err) {
+      console.error('[AppShell] Logout error:', err);
+    } finally {
+      // Clear local storage in case context logout didn't
+      localStorage.removeItem('user');
+      localStorage.removeItem('meetingAppUser');
+      localStorage.removeItem('activeWorkspaceId');
+      localStorage.removeItem('activeChannelId');
+      
+      // Navigate to login page
+      router.push('/login');
+    }
+  }, [logout, router]);
 
   const toggleNotif = useCallback(() => {
     setNotifOpen((v) => !v);

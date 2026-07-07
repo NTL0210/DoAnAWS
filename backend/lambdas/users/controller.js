@@ -15,7 +15,7 @@
  */
 
 import { findById, findByEmail, findAll, create as createUserRecord, update as updateUserRecord, delete_ as deleteUserRecord } from '../../src/dynamodb/repositories/userRepository.js';
-import { success, created, noContent, notFound, badRequest } from '../shared/router.js';
+import { success, created, noContent, notFound, badRequest, error } from '../shared/router.js';
 
 // ─── Helpers ──────────────────────────────────────────
 
@@ -119,12 +119,12 @@ export async function get(event) {
 
   // Permission check
   if (authUser.role === 'EMPLOYEE' && authUser.userId !== resourceId) {
-    return badRequest('You can only view your own profile', 'FORBIDDEN');
+    return error(403, 'FORBIDDEN', 'You can only view your own profile');
   }
 
   if (authUser.role === 'MANAGER' && authUser.userId !== resourceId) {
     if (user.departmentId !== authUser.departmentId) {
-      return badRequest('You can only view users in your department', 'FORBIDDEN');
+      return error(403, 'FORBIDDEN', 'You can only view users in your department');
     }
   }
 
