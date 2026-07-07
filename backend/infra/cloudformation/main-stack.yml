@@ -34,6 +34,10 @@ Parameters:
     MinLength: 12
     Default: change-me-before-prod
     Description: Static TURN credential for the single EC2 coturn relay
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+    Description: Google Gemini API key for AI meeting analysis
 
 Conditions:
   HasCustomDomain: !Not [!Equals [!Ref DomainName, ""]]
@@ -260,11 +264,21 @@ Resources:
     Properties:
       FunctionName: !Sub "ai-meeting-meetings-${Environment}"
       Description: Meeting management CRUD
+      Timeout: 120
+      MemorySize: 512
       Code:
         S3Bucket: !Sub "ai-meeting-lambda-${AWS::AccountId}"
         S3Key: !Sub "lambdas/meetings.zip"
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref DynamoDBTable
+          ENVIRONMENT: !Ref Environment
+          AUDIO_BUCKET: !Ref MeetingStorageBucket
+          STATE_MACHINE_ARN: !Ref AIProcessingStateMachine
+          GEMINI_API_KEY: !Ref GeminiApiKey
+          GEMINI_MODEL: gemini-2.5-flash
 
   # Lambda Functions — Tasks
   TasksLambda:
@@ -298,7 +312,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub "ai-meeting-ai-process-${Environment}"
-      Description: AI meeting processing (Transcribe + Bedrock)
+      Description: AI meeting processing (Gemini transcribe + analyze)
       Timeout: 300
       MemorySize: 1024
       Code:
@@ -310,7 +324,9 @@ Resources:
         Variables:
           TABLE_NAME: !Ref DynamoDBTable
           ENVIRONMENT: !Ref Environment
-          TRANSCRIBE_OUTPUT_BUCKET: !Ref MeetingStorageBucket
+          AUDIO_BUCKET: !Ref MeetingStorageBucket
+          GEMINI_API_KEY: !Ref GeminiApiKey
+          GEMINI_MODEL: gemini-2.5-flash
 
   # ─── API Gateway Resources & Methods ────────────────
   # Users API

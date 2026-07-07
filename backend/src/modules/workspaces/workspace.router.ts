@@ -11,7 +11,7 @@ export function buildWorkspaceRouter(
   router.get("/", controller.list);
   router.post("/", controller.create);
   router.get("/:id", guard("MEMBER", "ADMIN", "OWNER"), controller.get);
-  router.patch("/:id", guard("ADMIN", "OWNER"), controller.update);
+  router.patch("/:id", guard("MEMBER", "ADMIN", "OWNER"), controller.update);
   router.delete("/:id", guard("OWNER"), controller.delete_);
 
   router.get("/:id/members", guard("MEMBER", "ADMIN", "OWNER"), controller.getMembers);

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
@@ -14,7 +14,7 @@ import {
 } from '@/lib/voicePermissions';
 import { isCloudMode } from '@/services/apiClient';
 
-// ─── Hooks ────────────────────────────────────────────────
+// â”€â”€â”€ Hooks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 import useAuthState, { getSessionApiToken, toHydratedUser } from '@/hooks/workspace/useAuthState';
 import useToastState from '@/hooks/workspace/useToastState';
 import useOnboardingState from '@/hooks/workspace/useOnboardingState';
@@ -27,7 +27,7 @@ import useMembersAndTeams from '@/hooks/workspace/useMembersAndTeams';
 import useRolesAndPermissions from '@/hooks/workspace/useRolesAndPermissions';
 import useVoiceState from '@/hooks/workspace/useVoiceState';
 
-// ─── Module-level constants ───────────────────────────────
+// â”€â”€â”€ Module-level constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const WorkspaceContext = createContext(null);
 const STORAGE_KEYS = {
   workspaces: 'meetingAppWorkspaces',
@@ -59,7 +59,7 @@ const workspaceRoleColors = {
 };
 
 /**
- * WorkspaceProvider — wraps the entire app
+ * WorkspaceProvider â€” wraps the entire app
  *
  * Manages workspace-based SaaS state:
  *  - Account-only auth (no global roles)
@@ -73,12 +73,12 @@ const workspaceRoleColors = {
  *  - Toast notifications
  */
 export function WorkspaceProvider({ children }) {
-  // ─── Call all hooks ────────────────────────────────────
+  // â”€â”€â”€ Call all hooks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const authHook = useAuthState();
   const toastHook = useToastState();
   const onboardingHook = useOnboardingState();
 
-  // Activity feed — addActivity does NOT need activeWorkspaceId (only addNotification does).
+  // Activity feed â€” addActivity does NOT need activeWorkspaceId (only addNotification does).
   // activeWorkspaceIdRef is synced after workspaceHook resolves the cycle.
   const activityHook = useActivityFeed({
     currentUser: authHook.currentUser,
@@ -150,12 +150,12 @@ export function WorkspaceProvider({ children }) {
     setWorkspaces: workspaceHook.setWorkspaces,
   });
 
-  // ─── Sync active workspace for notifications (break circular dep) ────
+  // â”€â”€â”€ Sync active workspace for notifications (break circular dep) â”€â”€â”€â”€
   useEffect(() => {
     activityHook.syncActiveWorkspaceId(workspaceHook.activeWorkspaceId);
   }, [activityHook.syncActiveWorkspaceId, workspaceHook.activeWorkspaceId]);
 
-  // ─── UI State ──────────────────────────────────────────
+  // â”€â”€â”€ UI State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [workspaceStorageHydrated, setWorkspaceStorageHydrated] = useState(false);
   const [showInvitations, setShowInvitations] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -170,10 +170,10 @@ export function WorkspaceProvider({ children }) {
     [activityHook.aiNotifications]
   );
 
-  // ─── Local refs to commonly-used hook values ──────────
+  // â”€â”€â”€ Local refs to commonly-used hook values â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const { showToast } = toastHook;
 
-  // ─── Voice State (extracted to hook) ──────────────────
+  // â”€â”€â”€ Voice State (extracted to hook) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const voiceHook = useVoiceState({
     currentUser: authHook.currentUser,
     voiceChannels: workspaceHook.voiceChannels,
@@ -188,7 +188,7 @@ export function WorkspaceProvider({ children }) {
     addActivity: activityHook.addActivity,
   });
 
-  // ─── Initialize from localStorage or Cloud session ────
+  // â”€â”€â”€ Initialize from localStorage or Cloud session â”€â”€â”€â”€
   useEffect(() => {
     let cancelled = false;
     const loadWorkspaceState = async () => {
@@ -288,14 +288,14 @@ export function WorkspaceProvider({ children }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceStorageHydrated, authHook.currentUser?.id]);
 
-  // ─── Storage persistence effects ───────────────────────
-  // ─── Cloud API sync (debounced) ───────────────────────
+  // â”€â”€â”€ Storage persistence effects â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€â”€ Cloud API sync (debounced) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Persist workspace sub-entities (teams, channels, messages, voice)
   // to DynamoDB via cloud API whenever they change.
   // Workspace changes are persisted by the explicit action that made them.
   // A background PATCH loop causes stale expectedVersion conflicts after reloads.
 
-  // ─── Auto-select workspace when user logs in ──────────
+  // â”€â”€â”€ Auto-select workspace when user logs in â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (authHook.currentUser && !workspaceHook.activeWorkspaceId) {
       const userWs = workspaceHook.workspaces.filter((ws) =>
@@ -311,10 +311,10 @@ export function WorkspaceProvider({ children }) {
     }
   }, [authHook.currentUser, workspaceHook.workspaces, workspaceHook.activeWorkspaceId]);
 
-  // ─── Persist workspace selection ───────────────────────
-  // ─── Voice functions moved to useVoiceState hook ──────
+  // â”€â”€â”€ Persist workspace selection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€â”€ Voice functions moved to useVoiceState hook â”€â”€â”€â”€â”€â”€
 
-  // ─── Context Value ─────────────────────────────────────
+  // â”€â”€â”€ Context Value â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Matches the EXACT shape from the original monolithic provider.
   const value = useMemo(
     () => ({
@@ -413,6 +413,7 @@ export function WorkspaceProvider({ children }) {
       uploadMeetingFile: tasksHook.uploadMeetingFile,
       analyzeMeetingWithAI: tasksHook.analyzeMeetingWithAI,
       processMeetingWithAI: tasksHook.processMeetingWithAI,
+      reAnalyzeMeeting: tasksHook.reAnalyzeMeeting,
       updateSuggestedTask: tasksHook.updateSuggestedTask,
       updateMeetingSuggestion: tasksHook.updateMeetingSuggestion,
       toggleSuggestedTaskSelection: tasksHook.toggleSuggestedTaskSelection,
@@ -517,6 +518,7 @@ export function WorkspaceProvider({ children }) {
       tasksHook.workspaceMeetings, tasksHook.setWorkspaceMeetings,
       tasksHook.createMeeting, tasksHook.uploadMeetingFile,
       tasksHook.analyzeMeetingWithAI, tasksHook.processMeetingWithAI,
+      tasksHook.reAnalyzeMeeting,
       tasksHook.updateSuggestedTask, tasksHook.updateMeetingSuggestion,
       tasksHook.toggleSuggestedTaskSelection, tasksHook.removeMeetingSuggestion,
       tasksHook.createTasksFromSuggestions, tasksHook.createTasksFromMeeting,
@@ -564,7 +566,7 @@ export function WorkspaceProvider({ children }) {
 export function useWorkspace() {
   const ctx = useContext(WorkspaceContext);
   if (!ctx) {
-    throw new Error('useWorkspace doit être utilisé dans un WorkspaceProvider');
+    throw new Error('useWorkspace doit Ãªtre utilisÃ© dans un WorkspaceProvider');
   }
   return ctx;
 }

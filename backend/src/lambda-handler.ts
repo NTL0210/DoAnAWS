@@ -170,7 +170,6 @@ async function processPendingInvitations(userId: string, email: string, tableNam
     // Convert each invitation to a notification
     for (const inv of invitations) {
       // Extract DynamoDB attribute values
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const invData = inv as unknown as Record<string, { S?: string; SS?: string[] }>;
       const workspaceId = invData.workspaceId?.S || "";
       const workspaceName = invData.workspaceName?.S || "";

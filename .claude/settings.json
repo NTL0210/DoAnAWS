@@ -31,10 +31,14 @@
       "PowerShell(aws iam attach-role-policy --role-name ai-meeting-backend-role-1ktj49e7 --policy-arn arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess --profile github_user 2>&1)",
       "PowerShell(aws lambda update-function-configuration --function-name ai-meeting-backend --environment \"Variables={DATA_PROVIDER=dynamodb,DYNAMODB_TABLE_MAIN=ai-meeting-platform,NODE_ENV=production,COGNITO_USER_POOL_ID=ap-southeast-1_nGbFbM2mf,COGNITO_CLIENT_ID=7d7k9htoc247sogo2qdj394na9}\" --profile github_user --region ap-southeast-1 2>&1)",
       "Read(//c/Users/nguye/AppData/Local/Temp/**)",
-      "PowerShell(aws lambda get-function-configuration --function-name ai-meeting-backend --profile github_user --region ap-southeast-1 2>$null)"
+      "PowerShell(aws lambda get-function-configuration --function-name ai-meeting-backend --profile github_user --region ap-southeast-1 2>$null)",
+      "Bash(node -e ' *)",
+      "Bash(sed -n '520,521p' \"e:/ai-meeting-workforce-platform/frontend/src/context/WorkspaceContext.jsx\" > /tmp/check_ws.txt && od -c /tmp/check_ws.txt | head -10)",
+      "Bash(node scripts/build-lambdas.mjs meetings)"
     ],
     "additionalDirectories": [
-      "C:\\Users\\nguye\\AppData\\Local\\Temp"
+      "C:\\Users\\nguye\\AppData\\Local\\Temp",
+      "\\tmp"
     ]
   }
 }

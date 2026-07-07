@@ -21,6 +21,9 @@ import * as inviteService from './inviteService.js';
 const TABLE_NAME = db.getTableName();
 const lambda = new LambdaClient({ region: process.env.AWS_REGION || 'ap-southeast-1' });
 const sfn = new SFNClient({ region: process.env.AWS_REGION || 'ap-southeast-1' });
+const GEMINI_API_KEY = () => process.env.GEMINI_API_KEY || '';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 // ─── Helpers ──────────────────────────────────────────
 
@@ -61,6 +64,92 @@ function recordToMeeting(record) {
   if (!record) return null;
   const { PK, SK, GSI1PK, GSI1SK, GSI2PK, GSI2SK, ...meeting } = record;
   return meeting;
+}
+
+// ─── Gemini AI helper ──────────────────────────────────
+
+const SYSTEM_PROMPT_ANALYZE = `Bạn là trợ lý phân tích cuộc họp chuyên nghiệp.
+
+Dựa vào transcript cuộc họp dưới đây, hãy phân tích và trả về:
+1. Tóm tắt ngắn gọn bằng tiếng Việt (summary)
+2. Các quyết định quan trọng (keyDecisions)
+3. Danh sách công việc cần làm (tasks) — mỗi task có title, description, assignee (nếu có), priority (HIGH/MEDIUM/LOW), deadline (nếu có)
+4. Các rủi ro / vấn đề cần theo dõi (risks)
+
+CHỈ trả về JSON, không thêm chữ nào khác:
+{
+  "summary": "...",
+  "keyDecisions": ["...", "..."],
+  "tasks": [
+    {
+      "title": "Tên công việc",
+      "description": "Mô tả chi tiết",
+      "assignee": "Tên người được giao (nếu có)",
+      "priority": "HIGH|MEDIUM|LOW",
+      "deadline": "YYYY-MM-DD (nếu có)"
+    }
+  ],
+  "risks": ["...", "..."]
+}
+
+Nguyên tắc:
+- Chỉ lấy thông tin được đề cập rõ ràng trong transcript
+- Nếu không có ai được giao, để assignee là rỗng
+- Nếu không có deadline, để deadline là rỗng
+- Tóm tắt ngắn gọn, đủ ý chính`;
+
+/**
+ * Extract JSON from Gemini response text (handles markdown code fences).
+ */
+function extractJson(text) {
+  const cleaned = text
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    // Fallback: try to find an array or object in the text
+    const match = cleaned.match(/\[[\s\S]*?\]/);
+    if (match) return { tasks: JSON.parse(match[0]) };
+    throw new Error(`Cannot parse Gemini response as JSON: ${text.slice(0, 200)}...`);
+  }
+}
+
+/**
+ * Call Gemini API with transcript text and return structured analysis.
+ * Uses REST API directly (no SDK needed — fetch is available in Node 22).
+ */
+async function analyzeWithGemini(transcriptText) {
+  const apiKey = GEMINI_API_KEY();
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY not configured. Add it to the Lambda environment variables.');
+  }
+
+  const prompt = `${SYSTEM_PROMPT_ANALYZE}\n\nTranscript:\n${transcriptText.slice(0, 30000)}`;
+
+  const response = await fetch(`${GEMINI_BASE}/${GEMINI_MODEL}:generateContent`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
+    },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '');
+    throw new Error(`Gemini API error ${response.status}: ${errText.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  if (!text) throw new Error('Gemini returned empty response');
+
+  return extractJson(text);
 }
 
 // ─── Handlers ─────────────────────────────────────────
@@ -309,10 +398,60 @@ export async function postProcess(event) {
     GSI2SK: `MEETING#${meeting.createdAt}`,
   });
 
-  // Start Step Functions pipeline
+  // ── TEXT TRANSCRIPT MODE ─────────────────────────────
+  // If the meeting has inline transcript text (no audio file), process directly
+  // with Gemini API and save results — no Step Functions needed.
+  if (meeting.transcriptText && meeting.transcriptText.trim()) {
+    try {
+      const result = await analyzeWithGemini(meeting.transcriptText);
+
+      const updates = {
+        status: 'AI_REVIEW_READY',
+        summary: result.summary || '',
+        keyDecisions: Array.isArray(result.keyDecisions) ? result.keyDecisions : [],
+        risks: Array.isArray(result.risks) ? result.risks : [],
+        suggestedTasks: Array.isArray(result.tasks) ? result.tasks : [],
+        updatedAt: new Date().toISOString(),
+        GSI2PK: 'STATUS#AI_REVIEW_READY',
+        GSI2SK: `MEETING#${meeting.createdAt}`,
+      };
+
+      await db.updateItem(key, updates);
+
+      return success({
+        meetingId: resourceId,
+        status: 'AI_REVIEW_READY',
+        summary: updates.summary,
+        keyDecisions: updates.keyDecisions,
+        tasks: updates.suggestedTasks,
+        risks: updates.risks,
+        message: 'AI analysis complete.',
+      });
+    } catch (err) {
+      console.error(`[Meetings] Gemini analysis failed for ${resourceId}:`, err);
+      // Revert status so retry is possible
+      await db.updateItem(key, {
+        status: 'UPLOADED',
+        updatedAt: new Date().toISOString(),
+        GSI2PK: 'STATUS#UPLOADED',
+        GSI2SK: `MEETING#${meeting.createdAt}`,
+      });
+      return badRequest(`AI analysis failed: ${err.message}`, 'AI_ERROR');
+    }
+  }
+
+  // ── AUDIO FILE MODE ─────────────────────────────────
+  // Meetings with S3 storageKey go through Step Functions.
   const STATE_MACHINE_ARN = process.env.STATE_MACHINE_ARN || '';
 
   if (!STATE_MACHINE_ARN) {
+    // Mark as failed so frontend shows error state
+    await db.updateItem(key, {
+      status: 'FAILED',
+      updatedAt: new Date().toISOString(),
+      GSI2PK: 'STATUS#FAILED',
+      GSI2SK: `MEETING#${meeting.createdAt}`,
+    });
     return badRequest('AI pipeline not configured (STATE_MACHINE_ARN missing)', 'CONFIG_ERROR');
   }
 
