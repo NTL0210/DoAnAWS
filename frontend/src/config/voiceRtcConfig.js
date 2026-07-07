@@ -69,7 +69,7 @@ export function getVoiceRtcConfig() {
     const turnUrls = turnUrlsEnv
       .split(',')
       .map((url) => url.trim())
-      .filter(Boolean);
+      .filter(isValidTurnUrl);
 
     if (turnUrls.length > 0) {
       iceServers.push({
@@ -90,6 +90,12 @@ export function getVoiceRtcConfig() {
     rtcpMuxPolicy: 'require',
     iceCandidatePoolSize: 10,
   };
+}
+
+function isValidTurnUrl(url) {
+  if (!url || /[<>\s]/.test(url)) return false;
+  if (!url.startsWith('turn:') && !url.startsWith('turns:')) return false;
+  return /^turns?:[^:/?#[\]@]+:\d{2,5}(?:\?transport=(udp|tcp))?$/i.test(url);
 }
 
 // ─── Fetch ICE servers from API (production) ────────────────────────────
