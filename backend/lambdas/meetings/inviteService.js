@@ -159,18 +159,13 @@ export async function handleUpdateNotification(event) {
       isRead: true,
     });
 
-    // Add user as workspace member
+    // Add user as workspace member (upsert — adds GSI keys for existing members too)
     const workspaceId = notification.metadata?.workspaceId;
     const role = notification.metadata?.role || 'EMPLOYEE';
+    const memberRole = (role === 'OWNER' || role === 'VICE_ADMIN') ? 'ADMIN' : role;
     if (workspaceId) {
       try {
-        const existingMembers = await workspaceRepo.getMembers(workspaceId);
-        const isMember = existingMembers.some((m) => m.userId === authUser.userId);
-        if (!isMember) {
-          // Map 'OWNER' invite role to 'ADMIN' (don't give raw ownership to invitee)
-          const memberRole = (role === 'OWNER' || role === 'VICE_ADMIN') ? 'ADMIN' : role;
-          await workspaceRepo.addMember(workspaceId, authUser.userId, memberRole);
-        }
+        await workspaceRepo.addMember(workspaceId, authUser.userId, memberRole);
       } catch (err) {
         console.error(`[Invite] Failed to add member ${authUser.userId} to workspace ${workspaceId}:`, err);
       }

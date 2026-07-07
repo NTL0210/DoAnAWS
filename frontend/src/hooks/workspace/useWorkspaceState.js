@@ -157,7 +157,7 @@ export default function useWorkspaceState({
     setActiveWorkspaceId(workspaceId);
     const ws = workspaces.find((w) => w.id === workspaceId);
     if (ws) {
-      const general = ws.channels.find((c) => c.isDefault && c.type === 'text') || ws.channels[0];
+      const general = ws.channels?.find((c) => c.isDefault && c.type === 'text') || ws.channels?.[0];
       setActiveChannelId(general?.id || null);
       setActiveTeamId(null);
       setActiveView('home');

@@ -11,7 +11,7 @@
 
 import {
   findById,
-  findByOwner,
+  findByUserId,
   getMembers,
   create as createWorkspace,
   update as updateWorkspace,
@@ -51,8 +51,13 @@ function canAccessWorkspace(workspace, members, authUser, minRole = 'MEMBER') {
 }
 
 export async function list(event) {
-  const { authUser } = event;
-  const workspaces = await findByOwner(authUser.userId);
+  const { authUser, queryStringParameters } = event;
+  const q = queryStringParameters || {};
+
+  // Support explicit userId filter (admin scoping)
+  const userId = q.userId || authUser.userId;
+  const workspaces = await findByUserId(userId);
+
   return success(workspaces);
 }
 
