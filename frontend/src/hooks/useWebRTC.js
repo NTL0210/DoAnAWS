@@ -356,12 +356,12 @@ export default function useWebRTC(opts) {
         return;
       }
       await pc.setLocalDescription(offer);
-      socket.emit('webrtc:offer', { to: peer.socketId, from: socket.id, channelId, offer });
+      socket.emit('webrtc:offer', { to: peer.socketId, from: socket.id, fromUserId: userId, channelId, offer });
     } catch (err) {
       setLastWebRTCError(`ICE restart failed for ${peerUserId}: ${err.message}`);
       debugLog('restart ICE failed', peerUserId, err.message);
     }
-  }, [channelId, socket]);
+  }, [channelId, socket, userId]);
 
   /** Periodically poll selected candidate pair info and store in peer state. */
   const pollCandidateInfo = useCallback(async (peerUserId) => {
@@ -380,6 +380,18 @@ export default function useWebRTC(opts) {
       });
     }
   }, [updatePeerState]);
+
+  const resolvePeerUserId = useCallback((socketId, signalUserId) => {
+    if (signalUserId) {
+      if (socketId) socketUserMapRef.current.set(socketId, signalUserId);
+      const peer = peerMetaRef.current.get(signalUserId);
+      if (peer && socketId && peer.socketId !== socketId) {
+        peerMetaRef.current.set(signalUserId, { ...peer, socketId });
+      }
+      return signalUserId;
+    }
+    return socketUserMapRef.current.get(socketId);
+  }, []);
 
   const createPeerConnection = useCallback((peer) => {
     if (!peer?.userId || !peer?.socketId) return null;
@@ -420,6 +432,7 @@ export default function useWebRTC(opts) {
         socket.emit('webrtc:ice-candidate', {
           to: peer.socketId,
           from: socket.id,
+          fromUserId: userId,
           channelId,
           candidate: event.candidate,
         });
@@ -530,7 +543,7 @@ export default function useWebRTC(opts) {
     setPeerCount(peersRef.current.size);
     startPeerPing(peer.userId);
     return pc;
-  }, [addLocalTracks, channelId, cleanupPeer, clearReconnectTimer, restartPeerIce, rtcConfiguration, setupDataChannel, socket, startPeerPing, updatePeerState, pollCandidateInfo]);
+  }, [addLocalTracks, channelId, cleanupPeer, clearReconnectTimer, restartPeerIce, rtcConfiguration, setupDataChannel, socket, startPeerPing, updatePeerState, pollCandidateInfo, userId]);
 
   const sendOffer = useCallback(async (peer) => {
     const pc = createPeerConnection(peer);
@@ -547,7 +560,7 @@ export default function useWebRTC(opts) {
         return;
       }
       await pc.setLocalDescription(offer);
-      socket.emit('webrtc:offer', { to: peer.socketId, from: socket.id, channelId, offer });
+      socket.emit('webrtc:offer', { to: peer.socketId, from: socket.id, fromUserId: userId, channelId, offer });
     } catch (err) {
       console.error(`[Voice] Could not create audio offer for ${peer.name || peer.userId}:`, {
         error: err.message,
@@ -566,10 +579,10 @@ export default function useWebRTC(opts) {
       setAudioWarning(`Could not create audio offer for ${peer.name || peer.userId}.`);
       setLastWebRTCError(`offer failed: ${err.name} — ${err.message}`);
     }
-  }, [channelId, createPeerConnection, socket]);
+  }, [channelId, createPeerConnection, socket, userId]);
 
-  const handleOffer = useCallback(async ({ from, offer }) => {
-    const peerUserId = socketUserMapRef.current.get(from);
+  const handleOffer = useCallback(async ({ from, fromUserId, offer }) => {
+    const peerUserId = resolvePeerUserId(from, fromUserId);
     if (!peerUserId || !offer) return;
     const peer = peerMetaRef.current.get(peerUserId) || { userId: peerUserId, socketId: from };
     const pc = createPeerConnection(peer);
@@ -588,6 +601,7 @@ export default function useWebRTC(opts) {
         socket.emit('webrtc:answer', {
           to: from,
           from: socket.id,
+          fromUserId: userId,
           channelId,
           answer: pc.localDescription,
         });
@@ -617,6 +631,7 @@ export default function useWebRTC(opts) {
           socket.emit('webrtc:answer', {
             to: from,
             from: socket.id,
+            fromUserId: userId,
             channelId,
             answer: pc.localDescription,
           });
@@ -633,7 +648,7 @@ export default function useWebRTC(opts) {
       }
       await pc.setLocalDescription(answer);
       debugLog('send answer', peerUserId);
-      socket.emit('webrtc:answer', { to: from, from: socket.id, channelId, answer });
+      socket.emit('webrtc:answer', { to: from, from: socket.id, fromUserId: userId, channelId, answer });
     } catch (err) {
       console.error(`[Voice] Could not answer audio connection for ${peer.name || peerUserId}:`, {
         error: err.message,
@@ -656,10 +671,10 @@ export default function useWebRTC(opts) {
       setAudioWarning(`Could not answer audio connection for ${peer.name || peerUserId}.`);
       setLastWebRTCError(`answer failed: ${err.name} — ${err.message}`);
     }
-  }, [channelId, createPeerConnection, flushQueuedIceCandidates, socket, userId]);
+  }, [channelId, createPeerConnection, flushQueuedIceCandidates, resolvePeerUserId, socket, userId]);
 
-  const handleAnswer = useCallback(async ({ from, answer }) => {
-    const peerUserId = socketUserMapRef.current.get(from);
+  const handleAnswer = useCallback(async ({ from, fromUserId, answer }) => {
+    const peerUserId = resolvePeerUserId(from, fromUserId);
     const pc = peerUserId ? peersRef.current.get(peerUserId) : null;
     if (!pc || !answer) return;
     try {
@@ -680,10 +695,10 @@ export default function useWebRTC(opts) {
       setLastWebRTCError(`set answer failed: ${err.message}`);
       debugLog('set answer failed', err.message);
     }
-  }, [flushQueuedIceCandidates]);
+  }, [flushQueuedIceCandidates, resolvePeerUserId]);
 
-  const handleIce = useCallback(async ({ from, candidate }) => {
-    const peerUserId = socketUserMapRef.current.get(from);
+  const handleIce = useCallback(async ({ from, fromUserId, candidate }) => {
+    const peerUserId = resolvePeerUserId(from, fromUserId);
     const pc = peerUserId ? peersRef.current.get(peerUserId) : null;
     if (!pc || !candidate) return;
 
@@ -703,7 +718,7 @@ export default function useWebRTC(opts) {
         debugLog('ice failed', err.message);
       }
     }
-  }, [queueIceCandidate]);
+  }, [queueIceCandidate, resolvePeerUserId]);
 
   const leaveChannel = useCallback(() => {
     cleanupsRef.current.forEach((cleanup) => cleanup());

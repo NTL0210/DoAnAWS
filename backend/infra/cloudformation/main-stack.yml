@@ -38,6 +38,14 @@ Parameters:
     Type: String
     NoEcho: true
     Description: Google Gemini API key for AI meeting analysis
+  SignalingRepoUrl:
+    Type: String
+    Default: https://github.com/ThanhDuck204/DoAnAWS.git
+    Description: Git repository URL used by the EC2 voice signaling bootstrap
+  SignalingRepoBranch:
+    Type: String
+    Default: main
+    Description: Git branch used by the EC2 voice signaling bootstrap
 
 Conditions:
   HasCustomDomain: !Not [!Equals [!Ref DomainName, ""]]
@@ -1081,9 +1089,8 @@ Resources:
             systemctl start docker
 
             # ─── Clone signaling server ────────────────────────
-            # Replace with your repo URL / branch if different
-            REPO_URL="https://github.com/${AWS::AccountId}/ai-meeting-workforce-platform.git"
-            BRANCH="main"
+            REPO_URL="${SignalingRepoUrl}"
+            BRANCH="${SignalingRepoBranch}"
             SIGNALING_DIR="/home/ec2-user/signaling"
 
             if [ ! -d "$SIGNALING_DIR" ]; then

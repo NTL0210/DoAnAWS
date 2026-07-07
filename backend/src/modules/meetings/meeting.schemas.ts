@@ -11,7 +11,7 @@ export const meetingStatusSchema = z.enum([
 export const createMeetingSchema = z.object({
   workspaceId: z.string().min(1).optional(),
   teamId: z.string().min(1).optional(),
-  title: z.string().min(1).max(200),
+  title: z.string().max(200).optional(),
   transcriptText: z.string().max(200_000).optional(),
   storageRef: z.string().max(500).optional(),
   createdBy: z.string().min(1).optional()

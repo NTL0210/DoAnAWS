@@ -57,6 +57,7 @@ export default function MeetingUploadPanel({
     event.preventDefault();
     onAnalyze({
       ...form,
+      title: buildAutoMeetingTitle(form, file),
       fileName: file?.name || null,
       file,
       audioHash: fileHash || null,
@@ -160,7 +161,7 @@ export default function MeetingUploadPanel({
               value={form.title}
               onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50 dark:border-slate-700 dark:bg-slate-800 dark:focus:border-blue-500 dark:focus:ring-blue-900/30"
-              required
+              placeholder="Optional - AI will generate one if blank"
             />
           </Field>
 
@@ -286,9 +287,15 @@ export default function MeetingUploadPanel({
             </div>
           </Field>
 
+          {!form.title.trim() && (form.transcript.trim() || file) && (
+            <p className="mb-3 text-xs font-bold text-amber-600 dark:text-amber-400">
+              A meeting title will be generated automatically.
+            </p>
+          )}
+
           <button
             type="submit"
-            disabled={processing || !form.title.trim() || (!file && !form.transcript.trim())}
+            disabled={processing || (!file && !form.transcript.trim())}
             className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-700"
           >
             {processing ? <FiLoader className="h-4 w-4 animate-spin" /> : <FiZap className="h-4 w-4" />}
@@ -307,6 +314,18 @@ function Field({ label, children }) {
       {children}
     </div>
   );
+}
+
+function buildAutoMeetingTitle(form, file) {
+  const explicit = form.title.trim();
+  if (explicit) return explicit;
+  if (file?.name) return `AI Review - ${file.name.replace(/\.[^.]+$/, '').slice(0, 80)}`;
+  const firstLine = form.transcript
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .find(Boolean);
+  if (!firstLine) return 'AI Meeting Review';
+  return firstLine.replace(/^\[[^\]]+\]\s*/, '').replace(/\s+/g, ' ').slice(0, 80) || 'AI Meeting Review';
 }
 
 function isAllowedFile(file) {

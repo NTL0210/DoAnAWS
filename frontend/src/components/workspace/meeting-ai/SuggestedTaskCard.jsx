@@ -87,6 +87,11 @@ export default function SuggestedTaskCard({
             className="w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600 outline-none focus:border-blue-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:focus:border-blue-600"
             rows={2}
           />
+          {!task.assigneeId && task.assignee ? (
+            <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+              AI suggested assignee: <span className="text-blue-600 dark:text-blue-400">{task.assignee}</span>
+            </p>
+          ) : null}
 
           <div className="grid gap-2 md:grid-cols-4">
             <select
