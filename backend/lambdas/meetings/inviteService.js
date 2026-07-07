@@ -16,6 +16,7 @@
 import * as notificationRepo from '../../src/dynamodb/repositories/notificationRepository.js';
 import * as invitationRepo from '../../src/dynamodb/repositories/invitationRepository.js';
 import * as userRepo from '../../src/dynamodb/repositories/userRepository.js';
+import * as workspaceRepo from '../../src/dynamodb/repositories/workspaceRepository.js';
 import { updateItem } from '../../src/dynamodb/client.js';
 import { success, created, notFound, badRequest } from '../shared/router.js';
 
@@ -117,6 +118,7 @@ export async function handleGetNotifications(event) {
  * PATCH /meetings/notifications/{id}
  *
  * Updates a notification — used to mark as read, accept, or decline an invitation.
+ * When accepting, also adds the user as a workspace member.
  * Body: { action: 'read' | 'accept' | 'decline' }
  *
  * @param {Object} event - Lambda event with resourceId and parsedBody
@@ -146,8 +148,8 @@ export async function handleUpdateNotification(event) {
   }
 
   // Accept or decline an invitation
-  if (action === 'accept' || action === 'decline') {
-    const metadata = { ...(notification.metadata || {}), status: action === 'accept' ? 'ACCEPTED' : 'DECLINED' };
+  if (action === 'accept') {
+    const metadata = { ...(notification.metadata || {}), status: 'ACCEPTED' };
     const key = {
       PK: `NOTIF#${authUser.userId}`,
       SK: `NOTIF#${resourceId}`,
@@ -156,71 +158,29 @@ export async function handleUpdateNotification(event) {
       metadata,
       isRead: true,
     });
+
+    // Add user as workspace member
+    const workspaceId = notification.metadata?.workspaceId;
+    const role = notification.metadata?.role || 'EMPLOYEE';
+    if (workspaceId) {
+      try {
+        const existingMembers = await workspaceRepo.getMembers(workspaceId);
+        const isMember = existingMembers.some((m) => m.userId === authUser.userId);
+        if (!isMember) {
+          // Map 'OWNER' invite role to 'ADMIN' (don't give raw ownership to invitee)
+          const memberRole = (role === 'OWNER' || role === 'VICE_ADMIN') ? 'ADMIN' : role;
+          await workspaceRepo.addMember(workspaceId, authUser.userId, memberRole);
+        }
+      } catch (err) {
+        console.error(`[Invite] Failed to add member ${authUser.userId} to workspace ${workspaceId}:`, err);
+      }
+    }
+
     return success({ notification: updated });
   }
 
-  return badRequest('Unknown action');
-}
-
-export default { handleInvite, handleGetNotifications, handleUpdateNotification };
-
-/**
- * GET /meetings/notifications
- *
- * Returns notifications for the authenticated user.
- * Query params: unreadOnly (boolean)
- *
- * @param {Object} event - Lambda event with queryStringParameters
- * @returns {Object} API Gateway response
- */
-export async function handleGetNotifications(event) {
-  const { authUser, queryStringParameters } = event;
-  const q = queryStringParameters || {};
-  const userId = authUser.userId;
-
-  const notifications = await notificationRepo.findByUser(userId, {
-    unreadOnly: q.unreadOnly === 'true',
-    limit: parseInt(q.limit || '50', 10),
-  });
-
-  return success({ notifications });
-}
-
-/**
- * PATCH /meetings/notifications/{id}
- *
- * Updates a notification — used to mark as read, accept, or decline an invitation.
- * Body: { action: 'read' | 'accept' | 'decline' }
- *
- * @param {Object} event - Lambda event with resourceId and parsedBody
- * @returns {Object} API Gateway response
- */
-export async function handleUpdateNotification(event) {
-  const { resourceId, parsedBody, authUser } = event;
-  const { action } = parsedBody || {};
-
-  if (!resourceId) {
-    return badRequest('notificationId is required');
-  }
-
-  if (!action || !['read', 'accept', 'decline'].includes(action)) {
-    return badRequest('action must be one of: read, accept, decline');
-  }
-
-  // Fetch the notification first
-  const notification = await notificationRepo.findById(authUser.userId, resourceId);
-  if (!notification) {
-    return notFound('Notification not found');
-  }
-
-  if (action === 'read') {
-    const updated = await notificationRepo.markAsRead(authUser.userId, resourceId);
-    return success({ notification: updated });
-  }
-
-  // Accept or decline an invitation
-  if (action === 'accept' || action === 'decline') {
-    const metadata = { ...(notification.metadata || {}), status: action === 'accept' ? 'ACCEPTED' : 'DECLINED' };
+  if (action === 'decline') {
+    const metadata = { ...(notification.metadata || {}), status: 'DECLINED' };
     const key = {
       PK: `NOTIF#${authUser.userId}`,
       SK: `NOTIF#${resourceId}`,

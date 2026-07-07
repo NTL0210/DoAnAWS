@@ -1,8 +1,8 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState, useCallback } from 'react';
 import { generateId } from '@/lib/workspaceData';
-import { analyzeMeeting as serviceAnalyzeMeeting, createMeeting as serviceCreateMeeting, uploadMeetingFile as serviceUploadMeetingFile } from '@/services/meetingService';
+import { analyzeMeeting as serviceAnalyzeMeeting, createMeeting as serviceCreateMeeting, updateMeeting as serviceUpdateMeeting, uploadMeetingFile as serviceUploadMeetingFile } from '@/services/meetingService';
 import { getTasksByMeeting as filterTasksByMeeting } from '@/services/taskService';
 import { isCloudMode } from '@/services/apiClient';
 
@@ -37,7 +37,7 @@ function normalizeTaskStatusForApi(status) {
 }
 
 /**
- * useWorkspaceTasksState — manages workspace tasks, meetings, trash, and AI workflow actions.
+ * useWorkspaceTasksState â€” manages workspace tasks, meetings, trash, and AI workflow actions.
  *
  * @param {Object} params
  * @param {Object|null} params.currentUser
@@ -135,7 +135,7 @@ export default function useWorkspaceTasksState({
     return () => { cancelled = true; };
   }, [activeWorkspaceId, currentUser?.id, showToast]);
 
-  // ─── Task Actions ──────────────────────────────────────
+  // â”€â”€â”€ Task Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const addWorkspaceTasks = useCallback(async (newTasks) => {
     if (!Array.isArray(newTasks)) return;
     if (!isCloudMode() || !activeWorkspaceId) return;
@@ -214,7 +214,7 @@ export default function useWorkspaceTasksState({
     }
   }, [workspaceTasks, activeWorkspaceId, showToast]);
 
-  // ─── Meeting Actions ───────────────────────────────────
+  // â”€â”€â”€ Meeting Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const createMeeting = useCallback(async (meetingData) => {
     const allowed = canManageAIReview || workspaceRole === 'OWNER';
     if (!activeWorkspace || !currentUser || !allowed) {
@@ -318,6 +318,17 @@ export default function useWorkspaceTasksState({
 
   const analyzeMeetingWithAI = processMeetingWithAI;
 
+  /** Re-run AI analysis on an already-processed meeting */
+  const reAnalyzeMeeting = useCallback(async (meetingId) => {
+    try {
+      // Reset status to UPLOADED so postProcess accepts it
+      await serviceUpdateMeeting(meetingId, { status: 'UPLOADED' });
+    } catch (err) {
+      console.warn('[WorkspaceTasks] Failed to reset meeting status for re-analysis:', err);
+    }
+    await processMeetingWithAI(meetingId);
+  }, [processMeetingWithAI]);
+
   const updateMeetingSuggestion = useCallback((meetingId, suggestionId, patch) => {
     setWorkspaceMeetings((prev) =>
       prev.map((m) => {
@@ -416,7 +427,7 @@ export default function useWorkspaceTasksState({
     return filterTasksByMeeting(workspaceTasks, meetingId);
   }, [workspaceTasks]);
 
-  // ─── Trash actions ─────────────────────────────────────
+  // â”€â”€â”€ Trash actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const restoreTrashItem = useCallback((type, id) => {
     const item = trashItems[type]?.find((i) => i.id === id);
     if (!item) return;
@@ -454,6 +465,7 @@ export default function useWorkspaceTasksState({
     uploadMeetingFile,
     processMeetingWithAI,
     analyzeMeetingWithAI,
+    reAnalyzeMeeting,
     updateMeetingSuggestion,
     updateSuggestedTask,
     toggleSuggestedTaskSelection,

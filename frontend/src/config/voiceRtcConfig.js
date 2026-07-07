@@ -46,9 +46,25 @@ export function getSafeRtcConfigForLog(config) {
  */
 export function getVoiceRtcConfig() {
   // ── STUN (always included) ──────────────────────────────────────────────
+  // Multiple servers on different ports for better coverage through various NAT/firewalls
+  const defaultStunUrls = [
+    // Google STUN (public, widely available)
+    'stun:stun.l.google.com:19302',
+    'stun:stun1.l.google.com:19302',
+    'stun:stun2.l.google.com:19302',
+    'stun:stun3.l.google.com:19302',
+    'stun:stun4.l.google.com:19302',
+    // Twilio STUN (fallback port 3478)
+    'stun:global.stun.twilio.com:3478',
+    // Additional public STUN servers on common ports
+    'stun:stun.l.google.com:3478',
+    'stun:stun1.l.google.com:3478',
+    'stun:stun.services.mozilla.com:3478',
+  ];
+
   const stunUrls = (
     process.env.NEXT_PUBLIC_STUN_URLS ||
-    'stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302,stun:global.stun.twilio.com:3478'
+    defaultStunUrls.join(',')
   )
     .split(',')
     .map((url) => url.trim())
