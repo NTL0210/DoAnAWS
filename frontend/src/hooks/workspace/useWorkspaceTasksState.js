@@ -287,6 +287,8 @@ export default function useWorkspaceTasksState({
         deadline: task.deadline || null,
         priority: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'].includes(task.priority) ? task.priority : 'MEDIUM',
         confidence: typeof task.confidence === 'number' ? task.confidence : 0.5,
+        sourceQuote: task.sourceQuote || null,
+        reason: task.reason || null,
         approved: false,
         order: idx,
       }));

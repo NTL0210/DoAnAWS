@@ -128,11 +128,13 @@ export class VoiceRecordingService {
         id: `voice-suggestion-${index + 1}`,
         title: task.title || `Task ${index + 1}`,
         description: task.description || task.title || "",
+        assignee: task.assignee || "",
         assigneeId: null,
         priority: normalizePriority(task.priority),
         deadline: task.deadline || null,
         confidence: 0.72,
-        ...(task.description || task.title ? { sourceQuote: task.description || task.title } : {}),
+        ...(task.sourceQuote || task.description || task.title ? { sourceQuote: task.sourceQuote || task.description || task.title } : {}),
+        ...(task.reason ? { reason: task.reason } : {}),
       }));
       const reviewed = await this.meetingService.update({
         workspaceId: processing.workspaceId,

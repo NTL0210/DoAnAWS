@@ -16,8 +16,7 @@
 set -euo pipefail
 
 # ── Config ────────────────────────────────────────────────
-# >>> CHANGE THIS to your actual repository URL <<<
-REPO_URL="https://github.com/your-org/ai-meeting-workforce-platform.git"
+REPO_URL="${REPO_URL:-https://github.com/NTL0210/DoAnAWS.git}"
 BRANCH="main"
 SIGNALING_PORT="${VOICE_SIGNALING_PORT:-3001}"
 TURN_PORT="${TURN_PORT:-3478}"

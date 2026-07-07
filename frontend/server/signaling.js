@@ -420,17 +420,32 @@ io.on('connection', (socket) => {
 
   socket.on('webrtc:offer', ({ to, from, channelId, offer } = {}) => {
     if (!to || !offer) return;
-    io.to(to).emit('webrtc:offer', { from: from || socket.id, channelId, offer });
+    io.to(to).emit('webrtc:offer', {
+      from: from || socket.id,
+      fromUserId: socketVoiceState.get(socket.id)?.userId || socketUserMap.get(socket.id) || null,
+      channelId,
+      offer,
+    });
   });
 
   socket.on('webrtc:answer', ({ to, from, channelId, answer } = {}) => {
     if (!to || !answer) return;
-    io.to(to).emit('webrtc:answer', { from: from || socket.id, channelId, answer });
+    io.to(to).emit('webrtc:answer', {
+      from: from || socket.id,
+      fromUserId: socketVoiceState.get(socket.id)?.userId || socketUserMap.get(socket.id) || null,
+      channelId,
+      answer,
+    });
   });
 
   socket.on('webrtc:ice-candidate', ({ to, from, channelId, candidate } = {}) => {
     if (!to || !candidate) return;
-    io.to(to).emit('webrtc:ice-candidate', { from: from || socket.id, channelId, candidate });
+    io.to(to).emit('webrtc:ice-candidate', {
+      from: from || socket.id,
+      fromUserId: socketVoiceState.get(socket.id)?.userId || socketUserMap.get(socket.id) || null,
+      channelId,
+      candidate,
+    });
   });
 
   socket.on('peer-signal', ({ targetSocketId, signal, channelId } = {}) => {

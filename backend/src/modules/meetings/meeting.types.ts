@@ -10,10 +10,12 @@ export interface SuggestedTask {
   title: string;
   description: string;
   assigneeId: string | null;
+  assignee?: string;
   priority: "LOW" | "MEDIUM" | "HIGH";
   deadline: string | null;
   confidence: number;
   sourceQuote?: string;
+  reason?: string;
 }
 
 export interface Meeting {
@@ -40,7 +42,7 @@ export interface Meeting {
 export interface CreateMeetingInput {
   workspaceId: string;
   teamId?: string | undefined;
-  title: string;
+  title?: string | undefined;
   transcriptText?: string | undefined;
   storageRef?: string | undefined;
   createdBy?: string | undefined;
