@@ -9,6 +9,7 @@ import {
   FiActivity,
   FiBarChart2,
   FiBell,
+  FiCheck,
   FiChevronDown,
   FiBriefcase,
   FiCheckCircle,
@@ -25,7 +26,9 @@ import {
   FiVolumeX,
   FiUploadCloud,
   FiUser,
+  FiUserPlus,
   FiUsers,
+  FiX,
 } from 'react-icons/fi';
 
 /* ============================================
@@ -101,6 +104,9 @@ export default function AppShell({ user, children, eyebrow, title, description, 
     setShowCreateWorkspace,
     workspaceRole,
     aiNotifications,
+    userInvitations,
+    acceptInvitation,
+    declineInvitation,
     markNotificationRead,
     markAllNotificationsRead,
     workspaceNotificationsEnabled,
@@ -126,10 +132,21 @@ export default function AppShell({ user, children, eyebrow, title, description, 
   const dashboardHref = getDashboardHref(effectiveRole);
   const profileHref = '/profile';
   const notifications = aiNotifications || [];
+  const pendingInvitations = userInvitations || [];
+  const pendingInvitationIds = useMemo(
+    () => new Set(pendingInvitations.map((invitation) => invitation.id)),
+    [pendingInvitations]
+  );
+  const visibleNotifications = useMemo(
+    () => notifications.filter((item) => !pendingInvitationIds.has(item.id)),
+    [notifications, pendingInvitationIds]
+  );
 
   const [notifOpen, setNotifOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
-  const notifCount = notifications.filter((item) => item.unread || item.isRead === false).length;
+  const notifCount =
+    pendingInvitations.length +
+    visibleNotifications.filter((item) => item.unread || item.isRead === false).length;
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const notifRef = useRef(null);
@@ -170,6 +187,18 @@ export default function AppShell({ user, children, eyebrow, title, description, 
   const toggleNotif = useCallback(() => {
     setNotifOpen((v) => !v);
   }, []);
+
+  const handleAcceptInvitation = useCallback(async (invitationId) => {
+    await acceptInvitation(invitationId);
+    setNotifOpen(false);
+    if (router.pathname !== '/workspace') {
+      router.push('/workspace');
+    }
+  }, [acceptInvitation, router]);
+
+  const handleDeclineInvitation = useCallback(async (invitationId) => {
+    await declineInvitation(invitationId);
+  }, [declineInvitation]);
 
   const handleWorkspaceSelect = useCallback((workspaceId) => {
     if (workspaceId === activeWorkspaceId) {
@@ -509,38 +538,80 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                         </button>
                       </div>
                       <div className="max-h-72 overflow-y-auto">
-                        {notifications.length === 0 ? (
+                        {pendingInvitations.length === 0 && visibleNotifications.length === 0 ? (
                           <div className="px-4 py-8 text-center">
                             <FiBell className="mx-auto h-7 w-7 text-slate-300 dark:text-slate-600" />
                             <p className="mt-2 text-sm font-bold text-slate-600 dark:text-slate-300">No notifications yet</p>
                             <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Workspace chat alerts will appear here.</p>
                           </div>
-                        ) : notifications.map((n) => (
-                          <button
-                            key={n.id}
-                            type="button"
-                            onClick={() => markNotificationRead(n.id)}
-                            className={`flex w-full gap-3 px-4 py-3 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800 ${
-                              (n.unread || n.isRead === false) ? 'bg-orange-50/50 dark:bg-orange-950/20' : ''
-                            }`}
-                          >
-                            <div
-                              className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${
-                                (n.unread || n.isRead === false)
-                                  ? 'bg-orange-100 text-orange-600 dark:bg-orange-950/40 dark:text-orange-300'
-                                  : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-                              }`}
-                            >
-                              <FiBell className="h-3.5 w-3.5" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{n.title}</p>
-                              <p className="truncate text-xs text-slate-500 dark:text-slate-400">{n.message}</p>
-                              <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">{n.time || formatNotificationTime(n.createdAt)}</p>
-                            </div>
-                            {(n.unread || n.isRead === false) && <span className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-orange-500" />}
-                          </button>
-                        ))}
+                        ) : (
+                          <>
+                            {pendingInvitations.map((invitation) => (
+                              <div
+                                key={invitation.id}
+                                className="border-b border-slate-100 bg-blue-50/60 px-4 py-3 text-left dark:border-slate-800 dark:bg-blue-950/20"
+                              >
+                                <div className="flex gap-3">
+                                  <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">
+                                    <FiUserPlus className="h-3.5 w-3.5" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                      Invitation to {invitation.workspaceName || 'Workspace'}
+                                    </p>
+                                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                                      {invitation.invitedByUserName || 'A teammate'} invited you as {formatRoleLabel(invitation.role)}.
+                                    </p>
+                                    <div className="mt-3 flex gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleAcceptInvitation(invitation.id)}
+                                        className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-xs font-black text-white transition hover:bg-emerald-700"
+                                      >
+                                        <FiCheck className="h-3.5 w-3.5" />
+                                        Accept
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeclineInvitation(invitation.id)}
+                                        className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                                      >
+                                        <FiX className="h-3.5 w-3.5" />
+                                        Decline
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                            {visibleNotifications.map((n) => (
+                              <button
+                                key={n.id}
+                                type="button"
+                                onClick={() => markNotificationRead(n.id)}
+                                className={`flex w-full gap-3 px-4 py-3 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800 ${
+                                  (n.unread || n.isRead === false) ? 'bg-orange-50/50 dark:bg-orange-950/20' : ''
+                                }`}
+                              >
+                                <div
+                                  className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${
+                                    (n.unread || n.isRead === false)
+                                      ? 'bg-orange-100 text-orange-600 dark:bg-orange-950/40 dark:text-orange-300'
+                                      : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                                  }`}
+                                >
+                                  <FiBell className="h-3.5 w-3.5" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{n.title}</p>
+                                  <p className="truncate text-xs text-slate-500 dark:text-slate-400">{n.message}</p>
+                                  <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">{n.time || formatNotificationTime(n.createdAt)}</p>
+                                </div>
+                                {(n.unread || n.isRead === false) && <span className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-orange-500" />}
+                              </button>
+                            ))}
+                          </>
+                        )}
                       </div>
                       <div className="border-t border-slate-200 px-4 py-2.5 dark:border-slate-800">
                         <Link
@@ -749,6 +820,11 @@ function normalizeWorkspaceRole(role) {
   if (role === 'MANAGER') return 'MANAGER';
   if (role === 'EMPLOYEE') return 'EMPLOYEE';
   return null;
+}
+
+function formatRoleLabel(role) {
+  const normalized = String(role || 'EMPLOYEE').replace(/_/g, ' ').toLowerCase();
+  return normalized.replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function formatNotificationTime(value) {
