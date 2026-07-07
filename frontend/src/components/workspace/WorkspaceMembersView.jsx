@@ -46,9 +46,13 @@ export default function WorkspaceMembersView() {
 
     setSendingInvite(true);
 
-    await sendInvitation(activeWorkspace?.id, inviteEmail.trim(), inviteRole, selectedTeamIds);
-    setInviteEmail('');
-    setSelectedTeamIds([]);
+    const result = await sendInvitation(activeWorkspace?.id, inviteEmail.trim(), inviteRole, selectedTeamIds);
+    if (result) {
+      // Invitation sent successfully — close the form
+      setInviteEmail('');
+      setSelectedTeamIds([]);
+      setShowInviteMember(false);
+    }
     setSendingInvite(false);
   };
 
