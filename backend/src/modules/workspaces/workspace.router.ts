@@ -17,6 +17,7 @@ export function buildWorkspaceRouter(
   router.get("/:id/members", guard("MEMBER", "ADMIN", "OWNER"), controller.getMembers);
   router.post("/:id/members", guard("ADMIN", "OWNER"), controller.addMember);
   router.delete("/:id/members/:userId", guard("ADMIN", "OWNER"), controller.removeMember);
+  router.post("/:id/attachments/upload-url", guard("MEMBER", "ADMIN", "OWNER"), controller.createAttachmentUploadUrl);
 
   return router;
 }

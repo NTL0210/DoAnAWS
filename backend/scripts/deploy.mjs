@@ -27,6 +27,8 @@ const args = process.argv.slice(2);
 const ENV_FLAG = args.find((a) => a.startsWith('--env=')) || '--env=dev';
 const ENVIRONMENT = ENV_FLAG.split('=')[1] || 'dev';
 const STACK_NAME = `ai-meeting-stack-${ENVIRONMENT}`;
+const TURN_USERNAME = process.env.TURN_USERNAME || 'ai-meeting-turn';
+const TURN_CREDENTIAL = process.env.TURN_CREDENTIAL || '';
 
 console.log(`\n🚀 Deploying AI Meeting Workforce Platform`);
 console.log(`   Environment: ${ENVIRONMENT}`);
@@ -70,7 +72,10 @@ async function main() {
     'aws cloudformation deploy',
     `--template-file "${templatePath}"`,
     `--stack-name ${STACK_NAME}`,
-    `--parameter-overrides Environment=${ENVIRONMENT}`,
+    '--parameter-overrides',
+    `Environment=${ENVIRONMENT}`,
+    `TurnUsername=${shellQuote(TURN_USERNAME)}`,
+    `TurnCredential=${shellQuote(requireSecret(TURN_CREDENTIAL, 'TURN_CREDENTIAL'))}`,
     '--capabilities CAPABILITY_NAMED_IAM',
     '--no-fail-on-empty-changeset',
   ].join(' ');
@@ -114,6 +119,17 @@ function ensureBucketExists(bucket) {
       { stdio: 'inherit' }
     );
   }
+}
+
+function requireSecret(value, name) {
+  if (!value || value === 'change-me-before-prod') {
+    throw new Error(`${name} is required for TURN deployment`);
+  }
+  return value;
+}
+
+function shellQuote(value) {
+  return `"${String(value).replace(/"/g, '\\"')}"`;
 }
 
 main().catch((err) => {

@@ -21,6 +21,9 @@ export const workspaceMemberSchema = z.object({
   role: workspaceRoleSchema,
   joinedAt: z.string(),
   nickname: z.string().nullable(),
+  name: z.string().nullable().optional(),
+  email: z.string().nullable().optional(),
+  avatar: z.string().nullable().optional(),
 });
 
 export const workspaceChannelSchema = z.object({
@@ -63,6 +66,12 @@ export const updateWorkspaceSchema = z.object({
   messages: z.record(z.unknown()).optional(),
   voiceRecords: z.array(z.string()).optional(),
   expectedVersion: z.coerce.number().int().positive(),
+});
+
+export const createWorkspaceAttachmentUploadUrlSchema = z.object({
+  fileName: z.string().min(1).max(240),
+  contentType: z.string().min(1).max(120).default("application/octet-stream"),
+  size: z.coerce.number().int().nonnegative().max(25 * 1024 * 1024).optional(),
 });
 
 export const listWorkspacesSchema = z.object({

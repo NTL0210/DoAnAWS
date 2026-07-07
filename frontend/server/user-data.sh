@@ -20,6 +20,11 @@ set -euo pipefail
 REPO_URL="https://github.com/your-org/ai-meeting-workforce-platform.git"
 BRANCH="main"
 SIGNALING_PORT="${VOICE_SIGNALING_PORT:-3001}"
+TURN_PORT="${TURN_PORT:-3478}"
+TURN_MIN_PORT="${TURN_MIN_PORT:-49160}"
+TURN_MAX_PORT="${TURN_MAX_PORT:-49200}"
+TURN_USERNAME="${TURN_USERNAME:-ai-meeting-turn}"
+TURN_CREDENTIAL="${TURN_CREDENTIAL:-change-me-before-prod}"
 SIGNALING_DIR="/home/ec2-user/signaling"
 
 exec > >(tee /var/log/signaling-setup.log) 2>&1
@@ -73,6 +78,33 @@ docker run -d \
   -e VOICE_SIGNALING_PORT="${SIGNALING_PORT}" \
   -e NODE_ENV=production \
   voice-signaling-server
+
+echo "[4b/5] Starting TURN relay..."
+PUBLIC_IP="$(curl -sf http://169.254.169.254/latest/meta-data/public-ipv4 || true)"
+if [ -n "$PUBLIC_IP" ]; then
+  docker rm -f coturn 2>/dev/null || true
+  docker run -d \
+    --name coturn \
+    --restart unless-stopped \
+    --network host \
+    coturn/coturn:latest \
+    -n \
+    --log-file=stdout \
+    --listening-port="${TURN_PORT}" \
+    --fingerprint \
+    --lt-cred-mech \
+    --user="${TURN_USERNAME}:${TURN_CREDENTIAL}" \
+    --realm="ai-meeting-voice" \
+    --external-ip="${PUBLIC_IP}" \
+    --min-port="${TURN_MIN_PORT}" \
+    --max-port="${TURN_MAX_PORT}" \
+    --no-cli \
+    --no-tls \
+    --no-dtls
+  echo "[OK] TURN relay started on ${PUBLIC_IP}:${TURN_PORT}"
+else
+  echo "[WARN] TURN relay skipped because public IP was not available"
+fi
 
 # ── 5. Verify ─────────────────────────────────────────────
 echo "[5/5] Verifying health check..."

@@ -24,6 +24,16 @@ Parameters:
     Type: String
     Default: ""
     Description: Custom domain for CloudFront (optional)
+  TurnUsername:
+    Type: String
+    Default: ai-meeting-turn
+    Description: Static TURN username for the single EC2 coturn relay
+  TurnCredential:
+    Type: String
+    NoEcho: true
+    MinLength: 12
+    Default: change-me-before-prod
+    Description: Static TURN credential for the single EC2 coturn relay
 
 Conditions:
   HasCustomDomain: !Not [!Equals [!Ref DomainName, ""]]
@@ -961,6 +971,21 @@ Resources:
           FromPort: 3001
           ToPort: 3001
           SourceSecurityGroupId: !GetAtt ALBSecurityGroup.GroupId
+        - IpProtocol: udp
+          FromPort: 3478
+          ToPort: 3478
+          CidrIp: "0.0.0.0/0"
+          Description: TURN UDP listener
+        - IpProtocol: tcp
+          FromPort: 3478
+          ToPort: 3478
+          CidrIp: "0.0.0.0/0"
+          Description: TURN TCP fallback listener
+        - IpProtocol: udp
+          FromPort: 49160
+          ToPort: 49200
+          CidrIp: "0.0.0.0/0"
+          Description: TURN media relay UDP range
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -1006,7 +1031,7 @@ Resources:
       TargetGroupARNs:
         - !Ref ALBTargetGroup
       VPCZoneIdentifier:
-        - !Ref PrivateSubnet
+        - !Ref PublicSubnet
       LaunchTemplate:
         LaunchTemplateId: !Ref EC2LaunchTemplate
         Version: !GetAtt EC2LaunchTemplate.DefaultVersionNumber
@@ -1024,8 +1049,11 @@ Resources:
         ImageId: !Ref LatestAMIRA
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
-        SecurityGroupIds:
-          - !Ref EC2SecurityGroup
+        NetworkInterfaces:
+          - DeviceIndex: 0
+            AssociatePublicIpAddress: true
+            Groups:
+              - !Ref EC2SecurityGroup
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
@@ -1061,6 +1089,33 @@ Resources:
               -e VOICE_SIGNALING_PORT=3001 \
               -e NODE_ENV=production \
               voice-signaling-server
+
+            # TURN relay for WebRTC across different networks/NAT.
+            PUBLIC_IP="$(curl -sf http://169.254.169.254/latest/meta-data/public-ipv4 || true)"
+            if [ -n "$PUBLIC_IP" ]; then
+              docker rm -f coturn 2>/dev/null || true
+              docker run -d \
+                --name coturn \
+                --restart unless-stopped \
+                --network host \
+                coturn/coturn:latest \
+                -n \
+                --log-file=stdout \
+                --listening-port=3478 \
+                --fingerprint \
+                --lt-cred-mech \
+                --user="${TurnUsername}:${TurnCredential}" \
+                --realm="ai-meeting-${Environment}" \
+                --external-ip="$PUBLIC_IP" \
+                --min-port=49160 \
+                --max-port=49200 \
+                --no-cli \
+                --no-tls \
+                --no-dtls
+              echo "[OK] TURN relay started on $PUBLIC_IP:3478"
+            else
+              echo "[WARN] TURN relay skipped because public IP was not available" >&2
+            fi
 
             # ─── Health check ─────────────────────────────────
             sleep 2

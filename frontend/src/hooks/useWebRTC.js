@@ -18,6 +18,11 @@ function debugLog(...args) {
   if (DEBUG) console.info('[Voice/WebRTC]', ...args);
 }
 
+function isPolitePeer(localUserId, remoteUserId) {
+  if (!localUserId || !remoteUserId) return true;
+  return String(localUserId) > String(remoteUserId);
+}
+
 function summarizeWebRTCStats(report) {
   const summary = {
     roundTripTime: null,
@@ -107,6 +112,7 @@ export default function useWebRTC(opts) {
 
   /** ICE candidates that arrived before setRemoteDescription — keyed by peerUserId */
   const pendingIceCandidatesRef = useRef(new Map());
+  const ignoredOfferPeersRef = useRef(new Set());
   /** Interval for polling selected candidate-pair info */
   const candidateInfoIntervalRef = useRef(null);
 
@@ -345,6 +351,10 @@ export default function useWebRTC(opts) {
       debugLog('restart ICE', peerUserId, reason);
       pc.restartIce?.();
       const offer = await pc.createOffer({ iceRestart: true, offerToReceiveAudio: true });
+      if (pc.signalingState !== 'stable') {
+        debugLog('skip ICE restart offer, signaling not stable', peerUserId, pc.signalingState);
+        return;
+      }
       await pc.setLocalDescription(offer);
       socket.emit('webrtc:offer', { to: peer.socketId, from: socket.id, channelId, offer });
     } catch (err) {
@@ -494,7 +504,15 @@ export default function useWebRTC(opts) {
     if (!pc || !socket?.connected) return;
     try {
       debugLog('send offer', peer.userId);
+      if (pc.signalingState !== 'stable') {
+        debugLog('skip offer, signaling not stable', peer.userId, pc.signalingState);
+        return;
+      }
       const offer = await pc.createOffer({ offerToReceiveAudio: true });
+      if (pc.signalingState !== 'stable') {
+        debugLog('skip offer after createOffer, signaling not stable', peer.userId, pc.signalingState);
+        return;
+      }
       await pc.setLocalDescription(offer);
       socket.emit('webrtc:offer', { to: peer.socketId, from: socket.id, channelId, offer });
     } catch (err) {
@@ -525,15 +543,61 @@ export default function useWebRTC(opts) {
     if (!pc || !socket?.connected) return;
     try {
       debugLog('received offer', peerUserId);
-      if (pc.signalingState !== 'stable') {
-        await Promise.all([
-          pc.setLocalDescription({ type: 'rollback' }).catch(() => {}),
-        ]);
+
+      const alreadyAnsweredSameOffer =
+        pc.signalingState === 'stable'
+        && pc.remoteDescription?.type === 'offer'
+        && pc.localDescription?.type === 'answer'
+        && pc.remoteDescription.sdp === offer.sdp;
+
+      if (alreadyAnsweredSameOffer) {
+        debugLog('resend answer for duplicate offer', peerUserId);
+        socket.emit('webrtc:answer', {
+          to: from,
+          from: socket.id,
+          channelId,
+          answer: pc.localDescription,
+        });
+        return;
       }
+
+      const offerCollision = pc.signalingState !== 'stable';
+      const polite = isPolitePeer(userId, peerUserId);
+      ignoredOfferPeersRef.current.delete(peerUserId);
+
+      if (offerCollision) {
+        if (!polite) {
+          debugLog('ignore colliding offer from impolite peer', peerUserId, pc.signalingState);
+          ignoredOfferPeersRef.current.add(peerUserId);
+          return;
+        }
+        await pc.setLocalDescription({ type: 'rollback' }).catch(() => {});
+      }
+
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
       // Drain any ICE candidates that arrived before the remote description
       await flushQueuedIceCandidates(peerUserId);
+
+      if (pc.signalingState !== 'have-remote-offer') {
+        if (pc.localDescription?.type === 'answer') {
+          debugLog('remote offer already answered, resend current answer', peerUserId, pc.signalingState);
+          socket.emit('webrtc:answer', {
+            to: from,
+            from: socket.id,
+            channelId,
+            answer: pc.localDescription,
+          });
+        } else {
+          debugLog('skip answer, unexpected signaling state after remote offer', peerUserId, pc.signalingState);
+        }
+        return;
+      }
+
       const answer = await pc.createAnswer();
+      if (pc.signalingState !== 'have-remote-offer') {
+        debugLog('skip setLocalDescription(answer), signaling moved', peerUserId, pc.signalingState);
+        return;
+      }
       await pc.setLocalDescription(answer);
       debugLog('send answer', peerUserId);
       socket.emit('webrtc:answer', { to: from, from: socket.id, channelId, answer });
@@ -559,7 +623,7 @@ export default function useWebRTC(opts) {
       setAudioWarning(`Could not answer audio connection for ${peer.name || peerUserId}.`);
       setLastWebRTCError(`answer failed: ${err.name} — ${err.message}`);
     }
-  }, [channelId, createPeerConnection, flushQueuedIceCandidates, socket]);
+  }, [channelId, createPeerConnection, flushQueuedIceCandidates, socket, userId]);
 
   const handleAnswer = useCallback(async ({ from, answer }) => {
     const peerUserId = socketUserMapRef.current.get(from);
@@ -567,11 +631,18 @@ export default function useWebRTC(opts) {
     if (!pc || !answer) return;
     try {
       debugLog('received answer', peerUserId);
-      if (pc.signalingState !== 'stable') {
-        await pc.setRemoteDescription(new RTCSessionDescription(answer));
-        // Drain any ICE candidates that arrived before the remote description
-        await flushQueuedIceCandidates(peerUserId);
+      if (ignoredOfferPeersRef.current.has(peerUserId)) {
+        debugLog('ignore answer for ignored offer collision', peerUserId);
+        ignoredOfferPeersRef.current.delete(peerUserId);
+        return;
       }
+      if (pc.signalingState !== 'have-local-offer') {
+        debugLog('ignore answer in incompatible signaling state', peerUserId, pc.signalingState);
+        return;
+      }
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      // Drain any ICE candidates that arrived before the remote description
+      await flushQueuedIceCandidates(peerUserId);
     } catch (err) {
       setLastWebRTCError(`set answer failed: ${err.message}`);
       debugLog('set answer failed', err.message);

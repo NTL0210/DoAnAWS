@@ -4,7 +4,79 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { generateId } from '@/lib/workspaceData';
 import { normalizeVoiceChannel } from '@/lib/voicePermissions';
 import { getGlobalSocket } from '@/context/VoiceConnectionContext';
-import { workspacesApi } from '@/services/cloudClient';
+import { workspacesApi, workspaceAttachmentsApi } from '@/services/cloudClient';
+
+function messageKeyForChannel(channelId) {
+  return channelId;
+}
+
+function messageKeyForTeam(teamId) {
+  return 'team-chat-' + teamId;
+}
+
+function sortMessages(items = []) {
+  return [...items].sort((a, b) => {
+    const left = Date.parse(a.createdAt || 0);
+    const right = Date.parse(b.createdAt || 0);
+    return (Number.isNaN(left) ? 0 : left) - (Number.isNaN(right) ? 0 : right);
+  });
+}
+
+function appendMessage(collection = {}, key, message) {
+  if (!key || !message?.id) return collection || {};
+  const existing = Array.isArray(collection?.[key]) ? collection[key] : [];
+  if (existing.some((item) => item.id === message.id)) return collection || {};
+  return {
+    ...(collection || {}),
+    [key]: sortMessages([...existing, message]),
+  };
+}
+
+function mergeMessageCollections(base = {}, incoming = {}) {
+  const next = { ...(base || {}) };
+  Object.entries(incoming || {}).forEach(([key, value]) => {
+    if (!Array.isArray(value)) {
+      next[key] = value;
+      return;
+    }
+    const byId = new Map((Array.isArray(next[key]) ? next[key] : []).map((item) => [item.id, item]));
+    value.forEach((item) => {
+      if (item?.id) byId.set(item.id, { ...(byId.get(item.id) || {}), ...item });
+    });
+    next[key] = sortMessages(Array.from(byId.values()));
+  });
+  return next;
+}
+
+async function uploadChatAttachments(workspaceId, files = []) {
+  const selected = Array.from(files || []).filter(Boolean);
+  if (!workspaceId || selected.length === 0) return [];
+
+  return Promise.all(selected.map(async (file) => {
+    const attachment = await workspaceAttachmentsApi.createUploadUrl(workspaceId, {
+      fileName: file.name,
+      contentType: file.type || 'application/octet-stream',
+      size: file.size || 0,
+    });
+    const upload = await fetch(attachment.uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      body: file,
+    });
+    if (!upload.ok) throw new Error('Attachment upload failed.');
+    return {
+      id: attachment.id,
+      name: file.name,
+      size: file.size || 0,
+      type: file.type || 'application/octet-stream',
+      storageKey: attachment.storageKey,
+      url: attachment.downloadUrl,
+      downloadUrl: attachment.downloadUrl,
+      expiresAt: attachment.expiresAt,
+      createdAt: new Date().toISOString(),
+    };
+  }));
+}
 
 /**
  * useChannelsAndMessages — manages messages and channel CRUD.
@@ -78,10 +150,21 @@ export default function useChannelsAndMessages({
       }
       if (detail.type !== 'CHAT_MESSAGE' && detail.type !== 'TEAM_MESSAGE') return;
       const payload = detail.payload || {};
-      if (payload.messages) setMessages(payload.messages);
+      if (payload.message) {
+        const key = payload.message.scope === 'TEAM'
+          ? messageKeyForTeam(payload.message.teamId)
+          : messageKeyForChannel(payload.message.channelId);
+        setMessages((prev) => appendMessage(prev, key, payload.message));
+      } else if (payload.messages) {
+        setMessages((prev) => mergeMessageCollections(prev, payload.messages));
+      }
       if (payload.workspace?.id) {
         setWorkspaces((prev) =>
-          prev.map((ws) => (ws.id === payload.workspace.id ? payload.workspace : ws))
+          prev.map((ws) => (
+            ws.id === payload.workspace.id
+              ? { ...payload.workspace, messages: mergeMessageCollections(ws.messages, payload.workspace.messages) }
+              : ws
+          ))
         );
       }
     }
@@ -154,9 +237,28 @@ export default function useChannelsAndMessages({
   }, [activeWorkspace, setWorkspaces]);
 
   // ─── Message Actions ───────────────────────────────────
+  const persistAppendedMessage = useCallback(async (messageKey, newMsg, retries = 1) => {
+    if (!activeWorkspace?.id) return null;
+    let latest = await workspacesApi.get(activeWorkspace.id);
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      const nextMessages = appendMessage(latest.messages || {}, messageKey, newMsg);
+      try {
+        return await workspacesApi.update(activeWorkspace.id, {
+          messages: nextMessages,
+          expectedVersion: latest.version || 1,
+        });
+      } catch (err) {
+        if (err?.statusCode !== 409 || attempt >= retries) throw err;
+        latest = await workspacesApi.get(activeWorkspace.id);
+      }
+    }
+    return null;
+  }, [activeWorkspace?.id]);
+
   const sendMessage = useCallback(async (channelId, content, attachments) => {
     if (!currentUser || !content?.trim()) return;
     const channel = activeWorkspace?.channels?.find((item) => item.id === channelId);
+    const uploadedAttachments = await uploadChatAttachments(activeWorkspaceId, attachments);
 
     const newMsg = {
       id: 'msg-' + generateId(),
@@ -167,27 +269,21 @@ export default function useChannelsAndMessages({
       userEmail: currentUser.email || '',
       userAvatar: currentUser.avatar || null,
       content: content.trim(),
-      attachments: attachments || [],
+      attachments: uploadedAttachments,
       createdAt: new Date().toISOString(),
       updatedAt: null,
     };
 
-    const nextMessages = {
-      ...(messages || {}),
-      [channelId]: [...(messages[channelId] || []), newMsg],
-    };
-    setMessages(nextMessages);
+    const messageKey = messageKeyForChannel(channelId);
+    setMessages((prev) => appendMessage(prev, messageKey, newMsg));
     if (activeWorkspace) {
       try {
-        const saved = await workspacesApi.update(activeWorkspace.id, {
-          messages: nextMessages,
-          expectedVersion: activeWorkspace.version || 1,
-        });
+        const saved = await persistAppendedMessage(messageKey, newMsg);
         setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
         getGlobalSocket()?.emit('workspace:event', {
           workspaceId: activeWorkspaceId,
           type: 'CHAT_MESSAGE',
-          payload: { message: newMsg, messages: saved.messages || nextMessages, workspace: saved },
+          payload: { message: newMsg, workspace: saved },
         });
       } catch {
         // Message remains visible locally until the next cloud refresh.
@@ -199,10 +295,11 @@ export default function useChannelsAndMessages({
       senderId: currentUser.id,
       workspaceId: activeWorkspaceId,
     });
-  }, [currentUser, activeWorkspaceId, activeWorkspace, messages, setWorkspaces, addNotification]);
+  }, [currentUser, activeWorkspaceId, activeWorkspace, setWorkspaces, addNotification, persistAppendedMessage]);
 
   const sendTeamMessage = useCallback(async (teamId, content, attachments) => {
     if (!currentUser || !teamId || !content?.trim()) return;
+    const uploadedAttachments = await uploadChatAttachments(activeWorkspaceId, attachments);
 
     const newMsg = {
       id: 'msg-' + generateId(),
@@ -213,29 +310,22 @@ export default function useChannelsAndMessages({
       userEmail: currentUser.email || '',
       userAvatar: currentUser.avatar || null,
       content: content.trim(),
-      attachments: attachments || [],
+      attachments: uploadedAttachments,
       createdAt: new Date().toISOString(),
       updatedAt: null,
       scope: 'TEAM',
     };
 
-    const key = 'team-chat-' + teamId;
-    const nextMessages = {
-      ...(messages || {}),
-      [key]: [...(messages[key] || []), newMsg],
-    };
-    setMessages(nextMessages);
+    const key = messageKeyForTeam(teamId);
+    setMessages((prev) => appendMessage(prev, key, newMsg));
     if (activeWorkspace) {
       try {
-        const saved = await workspacesApi.update(activeWorkspace.id, {
-          messages: nextMessages,
-          expectedVersion: activeWorkspace.version || 1,
-        });
+        const saved = await persistAppendedMessage(key, newMsg);
         setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
         getGlobalSocket()?.emit('workspace:event', {
           workspaceId: activeWorkspaceId,
           type: 'TEAM_MESSAGE',
-          payload: { message: newMsg, messages: saved.messages || nextMessages, workspace: saved },
+          payload: { message: newMsg, workspace: saved },
         });
       } catch {
         // Message remains visible locally until the next cloud refresh.
@@ -248,7 +338,7 @@ export default function useChannelsAndMessages({
       senderId: currentUser.id,
       workspaceId: activeWorkspaceId,
     });
-  }, [currentUser, activeWorkspaceId, activeWorkspace, messages, setWorkspaces, addActivity, addNotification]);
+  }, [currentUser, activeWorkspaceId, activeWorkspace, setWorkspaces, addActivity, addNotification, persistAppendedMessage]);
 
   const sendTyping = useCallback((targetId, channelType = 'channel') => {
     if (!targetId || !currentUser?.id || !activeWorkspaceId) return;
