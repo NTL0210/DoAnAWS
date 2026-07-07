@@ -89,10 +89,13 @@ jobs:
 
       - name: Deploy Lambda (esbuild bundle)
         run: |
-          zip -j bundle-deploy.zip dist/bundle.js
+          test -f dist/bundle.js
+          rm -f "$RUNNER_TEMP/bundle-deploy.zip"
+          zip -q -j "$RUNNER_TEMP/bundle-deploy.zip" dist/bundle.js
+          unzip -t "$RUNNER_TEMP/bundle-deploy.zip"
           aws lambda update-function-code \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
-            --zip-file fileb://bundle-deploy.zip \
+            --zip-file fileb://$RUNNER_TEMP/bundle-deploy.zip \
             --region ${{ env.AWS_REGION }}
           aws lambda wait function-updated \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
