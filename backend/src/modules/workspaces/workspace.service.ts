@@ -7,6 +7,7 @@ import type {
   UpdateWorkspaceInput,
   WorkspaceMember,
 } from "./workspace.types.js";
+import { createWorkspaceAttachmentUploadUrl } from "./workspace.upload.js";
 
 export class WorkspaceService {
   constructor(private readonly repository: WorkspaceRepository) {}
@@ -100,10 +101,24 @@ export class WorkspaceService {
     return ws.members ?? [];
   }
 
+  async createAttachmentUpload(id: string, userId: string, input: {
+    fileName: string;
+    contentType: string;
+  }): Promise<Awaited<ReturnType<typeof createWorkspaceAttachmentUploadUrl>>> {
+    await this.get(id);
+    return createWorkspaceAttachmentUploadUrl({
+      workspaceId: id,
+      userId,
+      fileName: input.fileName,
+      contentType: input.contentType,
+    });
+  }
+
   async addMember(
     id: string,
     userId: string,
     role: WorkspaceMember["role"] = "EMPLOYEE",
+    profile: Partial<Pick<WorkspaceMember, "name" | "email" | "avatar">> = {},
   ): Promise<WorkspaceMember> {
     const ws = await this.get(id);
 
@@ -116,6 +131,9 @@ export class WorkspaceService {
       role,
       joinedAt: now,
       nickname: null,
+      name: profile.name ?? null,
+      email: profile.email ?? null,
+      avatar: profile.avatar ?? null,
     };
 
     const updated: Workspace = {

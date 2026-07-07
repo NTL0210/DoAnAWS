@@ -327,16 +327,24 @@ export default function WorkspaceChannelView() {
     if (activeTeamId && value.trim()) sendTyping(activeTeamId, 'team');
   }, [activeTeamId, sendTyping]);
 
-  const handleAttachChannelFile = useCallback((channelId, file) => {
+  const handleAttachChannelFile = useCallback(async (channelId, file) => {
     if (!channelId || !file) return;
-    sendMessage(channelId, `Attached ${file.name}`, [createMessageAttachment(file)]);
-    showToast('success', `Attached ${file.name}`);
+    try {
+      await sendMessage(channelId, `Attached ${file.name}`, [file]);
+      showToast('success', `Attached ${file.name}`);
+    } catch (err) {
+      showToast('error', err?.message || 'Attachment upload failed.');
+    }
   }, [sendMessage, showToast]);
 
-  const handleAttachTeamFile = useCallback((teamId, file) => {
+  const handleAttachTeamFile = useCallback(async (teamId, file) => {
     if (!teamId || !file) return;
-    sendTeamMessage(teamId, `Attached ${file.name}`, [createMessageAttachment(file)]);
-    showToast('success', `Attached ${file.name}`);
+    try {
+      await sendTeamMessage(teamId, `Attached ${file.name}`, [file]);
+      showToast('success', `Attached ${file.name}`);
+    } catch (err) {
+      showToast('error', err?.message || 'Attachment upload failed.');
+    }
   }, [sendTeamMessage, showToast]);
 
   // ─── Render current view ───
@@ -926,10 +934,7 @@ const MessageItem = memo(function MessageItem({ msg, user }) {
         {msg.attachments?.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
             {msg.attachments.map((attachment) => (
-              <div key={attachment.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-bold text-slate-500 dark:text-slate-400 shadow-sm">
-                {attachment.name}
-                {attachment.size ? <span className="ml-2 font-semibold text-slate-400">{formatBytes(attachment.size)}</span> : null}
-              </div>
+              <MessageAttachment key={attachment.id || attachment.storageKey || attachment.name} attachment={attachment} />
             ))}
           </div>
         )}
@@ -937,6 +942,45 @@ const MessageItem = memo(function MessageItem({ msg, user }) {
     </article>
   );
 });
+
+function MessageAttachment({ attachment }) {
+  const url = attachment.url || attachment.downloadUrl;
+  const isImage = String(attachment.type || '').startsWith('image/');
+  if (isImage && url) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="group/attachment block max-w-[min(420px,100%)] overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-sm transition hover:border-blue-300 dark:border-slate-700 dark:bg-slate-800"
+        title={attachment.name}
+      >
+        <img
+          src={url}
+          alt={attachment.name || 'Attached image'}
+          className="max-h-80 w-full object-contain"
+          loading="lazy"
+        />
+        <span className="flex items-center justify-between gap-3 border-t border-slate-200 bg-white/90 px-3 py-2 text-xs font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-400">
+          <span className="truncate">{attachment.name || 'Image'}</span>
+          {attachment.size ? <span className="flex-shrink-0 font-semibold">{formatBytes(attachment.size)}</span> : null}
+        </span>
+      </a>
+    );
+  }
+
+  return (
+    <a
+      href={url || undefined}
+      target={url ? '_blank' : undefined}
+      rel={url ? 'noreferrer' : undefined}
+      className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-bold text-slate-500 dark:text-slate-400 shadow-sm"
+    >
+      {attachment.name}
+      {attachment.size ? <span className="ml-2 font-semibold text-slate-400">{formatBytes(attachment.size)}</span> : null}
+    </a>
+  );
+}
 
 function TypingIndicator({ user }) {
   const name = user?.name || 'Someone';
@@ -1308,16 +1352,6 @@ function formatTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-}
-
-function createMessageAttachment(file) {
-  return {
-    id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    name: file.name,
-    size: file.size,
-    type: file.type || 'application/octet-stream',
-    createdAt: new Date().toISOString(),
-  };
 }
 
 function formatBytes(bytes = 0) {

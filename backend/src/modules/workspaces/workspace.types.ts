@@ -5,6 +5,9 @@ export interface WorkspaceMember {
   role: WorkspaceRole;
   joinedAt: string;
   nickname: string | null;
+  name?: string | null;
+  email?: string | null;
+  avatar?: string | null;
 }
 
 export interface WorkspaceChannel {

@@ -70,6 +70,10 @@ export class MeetingController {
             role === "OWNER" || role === "VICE_ADMIN" || role === "MANAGER" || role === "EMPLOYEE"
               ? role
               : "EMPLOYEE",
+            {
+              name: req.user.name || req.user.email || null,
+              email: req.user.email || null,
+            },
           );
         }
       }

@@ -7,6 +7,7 @@ import {
   idParamsSchema,
   addMemberSchema,
   removeMemberParamsSchema,
+  createWorkspaceAttachmentUploadUrlSchema,
 } from "./workspace.schemas.js";
 import type { WorkspaceService } from "./workspace.service.js";
 import type { WorkspaceChannel, WorkspaceMember, WorkspaceTeam } from "./workspace.types.js";
@@ -132,6 +133,31 @@ export class WorkspaceController {
       const body = addMemberSchema.parse(req.body);
       const member = await this.service.addMember(params.id, body.userId, body.role);
       res.status(201).json(member);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  createAttachmentUploadUrl = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const params = idParamsSchema.parse(req.params);
+      const userId = req.user?.userId;
+      if (!userId) {
+        res.status(401).json({
+          error: {
+            code: "AUTH_REQUIRED",
+            message: "Authentication required",
+            requestId: res.locals.requestId,
+          },
+        });
+        return;
+      }
+      const body = createWorkspaceAttachmentUploadUrlSchema.parse(req.body);
+      const upload = await this.service.createAttachmentUpload(params.id, userId, {
+        fileName: body.fileName,
+        contentType: body.contentType,
+      });
+      res.status(200).json(upload);
     } catch (error) {
       next(error);
     }

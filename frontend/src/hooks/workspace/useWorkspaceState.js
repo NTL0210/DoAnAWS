@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { getWorkspaceRole } from '@/lib/workspaceData';
 import { normalizeVoiceChannel } from '@/lib/voicePermissions';
 import { canManageAIWorkflow } from '@/services/workspaceService';
@@ -97,12 +97,59 @@ export default function useWorkspaceState({
       const isSelf = member.userId === currentUser?.id;
       return {
         ...member,
-        name: member.name || member.nickname || (isSelf ? currentUser?.name : null) || null,
+        name: member.name || member.nickname || (isSelf ? currentUser?.name : null) || member.email || member.userId || null,
         email: member.email || (isSelf ? currentUser?.email : null) || null,
         avatar: member.avatar || (isSelf ? currentUser?.avatar : null) || null,
       };
     });
   }, [activeWorkspace, currentUser]);
+
+  useEffect(() => {
+    if (!activeWorkspace || !isCloudMode()) return undefined;
+    const missingProfileIds = Array.from(new Set(
+      (activeWorkspace.members || [])
+        .filter((member) => member.userId && member.userId !== currentUser?.id && (!member.name || !member.email))
+        .map((member) => member.userId)
+    ));
+    if (missingProfileIds.length === 0) return undefined;
+
+    let cancelled = false;
+    async function hydrateMemberProfiles() {
+      try {
+        const { usersApi } = await import('@/services/cloudClient');
+        const profiles = await Promise.all(
+          missingProfileIds.map((userId) =>
+            usersApi.get(userId).catch(() => null)
+          )
+        );
+        if (cancelled) return;
+        const byId = new Map(profiles.filter(Boolean).map((profile) => [profile.id, profile]));
+        if (byId.size === 0) return;
+
+        setWorkspaces((prev) => prev.map((workspace) => {
+          if (workspace.id !== activeWorkspace.id) return workspace;
+          return {
+            ...workspace,
+            members: (workspace.members || []).map((member) => {
+              const profile = byId.get(member.userId);
+              if (!profile) return member;
+              return {
+                ...member,
+                name: member.name || profile.name || profile.email || member.userId,
+                email: member.email || profile.email || null,
+                avatar: member.avatar || profile.avatar || null,
+              };
+            }),
+          };
+        }));
+      } catch {
+        // Keep the userId fallback; member rendering must not fail if profile lookup is unavailable.
+      }
+    }
+
+    hydrateMemberProfiles();
+    return () => { cancelled = true; };
+  }, [activeWorkspace, currentUser?.id]);
 
   const workspaceTeams = useMemo(() => {
     if (!activeWorkspace) return [];
