@@ -386,7 +386,30 @@ export default function useWebRTC(opts) {
     const existing = peersRef.current.get(peer.userId);
     if (existing && existing.connectionState !== 'closed') return existing;
 
-    const pc = new RTCPeerConnection(rtcConfiguration);
+    let pc = null;
+    try {
+      pc = new RTCPeerConnection(rtcConfiguration);
+    } catch (err) {
+      console.error('[WebRTC] Failed to create RTCPeerConnection:', err);
+      console.error('[WebRTC] RTCConfiguration:', rtcConfiguration);
+      // Try again with fallback config (STUN only)
+      try {
+        const fallbackConfig = {
+          iceServers: [
+            { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+          ],
+          iceTransportPolicy: 'all',
+          bundlePolicy: 'balanced',
+          rtcpMuxPolicy: 'require',
+        };
+        pc = new RTCPeerConnection(fallbackConfig);
+        console.warn('[WebRTC] Using fallback STUN-only config');
+      } catch (fallbackErr) {
+        console.error('[WebRTC] Fallback RTCPeerConnection also failed:', fallbackErr);
+        return null;
+      }
+    }
+
     peerMetaRef.current.set(peer.userId, peer);
     socketUserMapRef.current.set(peer.socketId, peer.userId);
     addLocalTracks(pc);
@@ -401,6 +424,16 @@ export default function useWebRTC(opts) {
           candidate: event.candidate,
         });
       }
+    };
+
+    // Handle ICE errors
+    pc.onicecandidateerror = (event) => {
+      console.error('[WebRTC] ICE candidate error:', {
+        userId: peer.userId,
+        errorCode: event.errorCode,
+        errorText: event.errorText,
+      });
+      // Don't fail on candidate errors - continue trying
     };
 
     pc.ontrack = (event) => {
