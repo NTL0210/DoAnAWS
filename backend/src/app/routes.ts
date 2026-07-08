@@ -30,7 +30,7 @@ export function buildApiRouter(repositories: Repositories): Router {
     requireWorkspaceRole(repositories.workspaces, ...roles);
 
   const userService = new UserService(repositories.users);
-  const workspaceService = new WorkspaceService(repositories.workspaceCrud);
+  const workspaceService = new WorkspaceService(repositories.workspaceCrud, userService);
 
   // ── Meetings ──────────────────────────────────────────
   const meetingService = new MeetingService(repositories.meetings);

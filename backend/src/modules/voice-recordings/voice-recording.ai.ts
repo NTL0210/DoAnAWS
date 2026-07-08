@@ -23,6 +23,10 @@ interface VoiceAnalysisResult {
   }>;
 }
 
+interface AnalysisOptions {
+  referenceDate?: string | undefined;
+}
+
 export function getVoiceRecordingBucket(): string {
   const bucket = env.VOICE_RECORDINGS_BUCKET || env.AUDIO_BUCKET;
   if (!bucket) throw new Error("VOICE_RECORDINGS_BUCKET or AUDIO_BUCKET is required");
@@ -75,7 +79,7 @@ export async function analyzeVoiceRecording(recording: VoiceRecording): Promise<
   return analyzeStoredAudio({ storageKey: recording.storageKey, mimeType: recording.mimeType });
 }
 
-export async function analyzeStoredAudio(input: { storageKey: string; mimeType: string }): Promise<{
+export async function analyzeStoredAudio(input: { storageKey: string; mimeType: string; referenceDate?: string | undefined }): Promise<{
   transcript: string;
   summary: string;
   keyDecisions: string[];
@@ -107,16 +111,17 @@ export async function analyzeStoredAudio(input: { storageKey: string; mimeType: 
 
   const geminiMimeType = toGeminiMimeType(input.mimeType, input.storageKey);
   const fileUri = await uploadToGemini(buffer, geminiMimeType, input.storageKey);
-  const raw = await callGeminiWithFile(fileUri, geminiMimeType, audioPrompt());
-  return ensureActionableAnalysis(normalizeGeminiJson(raw), "");
+  const raw = await callGeminiWithFile(fileUri, geminiMimeType, audioPrompt(input.referenceDate));
+  return ensureActionableAnalysis(normalizeGeminiJson(raw), "", input.referenceDate);
 }
 
-export async function analyzeTranscriptText(transcriptText: string): Promise<VoiceAnalysisResult> {
+export async function analyzeTranscriptText(transcriptText: string, options: AnalysisOptions = {}): Promise<VoiceAnalysisResult> {
   if (!env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is required");
   const trimmed = transcriptText.trim();
   if (!trimmed) return emptyAnalysis();
-  const raw = await callGeminiWithText(textPrompt(trimmed));
-  return ensureActionableAnalysis(normalizeGeminiJson(raw), trimmed);
+  const referenceDate = resolveReferenceDate(trimmed, options.referenceDate);
+  const raw = await callGeminiWithText(textPrompt(trimmed, referenceDate));
+  return ensureActionableAnalysis(normalizeGeminiJson(raw), trimmed, referenceDate);
 }
 
 async function uploadToGemini(fileBuffer: Buffer, mimeType: string, storageKey: string): Promise<string> {
@@ -256,18 +261,20 @@ function emptyAnalysis(): VoiceAnalysisResult {
   return { transcript: "", summary: "", keyDecisions: [], actionItems: [], risks: [], tasks: [] };
 }
 
-function executionPromptHeader(): string {
+function executionPromptHeader(referenceDate?: string): string {
   return [
     "You are the execution analyst for AI Meeting Workforce Platform.",
     "The user provides only meeting notes, work notes, transcript text, or audio. Do not ask follow-up questions.",
     "Transform the content into execution: synthesized summary, decisions, risks, action items, and task suggestions.",
     "Output language: Vietnamese. Keep person names exactly as spoken/written.",
+    referenceDate ? `Reference date for relative deadlines: ${referenceDate}.` : "No reliable reference date is available for relative deadlines.",
     "Do not copy the transcript as the summary. The summary must be 3-6 synthesized sentences.",
     "Extract concrete work only. Ignore small talk unless it creates a risk or task.",
     "If the content has no work, decision, risk, deadline, or assignment, keep tasks, actionItems, keyDecisions, and risks as empty arrays.",
     "For each task, infer assignee from explicit assignment, speaker context, or responsibility phrase. Leave empty only if unclear.",
     "Use priority HIGH for blockers, customer escalations, login/auth failures, budget/credit risk, deadlines, production issues, or VIP customers.",
-    "Use deadline as YYYY-MM-DD only when the date can be inferred reliably from the content; otherwise use an empty string.",
+    "Use deadline as YYYY-MM-DD only when the content contains an explicit deadline or a relative deadline that can be resolved from the reference date; otherwise use an empty string.",
+    "Never invent years or calendar dates that are not supported by the transcript and reference date.",
     "Return valid JSON only. No Markdown, no commentary.",
     "",
     "JSON schema:",
@@ -292,7 +299,7 @@ function executionPromptHeader(): string {
   ].join("\n");
 }
 
-function ensureActionableAnalysis(analysis: VoiceAnalysisResult, fallbackTranscript: string): VoiceAnalysisResult {
+function ensureActionableAnalysis(analysis: VoiceAnalysisResult, fallbackTranscript: string, referenceDate?: string): VoiceAnalysisResult {
   const transcript = (analysis.transcript || fallbackTranscript).trim();
   if (transcript && !hasExecutionSignal(transcript)) {
     return {
@@ -315,7 +322,7 @@ function ensureActionableAnalysis(analysis: VoiceAnalysisResult, fallbackTranscr
       description: task.description || task.title || local.tasks[index]?.description || "",
       assignee: task.assignee || local.tasks[index]?.assignee || "",
       priority: normalizeAiPriority(task.priority || local.tasks[index]?.priority || "MEDIUM"),
-      deadline: task.deadline || local.tasks[index]?.deadline || "",
+      deadline: normalizeDeadline(task.deadline || local.tasks[index]?.deadline || "", task.sourceQuote || task.description || task.title || "", transcript, referenceDate),
       sourceQuote: task.sourceQuote || local.tasks[index]?.sourceQuote || task.description || task.title || "",
       reason: task.reason || local.tasks[index]?.reason || "Extracted from meeting content",
     }));
@@ -472,8 +479,124 @@ function normalizeAiPriority(value: string): "LOW" | "MEDIUM" | "HIGH" {
   return "MEDIUM";
 }
 
-function audioPrompt(): string {
-  return executionPromptHeader();
+function normalizeDeadline(value: string, source: string, transcript: string, referenceDate?: string): string {
+  const evidence = `${source}\n${transcript}`;
+  const reference = parseIsoDate(referenceDate || "");
+  const inferred = reference ? inferRelativeDeadline(evidence, reference) : "";
+  if (inferred) return inferred;
+
+  const deadline = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(deadline)) return "";
+
+  const generated = parseIsoDate(deadline);
+  if (!generated) return "";
+
+  if (hasAbsoluteDeadlineEvidence(evidence)) return deadline;
+  if (!hasRelativeDeadlineEvidence(evidence)) return "";
+
+  if (!reference) return "";
+  const diffDays = Math.round((generated.getTime() - reference.getTime()) / 86400000);
+  return diffDays >= 0 && diffDays <= 45 ? deadline : "";
+}
+
+function resolveReferenceDate(transcript: string, fallback?: string): string | undefined {
+  const explicit = extractExplicitReferenceDate(transcript);
+  if (explicit) return explicit;
+  const iso = fallback?.match(/\d{4}-\d{2}-\d{2}/)?.[0];
+  return iso && parseIsoDate(iso) ? iso : undefined;
+}
+
+function extractExplicitReferenceDate(text: string): string | undefined {
+  const numeric = text.match(/\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b/);
+  if (numeric) return toIsoDate(Number(numeric[1]), Number(numeric[2]), Number(numeric[3]));
+
+  const vietnamese = normalizeText(text).match(/\bngay\s+(\d{1,2})\s+thang\s+(\d{1,2})\s+nam\s+(\d{4})\b/);
+  if (vietnamese) return toIsoDate(Number(vietnamese[1]), Number(vietnamese[2]), Number(vietnamese[3]));
+
+  return undefined;
+}
+
+function hasAbsoluteDeadlineEvidence(text: string): boolean {
+  const normalized = normalizeText(text);
+  return /\b\d{4}-\d{2}-\d{2}\b/.test(text)
+    || /\b\d{1,2}[/-]\d{1,2}[/-]\d{4}\b/.test(text)
+    || /\bngay\s+\d{1,2}\s+thang\s+\d{1,2}(?:\s+nam\s+\d{4})?\b/.test(normalized);
+}
+
+function hasRelativeDeadlineEvidence(text: string): boolean {
+  const normalized = normalizeText(text);
+  return /\b(deadline|han chot|truoc|xong truoc|hom nay|ngay mai|tuan nay|tuan sau|thu hai|thu ba|thu tu|thu nam|thu sau|thu bay|chu nhat|cuoi tuan|next week|this week|today|tomorrow|by friday|before friday)\b/.test(normalized);
+}
+
+function inferRelativeDeadline(text: string, reference: Date): string {
+  const normalized = normalizeText(text);
+  if (!hasRelativeDeadlineEvidence(normalized)) return "";
+  if (/\bhom nay\b/.test(normalized)) return toIsoFromDate(addDays(reference, 0));
+  if (/\bngay mai\b/.test(normalized)) return toIsoFromDate(addDays(reference, 1));
+  if (/\bngay kia\b/.test(normalized)) return toIsoFromDate(addDays(reference, 2));
+
+  const weekday = normalized.match(/\b(thu hai|thu ba|thu tu|thu nam|thu sau|thu bay|chu nhat)\b/);
+  if (!weekday) return "";
+
+  const weekdayText = weekday[1];
+  if (!weekdayText) return "";
+  const target = weekdayNumber(weekdayText);
+  if (target === null) return "";
+
+  if (/\btuan sau\b/.test(normalized)) {
+    return toIsoFromDate(dateInNextIsoWeek(reference, target));
+  }
+
+  const current = reference.getUTCDay();
+  const diff = (target - current + 7) % 7;
+  return diff === 0 ? "" : toIsoFromDate(addDays(reference, diff));
+}
+
+function weekdayNumber(value: string): number | null {
+  const weekdays: Record<string, number> = {
+    "chu nhat": 0,
+    "thu hai": 1,
+    "thu ba": 2,
+    "thu tu": 3,
+    "thu nam": 4,
+    "thu sau": 5,
+    "thu bay": 6,
+  };
+  return weekdays[value] ?? null;
+}
+
+function dateInNextIsoWeek(reference: Date, targetWeekday: number): Date {
+  const current = reference.getUTCDay();
+  const daysUntilNextMonday = ((1 - current + 7) % 7) || 7;
+  const monday = addDays(reference, daysUntilNextMonday);
+  const offset = targetWeekday === 0 ? 6 : targetWeekday - 1;
+  return addDays(monday, offset);
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date.getTime());
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function toIsoFromDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function parseIsoDate(value: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function toIsoDate(day: number, month: number, year: number): string | undefined {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return undefined;
+  return date.toISOString().slice(0, 10);
+}
+
+function audioPrompt(referenceDate?: string): string {
+  return executionPromptHeader(referenceDate);
   return `Bạn là trợ lý phân tích cuộc họp. Hãy nghe file audio và thực hiện:
 
 1. Transcribe toàn bộ nội dung bằng tiếng Việt (giữ nguyên speaker nếu phân biệt được)
@@ -495,8 +618,8 @@ CHỈ trả về JSON:
 }`;
 }
 
-function textPrompt(transcriptText: string): string {
-  return `${executionPromptHeader()}
+function textPrompt(transcriptText: string, referenceDate?: string): string {
+  return `${executionPromptHeader(referenceDate)}
 
 Transcript:
 ${transcriptText}`;
