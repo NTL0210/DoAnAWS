@@ -131,13 +131,20 @@ export default function WorkspaceMeetingsView() {
     setActiveSection('overview');
     setProcessingMeetingId(meeting.id);
 
-    if (payload.file) {
-      await uploadMeetingFile(meeting.id, payload.file);
+    try {
+      let readyMeeting = meeting;
+      if (payload.file) {
+        const uploadedMeeting = await uploadMeetingFile(meeting.id, payload.file);
+        readyMeeting = { ...meeting, ...(uploadedMeeting || {}) };
+      }
+      await analyzeMeetingWithAI(readyMeeting);
+      setProcessingProgress(100);
+      setActiveSection('summary');
+    } catch (err) {
+      setError(err.message || 'AI processing failed.');
+    } finally {
+      setProcessingMeetingId(null);
     }
-    await analyzeMeetingWithAI(meeting);
-    setProcessingMeetingId(null);
-    setProcessingProgress(100);
-    setActiveSection('summary');
   };
 
   const handleReAnalyze = async () => {

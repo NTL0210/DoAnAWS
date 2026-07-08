@@ -71,8 +71,8 @@ jobs:
             --bundle \
             --platform=node \
             --target=node22 \
-            --outfile=dist/bundle.js \
-            --external:@aws-sdk/*
+            --format=cjs \
+            --outfile=dist/bundle.js
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4

@@ -124,9 +124,27 @@ export class MeetingService {
 
   async process(input: { workspaceId: string; meetingId: string }): Promise<Meeting> {
     const current = await this.get(input);
-    const analysis = current.transcriptText.trim()
-      ? await analyzeTranscriptMeeting(current.transcriptText)
-      : await analyzeStoredMeeting(current);
+    let analysis: Awaited<ReturnType<typeof analyzeTranscriptMeeting>>;
+    try {
+      analysis = current.transcriptText.trim()
+        ? await analyzeTranscriptMeeting(current.transcriptText)
+        : await analyzeStoredMeeting(current);
+    } catch (err) {
+      logger.error({ error: err instanceof Error ? err.message : String(err), meetingId: current.id }, "[MeetingService.process] AI processing failed");
+      const failed: Meeting = {
+        ...current,
+        status: "FAILED",
+        summary: "AI processing failed before the audio could be transcribed. Please check that the audio file finished uploading and try again.",
+        keyDecisions: [],
+        risks: [],
+        actionItems: [],
+        suggestedTasks: [],
+        version: current.version + 1,
+        updatedAt: new Date().toISOString()
+      };
+      await this.repository.update(failed, current.version);
+      return failed;
+    }
     const updated: Meeting = {
       ...current,
       status: "AI_REVIEW_READY",

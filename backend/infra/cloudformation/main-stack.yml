@@ -232,6 +232,11 @@ Resources:
                   - s3:DeleteObject
                   - s3:GetObjectUrl
                 Resource: !Sub "${MeetingStorageBucket.Arn}/*"
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource: !GetAtt MeetingStorageBucket.Arn
         - PolicyName: SESAccess
           PolicyDocument:
             Version: "2012-10-17"
@@ -1193,6 +1198,11 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                 Resource: !Sub "${MeetingStorageBucket.Arn}/*"
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource: !GetAtt MeetingStorageBucket.Arn
               - Effect: Allow
                 Action:
                   - dynamodb:UpdateItem
