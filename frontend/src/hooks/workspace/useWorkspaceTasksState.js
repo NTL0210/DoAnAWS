@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { generateId } from '@/lib/workspaceData';
-import { analyzeMeeting as serviceAnalyzeMeeting, createMeeting as serviceCreateMeeting, updateMeeting as serviceUpdateMeeting, uploadMeetingFile as serviceUploadMeetingFile } from '@/services/meetingService';
+import { analyzeMeeting as serviceAnalyzeMeeting, createMeeting as serviceCreateMeeting, deleteMeeting as serviceDeleteMeeting, updateMeeting as serviceUpdateMeeting, uploadMeetingFile as serviceUploadMeetingFile } from '@/services/meetingService';
 import { getTasksByMeeting as filterTasksByMeeting } from '@/services/taskService';
 import { isCloudMode } from '@/services/apiClient';
 
@@ -247,11 +247,10 @@ export default function useWorkspaceTasksState({
 
   const uploadMeetingFile = useCallback(async (meetingId, file) => {
     const meeting = workspaceMeetings.find((m) => m.id === meetingId);
-    if (!meeting) return;
     try {
       const result = await serviceUploadMeetingFile(meetingId, file, {
         meetingId,
-        workspaceId: meeting.workspaceId || activeWorkspaceId,
+        workspaceId: meeting?.workspaceId || activeWorkspaceId,
       });
       setWorkspaceMeetings((prev) =>
         prev.map((m) => (m.id === meetingId ? { ...m, ...result } : m))
@@ -261,10 +260,35 @@ export default function useWorkspaceTasksState({
     }
   }, [workspaceMeetings, activeWorkspaceId, showToast]);
 
+  const deleteMeeting = useCallback(async (meetingId) => {
+    const meeting = workspaceMeetings.find((item) => item.id === meetingId);
+    if (!meeting) return;
+
+    setWorkspaceMeetings((prev) => prev.filter((item) => item.id !== meetingId));
+    setTrashItems((prev) => ({
+      ...prev,
+      meetings: [{ ...meeting, deletedAt: new Date().toISOString() }, ...(prev.meetings || [])],
+    }));
+
+    try {
+      await serviceDeleteMeeting(meetingId, { workspaceId: meeting.workspaceId || activeWorkspaceId });
+    } catch (err) {
+      setWorkspaceMeetings((prev) => [meeting, ...prev]);
+      setTrashItems((prev) => ({
+        ...prev,
+        meetings: (prev.meetings || []).filter((item) => item.id !== meetingId),
+      }));
+      showToast('error', err?.message || 'Failed to move meeting to trash.');
+    }
+  }, [workspaceMeetings, activeWorkspaceId, showToast]);
+
   const processMeetingWithAI = useCallback(async (meetingOrId) => {
     const meetingId = typeof meetingOrId === 'string' ? meetingOrId : meetingOrId?.id;
-    const meeting = workspaceMeetings.find((m) => m.id === meetingId);
-    if (!meeting) return;
+    const meeting = workspaceMeetings.find((m) => m.id === meetingId) || (typeof meetingOrId === 'object' ? meetingOrId : null);
+    if (!meetingId || !meeting) {
+      showToast('error', 'Meeting is not ready for AI processing yet. Please try again.');
+      return;
+    }
 
     setWorkspaceMeetings((prev) =>
       prev.map((m) => (m.id === meetingId ? { ...m, status: 'PROCESSING' } : m))
@@ -322,14 +346,18 @@ export default function useWorkspaceTasksState({
 
   /** Re-run AI analysis on an already-processed meeting */
   const reAnalyzeMeeting = useCallback(async (meetingId) => {
+    const meeting = workspaceMeetings.find((item) => item.id === meetingId);
     try {
       // Reset status to UPLOADED so postProcess accepts it
-      await serviceUpdateMeeting(meetingId, { status: 'UPLOADED' });
+      await serviceUpdateMeeting(meetingId, {
+        status: 'UPLOADED',
+        workspaceId: meeting?.workspaceId || activeWorkspaceId,
+      });
     } catch (err) {
       console.warn('[WorkspaceTasks] Failed to reset meeting status for re-analysis:', err);
     }
     await processMeetingWithAI(meetingId);
-  }, [processMeetingWithAI]);
+  }, [workspaceMeetings, activeWorkspaceId, processMeetingWithAI]);
 
   const updateMeetingSuggestion = useCallback((meetingId, suggestionId, patch) => {
     setWorkspaceMeetings((prev) =>
@@ -464,6 +492,7 @@ export default function useWorkspaceTasksState({
     moveWorkspaceTask,
     deleteWorkspaceTask,
     createMeeting,
+    deleteMeeting,
     uploadMeetingFile,
     processMeetingWithAI,
     analyzeMeetingWithAI,

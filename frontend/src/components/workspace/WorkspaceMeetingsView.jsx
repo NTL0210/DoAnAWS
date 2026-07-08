@@ -100,9 +100,9 @@ export default function WorkspaceMeetingsView() {
   }, [processingMeetingId]);
 
   // Whether the selected meeting has already been analyzed
-  const canReAnalyze =
+  const canRunAnalysis =
     selectedMeeting &&
-    ['AI_REVIEW_READY', 'TASKS_GENERATED', 'COMPLETED'].includes(selectedMeeting.status) &&
+    ['UPLOADED', 'FAILED', 'AI_REVIEW_READY', 'TASKS_GENERATED', 'COMPLETED'].includes(selectedMeeting.status) &&
     !processingMeetingId;
 
   const handleAnalyze = async (payload) => {
@@ -232,7 +232,7 @@ export default function WorkspaceMeetingsView() {
               />
             ) : selectedMeeting ? (
               <div>
-                {canReAnalyze && (
+                {canRunAnalysis && (
                   <div className="mb-4 flex justify-end">
                     <button
                       type="button"
@@ -240,7 +240,7 @@ export default function WorkspaceMeetingsView() {
                       className="flex items-center gap-2 rounded-xl border border-amber-200 dark:border-amber-900/30 bg-amber-50 dark:bg-amber-900/20 px-4 py-2 text-xs font-bold text-amber-700 dark:text-amber-300 transition hover:bg-amber-100 dark:hover:bg-amber-900/40"
                     >
                       <FiRefreshCw className="h-3.5 w-3.5" />
-                      Re-analyze with AI
+                      {selectedMeeting.status === 'UPLOADED' || selectedMeeting.status === 'FAILED' ? 'Analyze with AI' : 'Re-analyze with AI'}
                     </button>
                   </div>
                 )}

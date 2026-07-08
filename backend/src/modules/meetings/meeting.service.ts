@@ -80,6 +80,16 @@ export class MeetingService {
     return updated;
   }
 
+  async delete(input: { workspaceId: string; meetingId: string }): Promise<void> {
+    const current = await this.get(input);
+    await this.repository.update({
+      ...current,
+      deletedAt: new Date().toISOString(),
+      version: current.version + 1,
+      updatedAt: new Date().toISOString(),
+    }, current.version);
+  }
+
   async createUpload(input: {
     workspaceId: string;
     meetingId: string;

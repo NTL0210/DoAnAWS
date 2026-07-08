@@ -196,9 +196,9 @@ export const usersApi = {
 export const meetingsApi = {
   list: (params) => request('/meetings', { params }),
   get: (id, params) => request(`/meetings/${id}`, { params }),
-  create: (data) => request('/meetings', { method: 'POST', body: data }),
-  update: (id, data) => request(`/meetings/${id}`, { method: 'PATCH', body: data }),
-  delete: (id) => request(`/meetings/${id}`, { method: 'DELETE' }),
+  create: (data) => request('/meetings', { method: 'POST', body: data, params: { workspaceId: data?.workspaceId } }),
+  update: (id, data) => request(`/meetings/${id}`, { method: 'PATCH', body: data, params: { workspaceId: data?.workspaceId } }),
+  delete: (id, params) => request(`/meetings/${id}`, { method: 'DELETE', params }),
   createUploadUrl: (id, data, params) => request(`/meetings/${id}/upload-url`, { method: 'POST', body: data, params }),
   process: (id, params) => request(`/meetings/${id}/process`, { method: 'POST', params }),
 };
