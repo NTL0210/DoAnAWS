@@ -105,8 +105,9 @@ export async function analyzeStoredAudio(input: { storageKey: string; mimeType: 
     return analyzeTranscriptText(buffer.toString("utf8"));
   }
 
-  const fileUri = await uploadToGemini(buffer, input.mimeType);
-  const raw = await callGeminiWithFile(fileUri, input.mimeType, audioPrompt());
+  const geminiMimeType = toGeminiMimeType(input.mimeType, input.storageKey);
+  const fileUri = await uploadToGemini(buffer, geminiMimeType, input.storageKey);
+  const raw = await callGeminiWithFile(fileUri, geminiMimeType, audioPrompt());
   return ensureActionableAnalysis(normalizeGeminiJson(raw), "");
 }
 
@@ -118,23 +119,60 @@ export async function analyzeTranscriptText(transcriptText: string): Promise<Voi
   return ensureActionableAnalysis(normalizeGeminiJson(raw), trimmed);
 }
 
-async function uploadToGemini(fileBuffer: Buffer, mimeType: string): Promise<string> {
-  const response = await fetch(`https://generativelanguage.googleapis.com/upload/v1beta/files?key=${env.GEMINI_API_KEY}`, {
+async function uploadToGemini(fileBuffer: Buffer, mimeType: string, storageKey: string): Promise<string> {
+  const startResponse = await fetch(`https://generativelanguage.googleapis.com/upload/v1beta/files?key=${env.GEMINI_API_KEY}`, {
     method: "POST",
     headers: {
       "X-Goog-Upload-Protocol": "resumable",
-      "X-Goog-Upload-Command": "start, upload, finalize",
+      "X-Goog-Upload-Command": "start",
+      "X-Goog-Upload-Header-Content-Type": mimeType,
       "X-Goog-Upload-Header-Content-Length": String(fileBuffer.length),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      file: {
+        display_name: storageKey.split("/").pop() || "meeting-audio",
+      },
+    }),
+  });
+  if (!startResponse.ok) {
+    throw new Error(`Gemini upload session failed: HTTP ${startResponse.status}`);
+  }
+
+  const uploadUrl = startResponse.headers.get("x-goog-upload-url");
+  if (!uploadUrl) throw new Error("Gemini upload session missing upload URL");
+
+  const uploadResponse = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      "Content-Length": String(fileBuffer.length),
       "Content-Type": mimeType,
+      "X-Goog-Upload-Command": "upload, finalize",
+      "X-Goog-Upload-Offset": "0",
     },
     body: fileBuffer as unknown as BodyInit,
   });
-  if (!response.ok) {
-    throw new Error(`Gemini upload failed: HTTP ${response.status}`);
+  if (!uploadResponse.ok) {
+    throw new Error(`Gemini upload failed: HTTP ${uploadResponse.status}`);
   }
-  const data = await response.json() as { file?: { uri?: string } };
+  const data = await uploadResponse.json() as { file?: { name?: string; uri?: string; state?: string } };
   if (!data.file?.uri) throw new Error("Gemini upload response missing file uri");
+  if (data.file.name && data.file.state && data.file.state !== "ACTIVE") {
+    await waitForGeminiFile(data.file.name);
+  }
   return data.file.uri;
+}
+
+async function waitForGeminiFile(fileName: string): Promise<void> {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${env.GEMINI_API_KEY}`);
+    if (!response.ok) throw new Error(`Gemini file status failed: HTTP ${response.status}`);
+    const data = await response.json() as { state?: string };
+    if (data.state === "ACTIVE" || !data.state) return;
+    if (data.state === "FAILED") throw new Error("Gemini file processing failed");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error("Gemini file processing timed out");
 }
 
 async function callGeminiWithFile(fileUri: string, mimeType: string, prompt: string): Promise<string> {
@@ -226,6 +264,7 @@ function executionPromptHeader(): string {
     "Output language: Vietnamese. Keep person names exactly as spoken/written.",
     "Do not copy the transcript as the summary. The summary must be 3-6 synthesized sentences.",
     "Extract concrete work only. Ignore small talk unless it creates a risk or task.",
+    "If the content has no work, decision, risk, deadline, or assignment, keep tasks, actionItems, keyDecisions, and risks as empty arrays.",
     "For each task, infer assignee from explicit assignment, speaker context, or responsibility phrase. Leave empty only if unclear.",
     "Use priority HIGH for blockers, customer escalations, login/auth failures, budget/credit risk, deadlines, production issues, or VIP customers.",
     "Use deadline as YYYY-MM-DD only when the date can be inferred reliably from the content; otherwise use an empty string.",
@@ -255,6 +294,18 @@ function executionPromptHeader(): string {
 
 function ensureActionableAnalysis(analysis: VoiceAnalysisResult, fallbackTranscript: string): VoiceAnalysisResult {
   const transcript = (analysis.transcript || fallbackTranscript).trim();
+  if (transcript && !hasExecutionSignal(transcript)) {
+    return {
+      transcript,
+      summary: isUsefulSummary(analysis.summary, transcript)
+        ? analysis.summary.trim()
+        : "No work-related action items were detected in this audio/transcript. The transcript is preserved for review.",
+      keyDecisions: [],
+      actionItems: [],
+      risks: [],
+      tasks: [],
+    };
+  }
   const local = buildLocalActionableAnalysis(transcript);
   const summary = isUsefulSummary(analysis.summary, transcript) ? analysis.summary.trim() : local.summary;
   const tasks = analysis.tasks
@@ -296,10 +347,11 @@ function buildLocalActionableAnalysis(transcript: string): VoiceAnalysisResult {
     .map((line) => line.trim())
     .filter(Boolean);
 
-  const actionLines = lines.filter((line) => hasActionSignal(line));
-  const decisionLines = lines.filter((line) => hasDecisionSignal(line)).slice(0, 6);
-  const riskLines = lines.filter((line) => hasRiskSignal(line)).slice(0, 6);
-  const selected = (actionLines.length ? actionLines : lines).slice(0, 12);
+  const actionableLines = lines.filter((line) => !isNoWorkStatement(line));
+  const actionLines = actionableLines.filter((line) => hasActionSignal(line));
+  const decisionLines = actionableLines.filter((line) => hasDecisionSignal(line)).slice(0, 6);
+  const riskLines = actionableLines.filter((line) => hasRiskSignal(line)).slice(0, 6);
+  const selected = actionLines.slice(0, 12);
   const tasks = selected.map((line, index) => ({
     title: toLocalTaskTitle(line, index),
     description: stripSpeaker(line),
@@ -313,7 +365,9 @@ function buildLocalActionableAnalysis(transcript: string): VoiceAnalysisResult {
   const themes = inferThemes(lines);
   const summary = themes.length
     ? `Cuoc hop ghi nhan cac chu de chinh: ${themes.join(", ")}. Nhung viec can xu ly tiep theo gom ${tasks.slice(0, 4).map((task) => task.title).join("; ")}.`
-    : `Cuoc hop co ${lines.length} y noi dung va ${tasks.length} viec can theo doi. Nen review lai cac task duoc de xuat truoc khi tao cong viec chinh thuc.`;
+    : tasks.length
+      ? `Cuoc hop co ${lines.length} y noi dung va ${tasks.length} viec can theo doi. Nen review lai cac task duoc de xuat truoc khi tao cong viec chinh thuc.`
+      : "No work-related action items were detected in this audio/transcript. The transcript is preserved for review.";
 
   return {
     transcript,
@@ -323,6 +377,12 @@ function buildLocalActionableAnalysis(transcript: string): VoiceAnalysisResult {
     risks: riskLines.map(stripSpeaker),
     tasks,
   };
+}
+
+function hasExecutionSignal(transcript: string): boolean {
+  return transcript
+    .split(/\n+|(?<=[.!?])\s+/)
+    .some((line) => !isNoWorkStatement(line) && (hasActionSignal(line) || hasDecisionSignal(line) || hasRiskSignal(line)));
 }
 
 function normalizeText(value: string): string {
@@ -335,21 +395,31 @@ function normalizeText(value: string): string {
 }
 
 function hasActionSignal(line: string): boolean {
+  if (isNoWorkStatement(line)) return false;
   const text = normalizeText(line);
-  return /\b(can|phai|deadline|truoc|fix|review|chuan bi|thong bao|check|hoi|goi|follow up|demo|cap|set|doi|viet|tao|update|chot|ping|bao|xu ly|lam|gui)\b/.test(text)
+  return /\b(can|phai|deadline|truoc|fix|review|chuan bi|thong bao|check|goi|follow up|demo|cap|set|doi|viet|tao|update|chot|ping|bao|xu ly|lam|gui)\b/.test(text)
+    || /\bhoi\s+(gia|y kien|vendor|sep|s3|quyen|khach|doi tac)\b/.test(text)
     || /\b(need|needs|must|should|todo|task|prepare|send|create|update|review|finish|call|ask|notify|follow up|fix|demo)\b/.test(text);
 }
 
 function hasDecisionSignal(line: string): boolean {
+  if (isNoWorkStatement(line)) return false;
   const text = normalizeText(line);
   return /\b(chot|quyet dinh|giu|tam dung|doi het|uu tien|de sprint sau|tap trung)\b/.test(text)
     || /\b(decided|keep|pause|prioritize|defer|focus)\b/.test(text);
 }
 
 function hasRiskSignal(line: string): boolean {
+  if (isNoWorkStatement(line)) return false;
   const text = normalizeText(line);
   return /\b(rui ro|tre|phan nan|het|cat|cao|anh huong|loi|bug|token|credit|chay|bao tri|tang)\b/.test(text)
     || /\b(risk|late|delay|complain|blocked|bug|issue|quota|credit|maintenance|increase)\b/.test(text);
+}
+
+function isNoWorkStatement(line: string): boolean {
+  const text = normalizeText(line);
+  return /\b(khong co|khong thay|khong phat sinh|chua co)\b.*\b(cong viec|nhiem vu|task|action item|viec can lam|quyet dinh|deadline|ke hoach|rui ro)\b/.test(text)
+    || /\b(no|not any|none|without)\b.*\b(task|action item|work item|decision|deadline|risk|assignment)\b/.test(text);
 }
 
 function inferThemes(lines: string[]): string[] {
@@ -468,6 +538,17 @@ function extensionForMime(mimeType: string): string {
   if (mimeType.includes("ogg")) return "ogg";
   if (mimeType.includes("mp4") || mimeType.includes("m4a")) return "m4a";
   return "webm";
+}
+
+function toGeminiMimeType(mimeType: string, storageKey: string): string {
+  const lowerType = mimeType.toLowerCase();
+  const lowerKey = storageKey.toLowerCase();
+  if (lowerType.includes("mpeg") || lowerType.includes("mp3") || lowerKey.endsWith(".mp3")) return "audio/mp3";
+  if (lowerType.includes("wav") || lowerKey.endsWith(".wav")) return "audio/wav";
+  if (lowerType.includes("m4a") || lowerKey.endsWith(".m4a")) return "audio/mp4";
+  if (lowerType.includes("webm") || lowerKey.endsWith(".webm")) return "audio/webm";
+  if (lowerType.includes("ogg") || lowerKey.endsWith(".ogg")) return "audio/ogg";
+  return mimeType || "application/octet-stream";
 }
 
 function isTextInput(mimeType: string, storageKey: string): boolean {

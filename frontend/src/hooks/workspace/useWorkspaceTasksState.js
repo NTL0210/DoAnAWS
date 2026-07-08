@@ -255,8 +255,10 @@ export default function useWorkspaceTasksState({
       setWorkspaceMeetings((prev) =>
         prev.map((m) => (m.id === meetingId ? { ...m, ...result } : m))
       );
+      return result;
     } catch (err) {
       showToast('error', err.message || 'Upload failed');
+      throw err;
     }
   }, [workspaceMeetings, activeWorkspaceId, showToast]);
 
@@ -300,6 +302,9 @@ export default function useWorkspaceTasksState({
         members: workspaceMembers,
         currentUserId: currentUser?.id,
       });
+      if (result?.status === 'FAILED') {
+        throw new Error(result.summary || 'AI processing failed.');
+      }
 
       const suggestions = (result?.suggestedTasks || result?.tasks || []).map((task, idx) => ({
         id: task.id || 'sug-' + generateId(),

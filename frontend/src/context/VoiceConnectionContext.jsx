@@ -31,6 +31,24 @@ export function VoiceConnectionProvider({ children, currentUser, workspaceId, wo
   const activeVoiceChannelIdRef = useRef(null);
   const [presenceByChannel, setPresenceByChannel] = useState({});
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const workspacePresenceUser = useMemo(() => {
+    if (!currentUser?.id) return null;
+    return {
+      id: currentUser.id,
+      name: currentUser.name || currentUser.email || currentUser.id,
+      email: currentUser.email || '',
+      avatar: currentUser.avatar || null,
+      role: workspaceRole || currentUser.role || 'Member',
+      workspaceRole: workspaceRole || currentUser.role || 'Member',
+    };
+  }, [
+    currentUser?.id,
+    currentUser?.name,
+    currentUser?.email,
+    currentUser?.avatar,
+    currentUser?.role,
+    workspaceRole,
+  ]);
 
   // ─── Local mic stream (managed by VoiceChannelView) ────────
   const localStreamRef = useRef(null);
@@ -107,11 +125,12 @@ export function VoiceConnectionProvider({ children, currentUser, workspaceId, wo
     socket.socket.on('workspace:presence:snapshot', handleWorkspacePresence);
     socket.socket.on('workspace:presence:update', handleWorkspacePresence);
     socket.socket.on('workspace:event', handleWorkspaceEvent);
-    socket.socket.emit('workspace:join', { workspaceId, user: currentUser });
+    socket.socket.emit('workspace:join', { workspaceId, user: workspacePresenceUser });
     const heartbeat = setInterval(() => {
       socket.socket?.emit('workspace:presence:heartbeat', {
         workspaceId,
-        userId: currentUser?.id,
+        userId: workspacePresenceUser?.id,
+        user: workspacePresenceUser,
       });
     }, 15000);
     return () => {
@@ -122,21 +141,23 @@ export function VoiceConnectionProvider({ children, currentUser, workspaceId, wo
       socket.socket?.off('workspace:event', handleWorkspaceEvent);
       clearInterval(heartbeat);
     };
-  }, [currentUser, socket.connected, socket.socket, workspaceId]);
+  }, [socket.connected, socket.socket, workspaceId, workspacePresenceUser]);
 
   // ─── Global socket + invitation relay ───────────────────
   useEffect(() => {
     const sock = socket.socket;
-    if (!sock || !socket.connected) return;
+    if (!sock) return undefined;
     // Expose socket globally so useInvitationsState can emit events
     _globalSocket = sock;
-    // Announce user presence for real-time messaging (invites, etc.)
-    if (currentUser?.id) {
+    const announceOnline = () => {
+      if (!currentUser?.id) return;
       sock.emit('user:online', {
         userId: currentUser.id,
         email: currentUser.email,
       });
-    }
+    };
+    if (socket.connected) announceOnline();
+    sock.on('connect', announceOnline);
     // Relay invitation events from signaling server → window events
     const handleInvitationNew = (invitation) => {
       window.dispatchEvent(new CustomEvent('invitation:new', { detail: invitation }));
@@ -147,11 +168,12 @@ export function VoiceConnectionProvider({ children, currentUser, workspaceId, wo
     sock.on('invitation:new', handleInvitationNew);
     sock.on('invitation:accepted', handleInvitationAccepted);
     return () => {
-      _globalSocket = null;
+      if (_globalSocket === sock) _globalSocket = null;
+      sock.off('connect', announceOnline);
       sock.off('invitation:new', handleInvitationNew);
       sock.off('invitation:accepted', handleInvitationAccepted);
     };
-  }, [currentUser?.id, socket.connected, socket.socket]);
+  }, [currentUser?.id, currentUser?.email, socket.connected, socket.socket]);
 
   // ─── Join voice channel (WebRTC + signaling) ─────────────
   const voiceJoinChannel = useCallback(async (channelId, options = {}) => {

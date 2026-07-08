@@ -57,7 +57,7 @@ const workspacePresence = new Map();
 const workspaceOnlinePresence = new Map();
 // Map<socketId, { workspaceId, channelId, userId }>
 const socketVoiceState = new Map();
-// Map<socketId, { workspaceId, userId }>
+// Map<socketId, { workspaceId, userId, presence }>
 const socketWorkspaceState = new Map();
 // Map<socketId, userId> — user presence for real-time messaging (invites, etc.)
 const socketUserMap = new Map();
@@ -291,20 +291,24 @@ io.on('connection', (socket) => {
   socket.on('workspace:join', ({ workspaceId, user } = {}) => {
     if (!workspaceId) return;
     if (user?.id) {
-      removeSocketFromWorkspace(socket, 'switch');
+      const previous = socketWorkspaceState.get(socket.id);
+      if (previous && (previous.workspaceId !== workspaceId || previous.userId !== user.id)) {
+        removeSocketFromWorkspace(socket, 'switch');
+      }
       const online = getWorkspaceOnline(workspaceId);
       const presence = {
         socketId: socket.id,
         userId: user.id,
-        name: user.name || 'Unknown',
+        name: user.name || user.email || user.id,
+        email: user.email || '',
         avatar: user.avatar || null,
-        role: user.role || user.workspaceRole || 'Member',
+        role: user.workspaceRole || user.role || 'Member',
         online: true,
-        connectedAt: new Date().toISOString(),
+        connectedAt: previous?.presence?.connectedAt || new Date().toISOString(),
         lastSeenAt: new Date().toISOString(),
       };
       online.set(user.id, presence);
-      socketWorkspaceState.set(socket.id, { workspaceId, userId: user.id });
+      socketWorkspaceState.set(socket.id, { workspaceId, userId: user.id, presence });
     }
     socket.join(workspaceRoom(workspaceId));
     socket.emit('voice:presence:snapshot', {
@@ -326,13 +330,32 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('workspace:presence:heartbeat', ({ workspaceId, userId } = {}) => {
+  socket.on('workspace:presence:heartbeat', ({ workspaceId, userId, user } = {}) => {
     if (!workspaceId || !userId) return;
     const online = getWorkspaceOnline(workspaceId);
     const current = online.get(userId);
     if (current) {
       current.lastSeenAt = new Date().toISOString();
       current.online = true;
+      return;
+    }
+    const state = socketWorkspaceState.get(socket.id);
+    if (state?.workspaceId === workspaceId && state.userId === userId) {
+      const presence = {
+        ...(state.presence || {}),
+        socketId: socket.id,
+        userId,
+        name: user?.name || state.presence?.name || user?.email || userId,
+        email: user?.email || state.presence?.email || '',
+        avatar: user?.avatar || state.presence?.avatar || null,
+        role: user?.workspaceRole || user?.role || state.presence?.role || 'Member',
+        online: true,
+        connectedAt: state.presence?.connectedAt || new Date().toISOString(),
+        lastSeenAt: new Date().toISOString(),
+      };
+      online.set(userId, presence);
+      socketWorkspaceState.set(socket.id, { workspaceId, userId, presence });
+      broadcastOnlinePresence(workspaceId);
     }
   });
 

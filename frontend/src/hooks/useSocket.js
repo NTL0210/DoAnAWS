@@ -88,7 +88,10 @@ export default function useSocket(options = {}) {
     if (socketRef.current?.connected || !url) return;
 
     const socket = io(url, {
-      transports: ['websocket', 'polling'],
+      // CloudFront/ALB accepts the Socket.IO polling handshake reliably, then
+      // upgrades to websocket when that path is available.
+      transports: ['polling', 'websocket'],
+      upgrade: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 5000,
       reconnectionDelayMax: 30000,
