@@ -64,16 +64,18 @@ export class MeetingController {
         const workspaceId = textMetadata(current.metadata, "workspaceId");
         const role = textMetadata(current.metadata, "role") || "EMPLOYEE";
         if (workspaceId) {
+          const profile = await this.getCurrentUserProfile(req.user.userId, {
+            name: req.user.name || req.user.email || null,
+            email: req.user.email || null,
+            avatar: null,
+          });
           await this.workspaces.addMember(
             workspaceId,
             req.user.userId,
             role === "OWNER" || role === "VICE_ADMIN" || role === "MANAGER" || role === "EMPLOYEE"
               ? role
               : "EMPLOYEE",
-            {
-              name: req.user.name || req.user.email || null,
-              email: req.user.email || null,
-            },
+            profile,
           );
         }
       }
@@ -233,6 +235,22 @@ export class MeetingController {
       next(error);
     }
   };
+
+  private async getCurrentUserProfile(
+    userId: string,
+    fallback: { name: string | null; email: string | null; avatar: string | null },
+  ): Promise<{ name: string | null; email: string | null; avatar: string | null }> {
+    try {
+      const profile = await this.users.getById(userId);
+      return {
+        name: profile.name || fallback.name,
+        email: profile.email || fallback.email,
+        avatar: profile.avatar || fallback.avatar,
+      };
+    } catch {
+      return fallback;
+    }
+  }
 }
 
 function textMetadata(metadata: Record<string, unknown>, key: string): string {

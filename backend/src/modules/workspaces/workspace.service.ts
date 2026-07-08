@@ -193,12 +193,22 @@ export class WorkspaceService {
 
   private async hydrateMember(member: WorkspaceMember): Promise<WorkspaceMember> {
     const profile = await this.getMemberProfile(member.userId);
+    const name = this.isUsableMemberName(member.name, member.userId) ? member.name! : profile.name;
     return {
       ...member,
-      name: member.name || profile.name,
+      name,
       email: member.email || profile.email,
       avatar: member.avatar || profile.avatar,
     };
+  }
+
+  private isUsableMemberName(name: string | null | undefined, userId: string): boolean {
+    const value = String(name || "").trim();
+    if (!value) return false;
+    if (value === userId) return false;
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return false;
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4,}$/i.test(value)) return false;
+    return true;
   }
 
   private async getMemberProfile(userId: string): Promise<MemberProfile> {

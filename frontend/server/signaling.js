@@ -66,6 +66,10 @@ const userSocketsMap = new Map();
 // Map<email, userId> — email → userId lookup for invitation routing
 const userEmailMap = new Map();
 
+function displayNameFromEmail(email) {
+  return typeof email === 'string' && email.includes('@') ? email.split('@')[0] : '';
+}
+
 function workspaceRoom(workspaceId) {
   return `workspace:${workspaceId}`;
 }
@@ -240,7 +244,7 @@ function upsertParticipant(socket, payload) {
   const participant = {
     socketId: socket.id,
     userId,
-    name: userName || name || userInfo.name || 'Unknown',
+    name: userName || name || userInfo.name || displayNameFromEmail(userInfo.email) || 'Member',
     avatar: avatar || userInfo.avatar || null,
     role: role || userInfo.role || 'Member',
     isMuted: Boolean(isMuted),
@@ -299,7 +303,7 @@ io.on('connection', (socket) => {
       const presence = {
         socketId: socket.id,
         userId: user.id,
-        name: user.name || user.email || user.id,
+        name: user.name || displayNameFromEmail(user.email) || 'Member',
         email: user.email || '',
         avatar: user.avatar || null,
         role: user.workspaceRole || user.role || 'Member',
@@ -345,7 +349,7 @@ io.on('connection', (socket) => {
         ...(state.presence || {}),
         socketId: socket.id,
         userId,
-        name: user?.name || state.presence?.name || user?.email || userId,
+        name: user?.name || state.presence?.name || displayNameFromEmail(user?.email) || 'Member',
         email: user?.email || state.presence?.email || '',
         avatar: user?.avatar || state.presence?.avatar || null,
         role: user?.workspaceRole || user?.role || state.presence?.role || 'Member',

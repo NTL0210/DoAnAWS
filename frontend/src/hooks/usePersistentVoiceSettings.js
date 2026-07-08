@@ -36,6 +36,13 @@ function legacyStorageKey(userId, workspaceId) {
   return `aiWorkforce_voiceSettings_${userId || 'anonymous'}_${workspaceId || 'default'}`;
 }
 
+function normalizeNoiseSuppressionMode(mode) {
+  if (['dtln-ai', 'future-krisp', 'future-rnnoise'].includes(mode)) {
+    return VOICE_AUDIO_CONFIG.noiseSuppressionMode;
+  }
+  return mode || VOICE_AUDIO_CONFIG.noiseSuppressionMode;
+}
+
 export default function usePersistentVoiceSettings(userId, workspaceId) {
   const key = useMemo(() => storageKey(userId, workspaceId), [userId, workspaceId]);
   const [settings, setSettings] = useState(DEFAULT_VOICE_SETTINGS);
@@ -49,9 +56,7 @@ export default function usePersistentVoiceSettings(userId, workspaceId) {
         ...parsed,
         selectedMicId: parsed.selectedMicId ?? parsed.inputDeviceId ?? null,
         inputDeviceId: parsed.inputDeviceId ?? parsed.selectedMicId ?? '',
-        noiseSuppressionMode: ['future-krisp', 'future-rnnoise'].includes(parsed.noiseSuppressionMode)
-          ? VOICE_AUDIO_CONFIG.noiseSuppressionMode
-          : parsed.noiseSuppressionMode,
+        noiseSuppressionMode: normalizeNoiseSuppressionMode(parsed.noiseSuppressionMode),
         inputVolume: parsed.inputVolume <= 1 ? Math.round(parsed.inputVolume * 100) : parsed.inputVolume,
         inputSensitivity: parsed.inputSensitivity > 1
           ? Math.max(0.005, Math.min(0.08, parsed.inputSensitivity / 720))

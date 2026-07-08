@@ -4,6 +4,10 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef, us
 import useSocket from '@/hooks/useSocket';
 import useWebRTC from '@/hooks/useWebRTC';
 
+function displayNameFromEmail(email) {
+  return typeof email === 'string' && email.includes('@') ? email.split('@')[0] : '';
+}
+
 // ─── Global socket ref for modules that need to emit ———————————
 // Set by VoiceConnectionProvider whenever the socket connects.
 // Other hooks (e.g., useInvitationsState) can use this to emit events
@@ -33,9 +37,10 @@ export function VoiceConnectionProvider({ children, currentUser, workspaceId, wo
   const [onlineUsers, setOnlineUsers] = useState([]);
   const workspacePresenceUser = useMemo(() => {
     if (!currentUser?.id) return null;
+    const name = currentUser.name || currentUser.nickname || displayNameFromEmail(currentUser.email) || 'Member';
     return {
       id: currentUser.id,
-      name: currentUser.name || currentUser.email || currentUser.id,
+      name,
       email: currentUser.email || '',
       avatar: currentUser.avatar || null,
       role: workspaceRole || currentUser.role || 'Member',
@@ -94,7 +99,7 @@ export function VoiceConnectionProvider({ children, currentUser, workspaceId, wo
     channelId: activeVoiceChannelId,
     socket: socket.socket,
     userId: currentUser?.id,
-    userName: currentUser?.name,
+    userName: workspacePresenceUser?.name || '',
     userRole: workspaceRole,
     userAvatar: currentUser?.avatar,
     isMuted: localMicMuted,

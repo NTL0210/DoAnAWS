@@ -41,6 +41,26 @@ import WorkspaceViewTransition from '@/components/workspace/WorkspaceViewTransit
 import CommandPalette from '@/components/workspace/CommandPalette';
 import { VALID_WORKSPACE_VIEWS, getQueryView } from '@/lib/workspaceViewUtils';
 
+function displayNameFromEmail(email) {
+  return typeof email === 'string' && email.includes('@') ? email.split('@')[0] : '';
+}
+
+function isLikelyUserId(value) {
+  const text = String(value || '').trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4,}$/i.test(text);
+}
+
+function getWorkspaceMemberDisplayName(member, presence, currentUser) {
+  const candidates = [
+    member?.nickname,
+    member?.name,
+    presence?.name,
+    member?.userId === currentUser?.id ? currentUser?.name : '',
+    displayNameFromEmail(member?.email || presence?.email || (member?.userId === currentUser?.id ? currentUser?.email : '')),
+  ];
+  return candidates.find((name) => name && !isLikelyUserId(name) && name !== member?.userId) || 'Member';
+}
+
 export default function WorkspaceChannelView() {
   const router = useRouter();
   const {
@@ -1125,7 +1145,7 @@ function MemberPanel({ members, currentUser, roleLabels, onlineUsers = [], curre
           : 'offline';
       return {
         ...member,
-        name: member.nickname || member.name || presence.name || (member.userId === currentUser?.id ? currentUser.name : 'Unknown'),
+        name: getWorkspaceMemberDisplayName(member, presence, currentUser),
         avatar: member.avatar || presence.avatar || (member.userId === currentUser?.id ? currentUser?.avatar : null) || null,
         role,
         status,
@@ -1253,7 +1273,7 @@ function LegacyMemberPanel({ members, currentUser, roleLabels, onlineUsers = [],
 
   const renderMember = (member, index, statusType) => {
     const presence = onlineById.get(member.userId) || {};
-    const name = member.nickname || member.name || presence.name || (member.userId === currentUser?.id ? currentUser.name : 'Unknown');
+    const name = getWorkspaceMemberDisplayName(member, presence, currentUser);
     const role = member.role || presence.role || 'Member';
     const isOnline = statusType === 'online';
     const isIdle = statusType === 'idle';
@@ -1334,7 +1354,8 @@ function IconButton({ icon: Icon, label, onClick }) {
 function getMemberDisplayName(members, userId) {
   if (!userId) return '';
   const member = members.find((item) => item.userId === userId);
-  return member?.name || member?.nickname || 'Unknown';
+  const name = member?.nickname || member?.name || displayNameFromEmail(member?.email);
+  return name && !isLikelyUserId(name) && name !== userId ? name : 'Member';
 }
 
 function getInitials(name) {

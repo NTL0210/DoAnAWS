@@ -753,7 +753,7 @@ export default function VoiceChannelView({ channel: propChannel }) {
             ) : (
               <div className="space-y-2">
                 {participants.map((participant) => {
-                  const member = memberMap[participant.userId] || { userId: participant.userId, name: participant.name };
+                  const member = memberMap[participant.userId] || { userId: participant.userId, name: participant.name || participant.userName };
                   const isRecorder = participant.userId === activeRecording?.startedBy || participant.isRecording;
                   const isLocal = participant.userId === currentUser?.id;
 

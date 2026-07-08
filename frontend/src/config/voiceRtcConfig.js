@@ -119,9 +119,9 @@ export function getVoiceRtcConfig() {
   return {
     iceServers,
     iceTransportPolicy: forceTurn ? 'relay' : 'all',
-    bundlePolicy: 'balanced',
+    bundlePolicy: 'max-bundle',
     rtcpMuxPolicy: 'require',
-    iceCandidatePoolSize: 10,
+    iceCandidatePoolSize: 2,
   };
 }
 

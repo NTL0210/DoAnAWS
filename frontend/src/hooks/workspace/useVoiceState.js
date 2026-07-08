@@ -18,6 +18,13 @@ import {
   sendVoiceRecordToAI as serviceSendVoiceRecordToAI,
 } from '@/services/voiceRecordingService';
 
+function getUserDisplayName(user) {
+  if (!user) return 'Member';
+  if (user.name || user.nickname) return user.name || user.nickname;
+  if (typeof user.email === 'string' && user.email.includes('@')) return user.email.split('@')[0];
+  return 'Member';
+}
+
 /**
  * useVoiceState — manages voice presence, recording, and channel permissions.
  *
@@ -153,7 +160,7 @@ export default function useVoiceState({
         ...(prev[channelId] || {}),
         [currentUser?.id]: {
           userId: currentUser?.id,
-          userName: currentUser?.name,
+          userName: getUserDisplayName(currentUser),
           avatar: currentUser?.avatar,
           role: workspaceRole,
           recordingConsent,
@@ -197,7 +204,7 @@ export default function useVoiceState({
           ...channel,
           [participantData.userId]: existing ? { ...existing, ...clean } : {
             userId: participantData.userId,
-            userName: participantData.userName || 'Unknown',
+            userName: participantData.userName || participantData.name || 'Member',
             avatar: participantData.avatar || null,
             role: participantData.role || workspaceRole,
             recordingConsent: true,
@@ -279,7 +286,7 @@ export default function useVoiceState({
         channelId,
         workspaceId: activeWorkspaceId,
         userId: currentUser?.id,
-        userName: currentUser?.name,
+        userName: getUserDisplayName(currentUser),
         blob,
         mimeType,
         size,
@@ -409,7 +416,7 @@ export default function useVoiceState({
         ...(prev[targetChannelId] || {}),
         [currentUser?.id]: {
           userId: currentUser?.id,
-          userName: currentUser?.name,
+          userName: getUserDisplayName(currentUser),
           avatar: currentUser?.avatar,
           role: workspaceRole,
           recordingConsent,
