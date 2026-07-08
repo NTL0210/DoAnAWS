@@ -35,7 +35,13 @@ function VoiceParticipant({
   voiceConnectionState,
   micStatus,
 }) {
-  const displayName = member?.nickname || member?.name || participant?.name || participant?.userId || 'Unknown';
+  const displayName =
+    member?.nickname ||
+    member?.name ||
+    participant?.userName ||
+    participant?.name ||
+    displayNameFromEmail(member?.email || participant?.email) ||
+    'Member';
   const effectiveMuted = participant.isMuted;
   const audioLevel = isLocal ? localAudioLevel : (participant.audioLevel || 0);
   const hasAudibleLevel = !effectiveMuted && audioLevel > 0.008;
@@ -251,6 +257,10 @@ function getInitials(name) {
     .map((part) => part[0])
     .join('')
     .toUpperCase();
+}
+
+function displayNameFromEmail(email) {
+  return typeof email === 'string' && email.includes('@') ? email.split('@')[0] : '';
 }
 
 function formatTime(value) {

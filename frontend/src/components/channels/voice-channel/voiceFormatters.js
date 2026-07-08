@@ -1,7 +1,7 @@
 import { getAudioFormatLabel } from '@/lib/voiceAudioQuality';
 
 export function getDisplayName(member) {
-  return member?.nickname || member?.name || member?.userId || 'Unknown';
+  return member?.nickname || member?.name || displayNameFromEmail(member?.email) || 'Member';
 }
 
 export function getInitials(name) {
@@ -36,4 +36,8 @@ export function formatBytes(bytes = 0) {
 
 export function formatAudioFormat(format = '') {
   return getAudioFormatLabel(format);
+}
+
+function displayNameFromEmail(email) {
+  return typeof email === 'string' && email.includes('@') ? email.split('@')[0] : '';
 }

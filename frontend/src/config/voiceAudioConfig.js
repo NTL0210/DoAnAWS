@@ -1,7 +1,7 @@
 'use client';
 
 export const VOICE_AUDIO_CONFIG = {
-  noiseSuppressionMode: 'dtln-ai',
+  noiseSuppressionMode: 'browser-only',
   browserEchoCancellation: true,
   browserNoiseSuppression: true,
   browserAutoGainControl: true,
