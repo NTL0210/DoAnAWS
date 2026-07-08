@@ -54,8 +54,25 @@ export class DynamoWorkspaceRepository implements WorkspaceRepository {
       }),
     );
 
-    if (!result.Item) return null;
-    return result.Item.role as WorkspaceRole;
+    if (result.Item) return result.Item.role as WorkspaceRole;
+
+    const workspaceResult = await ddb.send(
+      new GetCommand({
+        TableName: env.DYNAMODB_TABLE_MAIN,
+        Key: { PK: `WORKSPACE#${workspaceId}`, SK: "METADATA" },
+      }),
+    );
+    const workspace = workspaceResult.Item;
+    if (!workspace) return null;
+    if (workspace.ownerId === userId) return "OWNER";
+    const members = Array.isArray(workspace.members) ? workspace.members : [];
+    const member = members.find((item) =>
+      typeof item === "object" &&
+      item !== null &&
+      "userId" in item &&
+      (item as { userId?: unknown }).userId === userId,
+    ) as { role?: WorkspaceRole } | undefined;
+    return member?.role ?? null;
   }
 
   async getMembers(workspaceId: string): Promise<WorkspaceMembership[]> {

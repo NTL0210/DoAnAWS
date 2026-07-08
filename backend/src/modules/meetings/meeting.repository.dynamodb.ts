@@ -59,6 +59,7 @@ function fromItem(item: Record<string, unknown>): Meeting {
     generatedTaskIds: textArray(item.generatedTaskIds),
     storageRef: nullableText(item.storageRef),
     expiresAt: typeof item.expiresAt === "number" ? item.expiresAt : undefined,
+    deletedAt: nullableText(item.deletedAt) ?? undefined,
     version: num(item.version, 1),
     createdBy: nullableText(item.createdBy),
     createdAt: text(item.createdAt),

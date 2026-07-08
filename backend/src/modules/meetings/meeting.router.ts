@@ -16,6 +16,7 @@ export function buildMeetingRouter(
   router.post("/", guard("ADMIN", "OWNER"), controller.create);
   router.get("/:id", guard("MEMBER", "ADMIN", "OWNER"), controller.get);
   router.patch("/:id", guard("ADMIN", "OWNER"), controller.update);
+  router.delete("/:id", guard("ADMIN", "OWNER"), controller.delete);
   router.post("/:id/upload-url", guard("ADMIN", "OWNER"), controller.createUploadUrl);
   router.post("/:id/process", guard("ADMIN", "OWNER"), controller.process);
 

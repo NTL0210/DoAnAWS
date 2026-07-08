@@ -60,6 +60,11 @@ export async function updateMeeting(meetingId, updates) {
   return meetingsApi.update(meetingId, updates);
 }
 
+export async function deleteMeeting(meetingId, context = {}) {
+  if (!isCloudMode()) throw new Error('Cloud API mode is required.');
+  return meetingsApi.delete(meetingId, { workspaceId: context.workspaceId });
+}
+
 /**
  * Analyze a meeting with AI — wraps analyzeMeeting to optionally
  * create a processing job for async tracking.

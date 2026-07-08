@@ -33,6 +33,7 @@ export interface Meeting {
   generatedTaskIds: string[];
   storageRef: string | null;
   expiresAt?: number | undefined;
+  deletedAt?: string | undefined;
   version: number;
   createdBy: string | null;
   createdAt: string;

@@ -10,8 +10,8 @@ function isCloudModeNoSignalingUrl() {
 }
 
 function getDefaultSignalingUrl() {
-  if (process.env.NEXT_PUBLIC_VOICE_SERVER_URL) return process.env.NEXT_PUBLIC_VOICE_SERVER_URL;
-  if (process.env.NEXT_PUBLIC_SIGNALING_URL) return process.env.NEXT_PUBLIC_SIGNALING_URL;
+  const configuredUrl = process.env.NEXT_PUBLIC_VOICE_SERVER_URL || process.env.NEXT_PUBLIC_SIGNALING_URL;
+  if (configuredUrl) return normalizeSignalingUrl(configuredUrl);
   if (typeof window === 'undefined') return 'http://localhost:3001';
 
   const { hostname, port } = window.location;
@@ -31,6 +31,18 @@ function getDefaultSignalingUrl() {
 
   if (port) return `//${hostname}:3001`;
   return `//${hostname}:3001`;
+}
+
+function normalizeSignalingUrl(configuredUrl) {
+  if (typeof window === 'undefined') return configuredUrl;
+  const value = String(configuredUrl || '').trim();
+  if (!value) return value;
+
+  if (window.location.protocol === 'https:' && value.startsWith('http://')) {
+    return window.location.origin;
+  }
+
+  return value;
 }
 
 export default function useSocket(options = {}) {
