@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NotFoundError } from "../../shared/errors/app-error.js";
+import type { UserService } from "../users/user.service.js";
 import type { WorkspaceRepository } from "./workspace.repository.js";
 import type {
   Workspace,
@@ -9,12 +10,22 @@ import type {
 } from "./workspace.types.js";
 import { createWorkspaceAttachmentUploadUrl } from "./workspace.upload.js";
 
+type MemberProfile = {
+  name: string | null;
+  email: string | null;
+  avatar: string | null;
+};
+
 export class WorkspaceService {
-  constructor(private readonly repository: WorkspaceRepository) {}
+  constructor(
+    private readonly repository: WorkspaceRepository,
+    private readonly userService?: UserService,
+  ) {}
 
   async list(userId?: string): Promise<Workspace[]> {
     if (userId) {
-      return this.repository.findByUserId(userId);
+      const workspaces = await this.repository.findByUserId(userId);
+      return Promise.all(workspaces.map((workspace) => this.hydrateWorkspaceMembers(workspace)));
     }
     // If no userId filter, we'd need a scan — not implemented for now.
     return [];
@@ -23,13 +34,14 @@ export class WorkspaceService {
   async get(id: string): Promise<Workspace> {
     const ws = await this.repository.findById(id);
     if (!ws) throw new NotFoundError("Workspace not found");
-    return ws;
+    return this.hydrateWorkspaceMembers(ws);
   }
 
   async create(input: CreateWorkspaceInput): Promise<Workspace> {
     const now = new Date().toISOString();
     const slug = this.generateSlug(input.name);
     const id = randomUUID();
+    const ownerProfile = await this.getMemberProfile(input.ownerId);
 
     const workspace: Workspace = {
       id,
@@ -47,6 +59,9 @@ export class WorkspaceService {
           role: "OWNER",
           joinedAt: now,
           nickname: null,
+          name: ownerProfile.name,
+          email: ownerProfile.email,
+          avatar: ownerProfile.avatar,
         },
       ],
       channels: input.channels ?? defaultWorkspaceChannels(id, now),
@@ -65,7 +80,7 @@ export class WorkspaceService {
     };
 
     await this.repository.create(workspace);
-    return workspace;
+    return this.hydrateWorkspaceMembers(workspace);
   }
 
   async update(id: string, patch: UpdateWorkspaceInput): Promise<Workspace> {
@@ -123,17 +138,18 @@ export class WorkspaceService {
     const ws = await this.get(id);
 
     const existing = ws.members.find((m) => m.userId === userId);
-    if (existing) return existing;
+    if (existing) return this.hydrateMember(existing);
 
     const now = new Date().toISOString();
+    const storedProfile = await this.getMemberProfile(userId);
     const member: WorkspaceMember = {
       userId,
       role,
       joinedAt: now,
       nickname: null,
-      name: profile.name ?? null,
-      email: profile.email ?? null,
-      avatar: profile.avatar ?? null,
+      name: profile.name ?? storedProfile.name,
+      email: profile.email ?? storedProfile.email,
+      avatar: profile.avatar ?? storedProfile.avatar,
     };
 
     const updated: Workspace = {
@@ -168,6 +184,35 @@ export class WorkspaceService {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
       .slice(0, 60) || "workspace";
+  }
+
+  private async hydrateWorkspaceMembers(workspace: Workspace): Promise<Workspace> {
+    const members = await Promise.all((workspace.members ?? []).map((member) => this.hydrateMember(member)));
+    return { ...workspace, members };
+  }
+
+  private async hydrateMember(member: WorkspaceMember): Promise<WorkspaceMember> {
+    const profile = await this.getMemberProfile(member.userId);
+    return {
+      ...member,
+      name: member.name || profile.name,
+      email: member.email || profile.email,
+      avatar: member.avatar || profile.avatar,
+    };
+  }
+
+  private async getMemberProfile(userId: string): Promise<MemberProfile> {
+    if (!this.userService) return { name: null, email: null, avatar: null };
+    try {
+      const user = await this.userService.getById(userId);
+      return {
+        name: user.name || null,
+        email: user.email || null,
+        avatar: user.avatar || null,
+      };
+    } catch {
+      return { name: null, email: null, avatar: null };
+    }
   }
 }
 

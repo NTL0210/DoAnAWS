@@ -127,7 +127,7 @@ export class MeetingService {
     let analysis: Awaited<ReturnType<typeof analyzeTranscriptMeeting>>;
     try {
       analysis = current.transcriptText.trim()
-        ? await analyzeTranscriptMeeting(current.transcriptText)
+        ? await analyzeTranscriptMeeting(current.transcriptText, current.createdAt)
         : await analyzeStoredMeeting(current);
     } catch (err) {
       logger.error({ error: err instanceof Error ? err.message : String(err), meetingId: current.id }, "[MeetingService.process] AI processing failed");
@@ -162,7 +162,7 @@ export class MeetingService {
   }
 }
 
-async function analyzeTranscriptMeeting(transcriptText: string): Promise<{
+async function analyzeTranscriptMeeting(transcriptText: string, referenceDate?: string): Promise<{
   summary: string;
   actionItems: string[];
   keyDecisions: string[];
@@ -171,7 +171,7 @@ async function analyzeTranscriptMeeting(transcriptText: string): Promise<{
   transcriptText: string;
 }> {
   try {
-    const analysis = await analyzeTranscriptText(transcriptText);
+    const analysis = await analyzeTranscriptText(transcriptText, { referenceDate });
     return {
       transcriptText: analysis.transcript || transcriptText,
       summary: analysis.summary,
@@ -216,6 +216,7 @@ async function analyzeStoredMeeting(meeting: Meeting): Promise<{
   const analysis = await analyzeStoredAudio({
     storageKey: meeting.storageRef,
     mimeType: mimeTypeForStorageKey(meeting.storageRef),
+    referenceDate: meeting.createdAt,
   });
   return {
     transcriptText: analysis.transcript,
@@ -263,7 +264,7 @@ function extractMeetingWork(transcriptText: string): {
   const selectedActionItems = normalizedActionItems.length ? normalizedActionItems : actionItems;
   const keyDecisions = sentences.filter((sentence) => hasDecisionSignal(sentence)).slice(0, 6);
   const risks = sentences.filter((sentence) => hasRiskSignal(sentence)).slice(0, 6);
-  const selected = (selectedActionItems.length > 0 ? selectedActionItems : sentences).slice(0, 10);
+  const selected = selectedActionItems.slice(0, 10);
   const suggestedTasks = selected.map((sentence, index) => ({
     id: `suggestion-${index + 1}`,
     title: toTaskTitle(sentence),
@@ -274,7 +275,7 @@ function extractMeetingWork(transcriptText: string): {
     deadline: null,
     confidence: selectedActionItems.includes(sentence) ? 0.72 : 0.45,
     sourceQuote: sentence,
-    reason: selectedActionItems.includes(sentence) ? "Detected action wording in transcript" : "Fallback task candidate"
+    reason: "Detected action wording in transcript"
   }));
 
   return { summary, actionItems: selectedActionItems, keyDecisions, risks, transcriptText, suggestedTasks };
@@ -324,19 +325,29 @@ function normalizeText(value: string): string {
 }
 
 function hasActionSignal(sentence: string): boolean {
+  if (isNoWorkStatement(sentence)) return false;
   const text = normalizeText(sentence);
   return /\b(action|follow up|todo|task|need|needs|must|should|will|prepare|review|finish|send|create|update|fix|call|ask|notify|demo)\b/i.test(text)
-    || /\b(can|phai|truoc|deadline|chuan bi|thong bao|check|hoi|goi|lam|bao cao|xu ly|hoan thanh|chot|cap|set|doi|viet|nghien cuu|ping|gui)\b/.test(text);
+    || /\b(can|phai|truoc|deadline|chuan bi|thong bao|check|goi|lam|bao cao|xu ly|hoan thanh|chot|cap|set|doi|viet|nghien cuu|ping|gui)\b/.test(text)
+    || /\bhoi\s+(gia|y kien|vendor|sep|s3|quyen|khach|doi tac)\b/.test(text);
 }
 
 function hasDecisionSignal(sentence: string): boolean {
+  if (isNoWorkStatement(sentence)) return false;
   const text = normalizeText(sentence);
   return /\b(chot|quyet dinh|giu|tam dung|doi het|uu tien|de sprint sau|tap trung|decided|keep|pause|prioritize|defer|focus)\b/.test(text);
 }
 
 function hasRiskSignal(sentence: string): boolean {
+  if (isNoWorkStatement(sentence)) return false;
   const text = normalizeText(sentence);
   return /\b(rui ro|tre|phan nan|het|cat|cao|anh huong|loi|bug|token|credit|chay|bao tri|tang|risk|late|delay|complain|blocked|issue|quota|maintenance|increase)\b/.test(text);
+}
+
+function isNoWorkStatement(sentence: string): boolean {
+  const text = normalizeText(sentence);
+  return /\b(khong co|khong thay|khong phat sinh|chua co)\b.*\b(cong viec|nhiem vu|task|action item|viec can lam|quyet dinh|deadline|ke hoach|rui ro)\b/.test(text)
+    || /\b(no|not any|none|without)\b.*\b(task|action item|work item|decision|deadline|risk|assignment)\b/.test(text);
 }
 
 function inferThemes(sentences: string[]): string[] {

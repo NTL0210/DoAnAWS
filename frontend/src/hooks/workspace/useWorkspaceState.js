@@ -97,7 +97,7 @@ export default function useWorkspaceState({
       const isSelf = member.userId === currentUser?.id;
       return {
         ...member,
-        name: member.name || member.nickname || (isSelf ? currentUser?.name : null) || member.email || member.userId || null,
+        name: member.name || member.nickname || (isSelf ? currentUser?.name : null) || displayNameFromEmail(member.email) || 'Member',
         email: member.email || (isSelf ? currentUser?.email : null) || null,
         avatar: member.avatar || (isSelf ? currentUser?.avatar : null) || null,
       };
@@ -213,4 +213,10 @@ export default function useWorkspaceState({
     selectView,
     selectTeamChat,
   };
+}
+
+function displayNameFromEmail(email) {
+  if (!email || typeof email !== 'string') return null;
+  const local = email.split('@')[0]?.trim();
+  return local || null;
 }
