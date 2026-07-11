@@ -14,6 +14,9 @@ import { UserService } from "../modules/users/user.service.js";
 import { VoiceRecordingController } from "../modules/voice-recordings/voice-recording.controller.js";
 import { buildVoiceRecordingRouter } from "../modules/voice-recordings/voice-recording.router.js";
 import { VoiceRecordingService } from "../modules/voice-recordings/voice-recording.service.js";
+import { IceServerService } from "../modules/voice/ice-server.service.js";
+import { VoiceController } from "../modules/voice/voice.controller.js";
+import { buildVoiceRouter } from "../modules/voice/voice.router.js";
 import { WorkspaceController } from "../modules/workspaces/workspace.controller.js";
 import { buildWorkspaceRouter } from "../modules/workspaces/workspace.router.js";
 import { WorkspaceService } from "../modules/workspaces/workspace.service.js";
@@ -44,6 +47,9 @@ export function buildApiRouter(repositories: Repositories): Router {
   );
   const voiceRecordingController = new VoiceRecordingController(voiceRecordingService);
   api.use("/voice-recordings", buildVoiceRecordingRouter(voiceRecordingController, guard));
+
+  const voiceController = new VoiceController(new IceServerService());
+  api.use("/voice", buildVoiceRouter(voiceController));
 
   // ── Tasks ─────────────────────────────────────────────
   const taskService = new TaskService(repositories.tasks);

@@ -19,7 +19,9 @@
     "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\""
   },
   "dependencies": {
+    "@aws-sdk/client-auto-scaling": "^3.1085.0",
     "@aws-sdk/client-dynamodb": "^3.705.0",
+    "@aws-sdk/client-ec2": "^3.1085.0",
     "@aws-sdk/client-s3": "^3.1079.0",
     "@aws-sdk/lib-dynamodb": "^3.705.0",
     "@aws-sdk/s3-request-presigner": "^3.1079.0",
