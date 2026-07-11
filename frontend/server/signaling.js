@@ -5,10 +5,13 @@
  */
 const { Server } = require('socket.io');
 const http = require('http');
+const crypto = require('crypto');
 
 const PORT = process.env.VOICE_SIGNALING_PORT || process.env.PORT || 3001;
+const AWS_REGION = process.env.AWS_REGION || 'ap-southeast-1';
 const PRESENCE_TTL_MS = 60_000;
 const VOICE_TTL_MS = 90_000;
+const JWKS_CACHE_TTL_MS = 3_600_000;
 const DEV_ALLOWED_ORIGINS = [
   /^http:\/\/localhost:\d+$/,
   /^http:\/\/127\.0\.0\.1:\d+$/,
@@ -16,6 +19,27 @@ const DEV_ALLOWED_ORIGINS = [
   /^http:\/\/10\.\d+\.\d+\.\d+:\d+$/,
   /^http:\/\/172\.(1[6-9]|2\d|3[01])\.\d+\.\d+:\d+$/,
 ];
+const DEFAULT_PRODUCTION_ORIGINS = [
+  'https://d1gdsnv8exdah.cloudfront.net',
+];
+
+function getAllowedOrigins() {
+  const configured = process.env.VOICE_ALLOWED_ORIGINS || process.env.ALLOWED_ORIGINS || '';
+  const origins = configured
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  return new Set(origins.length ? origins : DEFAULT_PRODUCTION_ORIGINS);
+}
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  if (getAllowedOrigins().has(origin)) return true;
+  if (process.env.NODE_ENV !== 'production') {
+    return DEV_ALLOWED_ORIGINS.some((pattern) => pattern.test(origin));
+  }
+  return false;
+}
 
 const httpServer = http.createServer((req, res) => {
   // Health check endpoint for ALB target group
@@ -31,16 +55,98 @@ const httpServer = http.createServer((req, res) => {
 const io = new Server(httpServer, {
   cors: {
     origin(origin, callback) {
-      if (!origin || DEV_ALLOWED_ORIGINS.some((pattern) => pattern.test(origin))) {
+      if (isAllowedOrigin(origin)) {
         callback(null, true);
         return;
       }
-      callback(null, true);
+      callback(new Error('Origin is not allowed by voice signaling CORS'));
     },
     methods: ['GET', 'POST'],
   },
+  allowRequest(req, callback) {
+    const origin = req.headers.origin;
+    callback(null, isAllowedOrigin(origin));
+  },
+  maxHttpBufferSize: 100_000,
   pingInterval: 15000,
   pingTimeout: 20000,
+});
+
+const jwksCache = new Map();
+
+function shouldRequireSocketAuth() {
+  return process.env.REQUIRE_SIGNALING_AUTH === 'true'
+    || Boolean(process.env.COGNITO_USER_POOL_ID);
+}
+
+function base64UrlJson(value) {
+  return JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
+}
+
+async function fetchJwks(userPoolId) {
+  const cached = jwksCache.get(userPoolId);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+  const url = `https://cognito-idp.${AWS_REGION}.amazonaws.com/${userPoolId}/.well-known/jwks.json`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Failed to fetch Cognito JWKS: ${response.status}`);
+  const data = await response.json();
+  jwksCache.set(userPoolId, { data, expiresAt: Date.now() + JWKS_CACHE_TTL_MS });
+  return data;
+}
+
+async function verifyCognitoToken(token) {
+  const userPoolId = process.env.COGNITO_USER_POOL_ID;
+  if (!userPoolId) throw new Error('COGNITO_USER_POOL_ID is not configured');
+  const [headerPart, payloadPart, signaturePart] = String(token || '').split('.');
+  if (!headerPart || !payloadPart || !signaturePart) throw new Error('Invalid token format');
+
+  const header = base64UrlJson(headerPart);
+  const payload = base64UrlJson(payloadPart);
+  if (header.alg !== 'RS256') throw new Error('Unsupported token algorithm');
+
+  const jwks = await fetchJwks(userPoolId);
+  const jwk = jwks.keys?.find((key) => key.kid === header.kid);
+  if (!jwk) throw new Error('No matching Cognito key');
+
+  const verifier = crypto.createVerify('RSA-SHA256');
+  verifier.update(`${headerPart}.${payloadPart}`);
+  verifier.end();
+  const publicKey = crypto.createPublicKey({ key: jwk, format: 'jwk' });
+  const signature = Buffer.from(signaturePart, 'base64url');
+  if (!verifier.verify(publicKey, signature)) throw new Error('Invalid token signature');
+
+  const expectedIssuer = `https://cognito-idp.${AWS_REGION}.amazonaws.com/${userPoolId}`;
+  if (payload.iss !== expectedIssuer) throw new Error('Invalid token issuer');
+  if (Number(payload.exp || 0) * 1000 < Date.now()) throw new Error('Token expired');
+  if (payload.token_use !== 'access' && payload.token_use !== 'id') throw new Error('Invalid token use');
+
+  const clientId = process.env.COGNITO_CLIENT_ID;
+  const tokenClientId = payload.token_use === 'id' ? payload.aud : payload.client_id;
+  if (clientId && tokenClientId !== clientId) throw new Error('Invalid token audience');
+
+  return {
+    userId: String(payload.sub || ''),
+    email: String(payload.email || payload['cognito:email'] || ''),
+    name: String(payload.name || payload.preferred_username || payload.username || payload['cognito:username'] || ''),
+  };
+}
+
+io.use(async (socket, next) => {
+  if (!shouldRequireSocketAuth()) {
+    console.warn('[Signaling] Cognito auth env is not set; accepting socket without JWT verification.');
+    next();
+    return;
+  }
+
+  try {
+    const token = socket.handshake.auth?.token;
+    const authUser = await verifyCognitoToken(token);
+    if (!authUser.userId) throw new Error('Token missing user id');
+    socket.authUser = authUser;
+    next();
+  } catch (error) {
+    next(new Error('Authentication required'));
+  }
 });
 
 let redisClient = null;
@@ -104,6 +210,24 @@ const userEmailMap = new Map();
 
 function displayNameFromEmail(email) {
   return typeof email === 'string' && email.includes('@') ? email.split('@')[0] : '';
+}
+
+function authUserId(socket) {
+  return socket.authUser?.userId || null;
+}
+
+function matchesAuthenticatedUser(socket, userId) {
+  const authenticatedUserId = authUserId(socket);
+  return !authenticatedUserId || authenticatedUserId === userId;
+}
+
+function canRelayVoiceSignal(socket, targetSocketId, channelId) {
+  const sourceState = socketVoiceState.get(socket.id);
+  const targetState = socketVoiceState.get(targetSocketId);
+  if (!sourceState || !targetState) return false;
+  if (sourceState.workspaceId !== targetState.workspaceId) return false;
+  if (sourceState.channelId !== targetState.channelId) return false;
+  return !channelId || sourceState.channelId === channelId;
 }
 
 function workspaceRoom(workspaceId) {
@@ -354,6 +478,7 @@ async function upsertParticipant(socket, payload) {
   } = payload || {};
 
   if (!workspaceId || !channelId || !userId) return null;
+  if (!matchesAuthenticatedUser(socket, userId)) return null;
   await removeSocketFromVoice(socket, 'switch');
 
   const now = new Date().toISOString();
@@ -426,6 +551,7 @@ io.on('connection', (socket) => {
   socket.on('workspace:join', async ({ workspaceId, user } = {}) => {
     if (!workspaceId) return;
     if (user?.id) {
+      if (!matchesAuthenticatedUser(socket, user.id)) return;
       const previous = socketWorkspaceState.get(socket.id);
       if (previous && (previous.workspaceId !== workspaceId || previous.userId !== user.id)) {
         await removeSocketFromWorkspace(socket, 'switch');
@@ -460,6 +586,8 @@ io.on('connection', (socket) => {
 
   socket.on('workspace:presence:get', async ({ workspaceId } = {}) => {
     if (!workspaceId) return;
+    const state = socketWorkspaceState.get(socket.id);
+    if (state?.workspaceId !== workspaceId) return;
     socket.emit('workspace:presence:snapshot', {
       workspaceId,
       onlineUsers: await serializeOnlineWorkspace(workspaceId),
@@ -468,6 +596,9 @@ io.on('connection', (socket) => {
 
   socket.on('workspace:presence:heartbeat', async ({ workspaceId, userId, user } = {}) => {
     if (!workspaceId || !userId) return;
+    if (!matchesAuthenticatedUser(socket, userId)) return;
+    const state = socketWorkspaceState.get(socket.id);
+    if (state?.workspaceId !== workspaceId || state.userId !== userId) return;
     const online = getWorkspaceOnline(workspaceId);
     const current = online.get(userId);
     if (current) {
@@ -476,7 +607,6 @@ io.on('connection', (socket) => {
       await writeJsonHash(workspacePresenceKey(workspaceId), userId, current);
       return;
     }
-    const state = socketWorkspaceState.get(socket.id);
     if (state?.workspaceId === workspaceId && state.userId === userId) {
       const presence = {
         ...(state.presence || {}),
@@ -499,6 +629,8 @@ io.on('connection', (socket) => {
 
   socket.on('workspace:event', ({ workspaceId, type, payload } = {}) => {
     if (!workspaceId || !type) return;
+    const state = socketWorkspaceState.get(socket.id);
+    if (state?.workspaceId !== workspaceId) return;
     socket.to(workspaceRoom(workspaceId)).emit('workspace:event', {
       workspaceId,
       type,
@@ -509,6 +641,8 @@ io.on('connection', (socket) => {
 
   socket.on('voice:presence:get', async ({ workspaceId } = {}) => {
     if (!workspaceId) return;
+    const state = socketWorkspaceState.get(socket.id);
+    if (state?.workspaceId !== workspaceId) return;
     socket.emit('voice:presence:snapshot', {
       workspaceId,
       participantsByChannel: await serializeWorkspace(workspaceId),
@@ -518,6 +652,7 @@ io.on('connection', (socket) => {
   // ─── User presence (for real-time messaging) ───────────
   socket.on('user:online', ({ userId, email } = {}) => {
     if (!userId) return;
+    if (!matchesAuthenticatedUser(socket, userId)) return;
     registerUserSocket(socket, userId, email);
   });
 
@@ -540,6 +675,7 @@ io.on('connection', (socket) => {
       return;
     }
     const senderId = socketUserMap.get(socket.id);
+    if (!senderId || (invitation.invitedByUserId && invitation.invitedByUserId !== senderId)) return;
     console.log(`[Signaling] Invitation relay: ${senderId} → ${targetId}`);
     io.to(userRoom(targetId)).emit('invitation:new', invitation);
   });
@@ -553,6 +689,7 @@ io.on('connection', (socket) => {
    */
   socket.on('invitation:accept', ({ fromUserId, invitation } = {}) => {
     if (!fromUserId || !invitation) return;
+    if (!matchesAuthenticatedUser(socket, fromUserId)) return;
     console.log(`[Signaling] Invitation accepted: ${fromUserId} accepted invite to ${invitation.workspaceName}`);
     // Notify the original sender (the one who created the invitation)
     if (invitation.invitedByUserId) {
@@ -583,6 +720,7 @@ io.on('connection', (socket) => {
 
   socket.on('webrtc:offer', ({ to, from, channelId, offer } = {}) => {
     if (!to || !offer) return;
+    if (!canRelayVoiceSignal(socket, to, channelId)) return;
     io.to(to).emit('webrtc:offer', {
       from: from || socket.id,
       fromUserId: socketVoiceState.get(socket.id)?.userId || socketUserMap.get(socket.id) || null,
@@ -593,6 +731,7 @@ io.on('connection', (socket) => {
 
   socket.on('webrtc:answer', ({ to, from, channelId, answer } = {}) => {
     if (!to || !answer) return;
+    if (!canRelayVoiceSignal(socket, to, channelId)) return;
     io.to(to).emit('webrtc:answer', {
       from: from || socket.id,
       fromUserId: socketVoiceState.get(socket.id)?.userId || socketUserMap.get(socket.id) || null,
@@ -603,6 +742,7 @@ io.on('connection', (socket) => {
 
   socket.on('webrtc:ice-candidate', ({ to, from, channelId, candidate } = {}) => {
     if (!to || !candidate) return;
+    if (!canRelayVoiceSignal(socket, to, channelId)) return;
     io.to(to).emit('webrtc:ice-candidate', {
       from: from || socket.id,
       fromUserId: socketVoiceState.get(socket.id)?.userId || socketUserMap.get(socket.id) || null,
@@ -613,12 +753,14 @@ io.on('connection', (socket) => {
 
   socket.on('peer-signal', ({ targetSocketId, signal, channelId } = {}) => {
     if (!targetSocketId || !signal) return;
+    if (!canRelayVoiceSignal(socket, targetSocketId, channelId)) return;
     io.to(targetSocketId).emit('peer-signal', { socketId: socket.id, signal, channelId });
   });
 
   socket.on('mute-state', async ({ channelId, userId, isMuted } = {}) => {
     const state = socketVoiceState.get(socket.id);
     const workspaceId = state?.workspaceId;
+    if (!state || state.channelId !== channelId || state.userId !== userId) return;
     if (workspaceId && channelId && userId) {
       const participant = getChannel(workspaceId, channelId).get(userId);
       if (participant) {
@@ -634,6 +776,7 @@ io.on('connection', (socket) => {
   socket.on('speaking-state', async ({ channelId, userId, isSpeaking, audioLevel } = {}) => {
     const state = socketVoiceState.get(socket.id);
     const workspaceId = state?.workspaceId;
+    if (!state || state.channelId !== channelId || state.userId !== userId) return;
     if (workspaceId && channelId && userId) {
       const participant = getChannel(workspaceId, channelId).get(userId);
       if (participant) {
