@@ -143,11 +143,13 @@ export default function useWebRTC(opts) {
   }, [isMuted]);
 
   useEffect(() => {
-    if (!hasTurnServer(rtcConfiguration)) {
-      const warning = 'TURN server is not configured. Voice may fail across different networks/NAT.';
-      debugLog(warning);
-      setAudioWarning((prev) => prev || warning);
+    const turnWarning = 'TURN server is not configured. Voice may fail across different networks/NAT.';
+    if (hasTurnServer(rtcConfiguration)) {
+      setAudioWarning((prev) => (prev === turnWarning ? '' : prev));
+      return;
     }
+    debugLog(turnWarning);
+    setAudioWarning((prev) => prev || turnWarning);
   }, [rtcConfiguration]);
 
   const updatePeerState = useCallback((peerUserId, patch) => {

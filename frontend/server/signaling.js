@@ -7,6 +7,8 @@ const { Server } = require('socket.io');
 const http = require('http');
 
 const PORT = process.env.VOICE_SIGNALING_PORT || process.env.PORT || 3001;
+const PRESENCE_TTL_MS = 60_000;
+const VOICE_TTL_MS = 90_000;
 const DEV_ALLOWED_ORIGINS = [
   /^http:\/\/localhost:\d+$/,
   /^http:\/\/127\.0\.0\.1:\d+$/,
@@ -40,6 +42,40 @@ const io = new Server(httpServer, {
   pingInterval: 15000,
   pingTimeout: 20000,
 });
+
+let redisClient = null;
+let redisSubClient = null;
+let redisReady = false;
+
+async function setupRedisAdapter() {
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) {
+    console.log('[Signaling] REDIS_URL not set; using single-instance in-memory signaling.');
+    return;
+  }
+
+  try {
+    const { createAdapter } = require('@socket.io/redis-adapter');
+    const { createClient } = require('redis');
+    const pubClient = createClient({ url: redisUrl });
+    const subClient = pubClient.duplicate();
+
+    pubClient.on('error', (error) => console.error('[Signaling] Redis pub error:', error.message));
+    subClient.on('error', (error) => console.error('[Signaling] Redis sub error:', error.message));
+
+    await Promise.all([pubClient.connect(), subClient.connect()]);
+    io.adapter(createAdapter(pubClient, subClient));
+    redisClient = pubClient;
+    redisSubClient = subClient;
+    redisReady = true;
+    console.log('[Signaling] Redis adapter enabled for multi-EC2 realtime.');
+  } catch (error) {
+    redisClient = null;
+    redisSubClient = null;
+    redisReady = false;
+    console.error('[Signaling] Redis adapter failed; falling back to in-memory signaling:', error.message);
+  }
+}
 
 httpServer.on('error', (error) => {
   if (error.code === 'EADDRINUSE') {
@@ -78,6 +114,18 @@ function voiceRoom(channelId) {
   return `voice:${channelId}`;
 }
 
+function workspacePresenceKey(workspaceId) {
+  return `presence:workspace:${workspaceId}`;
+}
+
+function voicePresenceKey(workspaceId, channelId) {
+  return `presence:voice:${workspaceId}:${channelId}`;
+}
+
+function voiceChannelsKey(workspaceId) {
+  return `presence:voice-channels:${workspaceId}`;
+}
+
 function getWorkspace(workspaceId) {
   if (!workspacePresence.has(workspaceId)) workspacePresence.set(workspaceId, new Map());
   return workspacePresence.get(workspaceId);
@@ -94,23 +142,73 @@ function getChannel(workspaceId, channelId) {
   return workspace.get(channelId);
 }
 
-function serializeChannel(channelMap) {
+function serializeLocalChannel(channelMap) {
   return Array.from(channelMap.values());
 }
 
-function serializeWorkspace(workspaceId) {
+function serializeLocalWorkspace(workspaceId) {
   const workspace = getWorkspace(workspaceId);
   return Object.fromEntries(
     Array.from(workspace.entries()).map(([channelId, participants]) => [
       channelId,
-      serializeChannel(participants),
+      serializeLocalChannel(participants),
     ])
   );
 }
 
-function broadcastPresence(workspaceId, channelId) {
+async function readJsonHash(key, ttlMs) {
+  if (!redisReady || !redisClient) return [];
+  const raw = await redisClient.hGetAll(key);
+  const now = Date.now();
+  const values = [];
+  const staleFields = [];
+
+  for (const [field, json] of Object.entries(raw || {})) {
+    try {
+      const value = JSON.parse(json);
+      const seenAt = Date.parse(value.lastSeenAt || value.updatedAt || value.joinedAt || value.connectedAt || 0);
+      if (ttlMs && (!seenAt || Number.isNaN(seenAt) || now - seenAt > ttlMs)) {
+        staleFields.push(field);
+      } else {
+        values.push(value);
+      }
+    } catch {
+      staleFields.push(field);
+    }
+  }
+
+  if (staleFields.length) await redisClient.hDel(key, staleFields);
+  return values;
+}
+
+async function writeJsonHash(key, field, value) {
+  if (!redisReady || !redisClient) return;
+  await redisClient.hSet(key, field, JSON.stringify(value));
+  await redisClient.expire(key, 3600);
+}
+
+async function deleteJsonHash(key, field) {
+  if (!redisReady || !redisClient) return;
+  await redisClient.hDel(key, field);
+}
+
+async function serializeChannelPresence(workspaceId, channelId) {
+  if (redisReady) return readJsonHash(voicePresenceKey(workspaceId, channelId), VOICE_TTL_MS);
+  return serializeLocalChannel(getChannel(workspaceId, channelId));
+}
+
+async function serializeWorkspace(workspaceId) {
+  if (!redisReady || !redisClient) return serializeLocalWorkspace(workspaceId);
+  const channels = await redisClient.sMembers(voiceChannelsKey(workspaceId));
+  const entries = await Promise.all(
+    channels.map(async (channelId) => [channelId, await serializeChannelPresence(workspaceId, channelId)])
+  );
+  return Object.fromEntries(entries.filter(([, participants]) => participants.length > 0));
+}
+
+async function broadcastPresence(workspaceId, channelId) {
   if (!workspaceId || !channelId) return;
-  const participants = serializeChannel(getChannel(workspaceId, channelId));
+  const participants = await serializeChannelPresence(workspaceId, channelId);
   io.to(workspaceRoom(workspaceId)).emit('voice:presence:update', {
     workspaceId,
     channelId,
@@ -118,15 +216,16 @@ function broadcastPresence(workspaceId, channelId) {
   });
 }
 
-function serializeOnlineWorkspace(workspaceId) {
+async function serializeOnlineWorkspace(workspaceId) {
+  if (redisReady) return readJsonHash(workspacePresenceKey(workspaceId), PRESENCE_TTL_MS);
   return Array.from(getWorkspaceOnline(workspaceId).values());
 }
 
-function broadcastOnlinePresence(workspaceId) {
+async function broadcastOnlinePresence(workspaceId) {
   if (!workspaceId) return;
   io.to(workspaceRoom(workspaceId)).emit('workspace:presence:update', {
     workspaceId,
-    onlineUsers: serializeOnlineWorkspace(workspaceId),
+    onlineUsers: await serializeOnlineWorkspace(workspaceId),
   });
 }
 
@@ -177,7 +276,7 @@ function unregisterUserSocket(socket) {
   }
 }
 
-function removeSocketFromWorkspace(socket, reason = 'left') {
+async function removeSocketFromWorkspace(socket, reason = 'left') {
   const state = socketWorkspaceState.get(socket.id);
   if (!state) return;
   const { workspaceId, userId } = state;
@@ -186,22 +285,31 @@ function removeSocketFromWorkspace(socket, reason = 'left') {
   if (current?.socketId === socket.id) {
     const replacementSocketId = findWorkspaceSocketForUser(workspaceId, userId, socket.id);
     if (replacementSocketId) {
-      online.set(userId, {
+      const replacementPresence = {
         ...current,
         socketId: replacementSocketId,
         online: true,
         lastSeenAt: new Date().toISOString(),
-      });
+      };
+      online.set(userId, replacementPresence);
+      await writeJsonHash(workspacePresenceKey(workspaceId), userId, replacementPresence);
     } else {
       online.delete(userId);
+      if (redisReady) {
+        const currentRemote = (await readJsonHash(workspacePresenceKey(workspaceId), 0))
+          .find((item) => item.userId === userId);
+        if (!currentRemote || currentRemote.socketId === socket.id) {
+          await deleteJsonHash(workspacePresenceKey(workspaceId), userId);
+        }
+      }
     }
-    broadcastOnlinePresence(workspaceId);
+    await broadcastOnlinePresence(workspaceId);
   }
   socketWorkspaceState.delete(socket.id);
   socket.leave(workspaceRoom(workspaceId));
 }
 
-function removeSocketFromVoice(socket, reason = 'left') {
+async function removeSocketFromVoice(socket, reason = 'left') {
   const state = socketVoiceState.get(socket.id);
   if (!state) return;
   const { workspaceId, channelId, userId } = state;
@@ -210,6 +318,13 @@ function removeSocketFromVoice(socket, reason = 'left') {
 
   if (participant?.socketId === socket.id) {
     channel.delete(userId);
+  }
+  if (redisReady) {
+    const current = (await readJsonHash(voicePresenceKey(workspaceId, channelId), 0))
+      .find((item) => item.userId === userId);
+    if (!current || current.socketId === socket.id) {
+      await deleteJsonHash(voicePresenceKey(workspaceId, channelId), userId);
+    }
   }
   socket.leave(voiceRoom(channelId));
   socketVoiceState.delete(socket.id);
@@ -222,10 +337,10 @@ function removeSocketFromVoice(socket, reason = 'left') {
     reason,
   });
   socket.to(voiceRoom(channelId)).emit('user-left', { socketId: socket.id, userId });
-  broadcastPresence(workspaceId, channelId);
+  await broadcastPresence(workspaceId, channelId);
 }
 
-function upsertParticipant(socket, payload) {
+async function upsertParticipant(socket, payload) {
   const {
     workspaceId,
     channelId,
@@ -239,8 +354,9 @@ function upsertParticipant(socket, payload) {
   } = payload || {};
 
   if (!workspaceId || !channelId || !userId) return null;
-  removeSocketFromVoice(socket, 'switch');
+  await removeSocketFromVoice(socket, 'switch');
 
+  const now = new Date().toISOString();
   const participant = {
     socketId: socket.id,
     userId,
@@ -250,13 +366,20 @@ function upsertParticipant(socket, payload) {
     isMuted: Boolean(isMuted),
     isSpeaking: false,
     audioLevel: 0,
-    joinedAt: new Date().toISOString(),
+    joinedAt: now,
+    lastSeenAt: now,
     connected: true,
   };
 
   const channel = getChannel(workspaceId, channelId);
-  const existingPeers = serializeChannel(channel).filter((peer) => peer.userId !== userId);
+  const existingPeers = (await serializeChannelPresence(workspaceId, channelId))
+    .filter((peer) => peer.userId !== userId);
   channel.set(userId, participant);
+  if (redisReady && redisClient) {
+    await writeJsonHash(voicePresenceKey(workspaceId, channelId), userId, participant);
+    await redisClient.sAdd(voiceChannelsKey(workspaceId), channelId);
+    await redisClient.expire(voiceChannelsKey(workspaceId), 3600);
+  }
 
   socket.join(workspaceRoom(workspaceId));
   socket.join(voiceRoom(channelId));
@@ -280,7 +403,7 @@ function upsertParticipant(socket, payload) {
     userInfo: { name: participant.name, avatar: participant.avatar, role: participant.role },
     isMuted: participant.isMuted,
   });
-  broadcastPresence(workspaceId, channelId);
+  await broadcastPresence(workspaceId, channelId);
   console.log(`[Signaling] ${userId} joined ${channelId} in ${workspaceId}`);
   return participant;
 }
@@ -288,16 +411,24 @@ function upsertParticipant(socket, payload) {
 io.on('connection', (socket) => {
   console.log(`[Signaling] Client connected: ${socket.id}`);
 
-  socket.on('voice-ping', ({ timestamp } = {}) => {
+  socket.on('voice-ping', async ({ timestamp } = {}) => {
+    const state = socketVoiceState.get(socket.id);
+    if (state?.workspaceId && state.channelId && state.userId) {
+      const participant = getChannel(state.workspaceId, state.channelId).get(state.userId);
+      if (participant) {
+        participant.lastSeenAt = new Date().toISOString();
+        await writeJsonHash(voicePresenceKey(state.workspaceId, state.channelId), state.userId, participant);
+      }
+    }
     socket.emit('voice-pong', { timestamp });
   });
 
-  socket.on('workspace:join', ({ workspaceId, user } = {}) => {
+  socket.on('workspace:join', async ({ workspaceId, user } = {}) => {
     if (!workspaceId) return;
     if (user?.id) {
       const previous = socketWorkspaceState.get(socket.id);
       if (previous && (previous.workspaceId !== workspaceId || previous.userId !== user.id)) {
-        removeSocketFromWorkspace(socket, 'switch');
+        await removeSocketFromWorkspace(socket, 'switch');
       }
       const online = getWorkspaceOnline(workspaceId);
       const presence = {
@@ -312,35 +443,37 @@ io.on('connection', (socket) => {
         lastSeenAt: new Date().toISOString(),
       };
       online.set(user.id, presence);
+      await writeJsonHash(workspacePresenceKey(workspaceId), user.id, presence);
       socketWorkspaceState.set(socket.id, { workspaceId, userId: user.id, presence });
     }
     socket.join(workspaceRoom(workspaceId));
     socket.emit('voice:presence:snapshot', {
       workspaceId,
-      participantsByChannel: serializeWorkspace(workspaceId),
+      participantsByChannel: await serializeWorkspace(workspaceId),
     });
     socket.emit('workspace:presence:snapshot', {
       workspaceId,
-      onlineUsers: serializeOnlineWorkspace(workspaceId),
+      onlineUsers: await serializeOnlineWorkspace(workspaceId),
     });
-    if (user?.id) broadcastOnlinePresence(workspaceId);
+    if (user?.id) await broadcastOnlinePresence(workspaceId);
   });
 
-  socket.on('workspace:presence:get', ({ workspaceId } = {}) => {
+  socket.on('workspace:presence:get', async ({ workspaceId } = {}) => {
     if (!workspaceId) return;
     socket.emit('workspace:presence:snapshot', {
       workspaceId,
-      onlineUsers: serializeOnlineWorkspace(workspaceId),
+      onlineUsers: await serializeOnlineWorkspace(workspaceId),
     });
   });
 
-  socket.on('workspace:presence:heartbeat', ({ workspaceId, userId, user } = {}) => {
+  socket.on('workspace:presence:heartbeat', async ({ workspaceId, userId, user } = {}) => {
     if (!workspaceId || !userId) return;
     const online = getWorkspaceOnline(workspaceId);
     const current = online.get(userId);
     if (current) {
       current.lastSeenAt = new Date().toISOString();
       current.online = true;
+      await writeJsonHash(workspacePresenceKey(workspaceId), userId, current);
       return;
     }
     const state = socketWorkspaceState.get(socket.id);
@@ -359,7 +492,8 @@ io.on('connection', (socket) => {
       };
       online.set(userId, presence);
       socketWorkspaceState.set(socket.id, { workspaceId, userId, presence });
-      broadcastOnlinePresence(workspaceId);
+      await writeJsonHash(workspacePresenceKey(workspaceId), userId, presence);
+      await broadcastOnlinePresence(workspaceId);
     }
   });
 
@@ -373,11 +507,11 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('voice:presence:get', ({ workspaceId } = {}) => {
+  socket.on('voice:presence:get', async ({ workspaceId } = {}) => {
     if (!workspaceId) return;
     socket.emit('voice:presence:snapshot', {
       workspaceId,
-      participantsByChannel: serializeWorkspace(workspaceId),
+      participantsByChannel: await serializeWorkspace(workspaceId),
     });
   });
 
@@ -429,10 +563,12 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('voice:join', (payload = {}) => upsertParticipant(socket, payload));
+  socket.on('voice:join', async (payload = {}) => {
+    await upsertParticipant(socket, payload);
+  });
 
-  socket.on('join-room', (payload = {}) => {
-    upsertParticipant(socket, {
+  socket.on('join-room', async (payload = {}) => {
+    await upsertParticipant(socket, {
       ...payload,
       workspaceId: payload.workspaceId || 'default',
       userName: payload.userInfo?.name,
@@ -441,9 +577,9 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('voice:leave', () => removeSocketFromVoice(socket));
+  socket.on('voice:leave', async () => removeSocketFromVoice(socket));
 
-  socket.on('leave-room', () => removeSocketFromVoice(socket));
+  socket.on('leave-room', async () => removeSocketFromVoice(socket));
 
   socket.on('webrtc:offer', ({ to, from, channelId, offer } = {}) => {
     if (!to || !offer) return;
@@ -480,18 +616,22 @@ io.on('connection', (socket) => {
     io.to(targetSocketId).emit('peer-signal', { socketId: socket.id, signal, channelId });
   });
 
-  socket.on('mute-state', ({ channelId, userId, isMuted } = {}) => {
+  socket.on('mute-state', async ({ channelId, userId, isMuted } = {}) => {
     const state = socketVoiceState.get(socket.id);
     const workspaceId = state?.workspaceId;
     if (workspaceId && channelId && userId) {
       const participant = getChannel(workspaceId, channelId).get(userId);
-      if (participant) participant.isMuted = Boolean(isMuted);
-      broadcastPresence(workspaceId, channelId);
+      if (participant) {
+        participant.isMuted = Boolean(isMuted);
+        participant.lastSeenAt = new Date().toISOString();
+        await writeJsonHash(voicePresenceKey(workspaceId, channelId), userId, participant);
+      }
+      await broadcastPresence(workspaceId, channelId);
     }
     socket.to(voiceRoom(channelId)).emit('mute-state', { socketId: socket.id, userId, isMuted });
   });
 
-  socket.on('speaking-state', ({ channelId, userId, isSpeaking, audioLevel } = {}) => {
+  socket.on('speaking-state', async ({ channelId, userId, isSpeaking, audioLevel } = {}) => {
     const state = socketVoiceState.get(socket.id);
     const workspaceId = state?.workspaceId;
     if (workspaceId && channelId && userId) {
@@ -499,6 +639,8 @@ io.on('connection', (socket) => {
       if (participant) {
         participant.isSpeaking = participant.isMuted ? false : Boolean(isSpeaking);
         participant.audioLevel = participant.isMuted ? 0 : Number(audioLevel) || 0;
+        participant.lastSeenAt = new Date().toISOString();
+        await writeJsonHash(voicePresenceKey(workspaceId, channelId), userId, participant);
       }
     }
     socket.to(voiceRoom(channelId)).emit('speaking-state', {
@@ -509,15 +651,15 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('disconnect', (reason) => {
+  socket.on('disconnect', async (reason) => {
     console.log(`[Signaling] Client disconnected: ${socket.id} (${reason})`);
-    removeSocketFromVoice(socket, reason);
-    removeSocketFromWorkspace(socket, reason);
+    await removeSocketFromVoice(socket, reason);
+    await removeSocketFromWorkspace(socket, reason);
     unregisterUserSocket(socket);
   });
 });
 
-setInterval(() => {
+setInterval(async () => {
   const cutoff = Date.now() - 45000;
   for (const [workspaceId, online] of workspaceOnlinePresence.entries()) {
     let changed = false;
@@ -534,10 +676,13 @@ setInterval(() => {
         changed = true;
       }
     }
-    if (changed) broadcastOnlinePresence(workspaceId);
+    if (changed) await broadcastOnlinePresence(workspaceId);
   }
 }, 15000).unref?.();
 
-httpServer.listen(PORT, () => {
-  console.log(`[Signaling] Voice signaling server running on port ${PORT}`);
-});
+setupRedisAdapter()
+  .finally(() => {
+    httpServer.listen(PORT, () => {
+      console.log(`[Signaling] Voice signaling server running on port ${PORT}`);
+    });
+  });

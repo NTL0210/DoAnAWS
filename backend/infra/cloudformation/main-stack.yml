@@ -46,6 +46,10 @@ Parameters:
     Type: String
     Default: main
     Description: Git branch used by the EC2 voice signaling bootstrap
+  SignalingRedisUrl:
+    Type: String
+    Default: ""
+    Description: Optional private Redis URL used to synchronize Socket.IO across multiple EC2 instances
 
 Conditions:
   HasCustomDomain: !Not [!Equals [!Ref DomainName, ""]]
@@ -1105,6 +1109,7 @@ Resources:
             # ─── Clone signaling server ────────────────────────
             REPO_URL="${SignalingRepoUrl}"
             BRANCH="${SignalingRepoBranch}"
+            REDIS_URL="${SignalingRedisUrl}"
             SIGNALING_DIR="/home/ec2-user/signaling"
 
             if [ ! -d "$SIGNALING_DIR" ]; then
@@ -1125,6 +1130,7 @@ Resources:
               -p 3001:3001 \
               -e VOICE_SIGNALING_PORT=3001 \
               -e NODE_ENV=production \
+              -e REDIS_URL="$REDIS_URL" \
               voice-signaling-server
 
             # TURN relay for WebRTC across different networks/NAT.
