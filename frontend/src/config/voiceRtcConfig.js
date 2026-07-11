@@ -74,17 +74,14 @@ export function getVoiceRtcConfig() {
     .map((url) => url.trim())
     .filter(Boolean);
 
-  const iceServers = [
-    {
-      urls: stunUrls,
-    },
-  ];
+  const iceServers = [];
 
   // ── TURN (optional, from env) ──────────────────────────────────────────
   const turnUrlsEnv = process.env.NEXT_PUBLIC_TURN_URLS;
   const turnUsername = process.env.NEXT_PUBLIC_TURN_USERNAME;
   const turnCredential = process.env.NEXT_PUBLIC_TURN_CREDENTIAL;
 
+  let hasTurn = false;
   if (turnUrlsEnv && turnUsername && turnCredential) {
     try {
       const turnUrls = turnUrlsEnv
@@ -104,6 +101,7 @@ export function getVoiceRtcConfig() {
           username: turnUsername,
           credential: turnCredential,
         });
+        hasTurn = true;
         if (DEBUG) {
           console.info('[Voice/ICE] Added TURN servers:', turnUrls.length);
         }
@@ -119,10 +117,13 @@ export function getVoiceRtcConfig() {
 
   // ── ICE transport policy ──────────────────────────────────────────────
   const forceTurn = process.env.NEXT_PUBLIC_FORCE_TURN === 'true';
+  if (!forceTurn || !hasTurn) {
+    iceServers.unshift({ urls: stunUrls });
+  }
 
   return {
     iceServers,
-    iceTransportPolicy: forceTurn ? 'relay' : 'all',
+    iceTransportPolicy: forceTurn && hasTurn ? 'relay' : 'all',
     bundlePolicy: 'max-bundle',
     rtcpMuxPolicy: 'require',
     iceCandidatePoolSize: 2,

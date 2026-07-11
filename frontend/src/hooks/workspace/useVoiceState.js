@@ -450,16 +450,6 @@ export default function useVoiceState({
       return null;
     }
 
-    if (!options.skipConsent && channel.recordingConsentEnabled === true) {
-      const participants = voiceParticipants[channelId] || {};
-      const others = Object.values(participants).filter((p) => p.userId !== currentUser?.id);
-      const denied = others.filter((p) => p.recordingConsent === false);
-      if (denied.length > 0) {
-        showToast('error', 'Not all participants have consented to recording.');
-        return null;
-      }
-    }
-
     try {
       const stream = providedStream || mediaStreamRefs.current[channelId];
       if (!stream) {
@@ -542,7 +532,7 @@ export default function useVoiceState({
       showToast('error', 'Failed to start recording: ' + (err.message || 'Unknown error'));
       return null;
     }
-  }, [voiceChannels, canRecordVoice, activeVoiceRecordings, voiceParticipants, currentUser, showToast, updateVoiceParticipantState]);
+  }, [voiceChannels, canRecordVoice, activeVoiceRecordings, currentUser, showToast, updateVoiceParticipantState]);
 
   const stopVoiceRecording = useCallback((channelId, reason = 'manual') => {
     return finishVoiceRecording(channelId, reason);

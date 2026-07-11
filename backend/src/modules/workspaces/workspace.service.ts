@@ -198,7 +198,7 @@ export class WorkspaceService {
       ...member,
       name,
       email: member.email || profile.email,
-      avatar: member.avatar || profile.avatar,
+      avatar: profile.avatar ?? member.avatar ?? null,
     };
   }
 
