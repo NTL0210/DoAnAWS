@@ -254,6 +254,15 @@ Resources:
                 Action:
                   - sns:Publish
                 Resource: !Ref NotificationTopic
+        - PolicyName: VoiceDiscoveryAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - autoscaling:DescribeAutoScalingGroups
+                  - ec2:DescribeInstances
+                Resource: "*"
 
   # Lambda Functions — Users
   UsersLambda:

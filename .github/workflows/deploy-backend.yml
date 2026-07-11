@@ -108,7 +108,7 @@ jobs:
             --region ${{ env.AWS_REGION }}
           aws lambda update-function-configuration \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
-            --environment "Variables={DATA_PROVIDER=dynamodb,DYNAMODB_TABLE_MAIN=ai-meeting-platform,NODE_ENV=production,COGNITO_USER_POOL_ID=${{ secrets.COGNITO_USER_POOL_ID }},COGNITO_CLIENT_ID=${{ secrets.COGNITO_CLIENT_ID }},VOICE_RECORDINGS_BUCKET=${{ vars.VOICE_RECORDINGS_BUCKET || secrets.VOICE_RECORDINGS_BUCKET || 'ai-meeting-workforce-audio' }},AUDIO_BUCKET=${{ vars.AUDIO_BUCKET || secrets.AUDIO_BUCKET || 'ai-meeting-workforce-audio' }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},GEMINI_MODEL=${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}}" \
+            --environment "Variables={DATA_PROVIDER=dynamodb,DYNAMODB_TABLE_MAIN=ai-meeting-platform,NODE_ENV=production,COGNITO_USER_POOL_ID=${{ secrets.COGNITO_USER_POOL_ID }},COGNITO_CLIENT_ID=${{ secrets.COGNITO_CLIENT_ID }},VOICE_RECORDINGS_BUCKET=${{ vars.VOICE_RECORDINGS_BUCKET || secrets.VOICE_RECORDINGS_BUCKET || 'ai-meeting-workforce-audio' }},AUDIO_BUCKET=${{ vars.AUDIO_BUCKET || secrets.AUDIO_BUCKET || 'ai-meeting-workforce-audio' }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},GEMINI_MODEL=${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }},VOICE_ASG_NAME=${{ vars.VOICE_ASG_NAME || 'app-asg' }},TURN_USERNAME=${{ vars.NEXT_PUBLIC_TURN_USERNAME || 'ai-meeting-turn' }},TURN_CREDENTIAL=${{ secrets.TURN_CREDENTIAL || secrets.NEXT_PUBLIC_TURN_CREDENTIAL }},FORCE_TURN=${{ vars.NEXT_PUBLIC_FORCE_TURN || 'false' }}}" \
             --region ${{ env.AWS_REGION }}
           aws lambda wait function-updated \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \

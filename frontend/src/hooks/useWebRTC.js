@@ -4,6 +4,7 @@ import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import useThrottledCallback from './useThrottledCallback';
 import { VOICE_AUDIO_CONFIG } from '@/config/voiceAudioConfig';
 import {
+  fetchIceServersFromApi,
   getVoiceRtcConfig,
   getSafeRtcConfigForLog,
   hasTurnServer,
@@ -87,13 +88,7 @@ export default function useWebRTC(opts) {
     speakingState = { isSpeaking: false, audioLevel: 0 },
   } = opts;
 
-  const rtcConfiguration = useMemo(() => {
-    const config = getVoiceRtcConfig();
-    if (DEBUG) {
-      console.info('[Voice/WebRTC] RTC config:', getSafeRtcConfigForLog(config));
-    }
-    return config;
-  }, []);
+  const [rtcConfiguration, setRtcConfiguration] = useState(() => getVoiceRtcConfig());
   const localStreamRef = useRef(localStream);
   const peersRef = useRef(new Map());
   const peerMetaRef = useRef(new Map());
@@ -122,6 +117,18 @@ export default function useWebRTC(opts) {
   const [audioWarning, setAudioWarning] = useState('');
   const [lastWebRTCError, setLastWebRTCError] = useState('');
   const lastBroadcastSpeakingRef = useRef({ isSpeaking: false, audioLevel: 0 });
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchIceServersFromApi().then((config) => {
+      if (cancelled || !config?.iceServers?.length) return;
+      setRtcConfiguration(config);
+      if (DEBUG) {
+        console.info('[Voice/WebRTC] RTC config:', getSafeRtcConfigForLog(config));
+      }
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     localStreamRef.current = localStream;

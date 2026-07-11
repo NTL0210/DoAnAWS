@@ -39,10 +39,10 @@ jobs:
           NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ secrets.COGNITO_CLIENT_ID }}
           NEXT_PUBLIC_API_GATEWAY_URL: ${{ secrets.NEXT_PUBLIC_API_GATEWAY_URL }}
           NEXT_PUBLIC_VOICE_SERVER_URL: ${{ secrets.NEXT_PUBLIC_VOICE_SERVER_URL }}
-          NEXT_PUBLIC_TURN_URLS: ${{ vars.NEXT_PUBLIC_TURN_URLS }}
-          NEXT_PUBLIC_TURN_USERNAME: ${{ vars.NEXT_PUBLIC_TURN_USERNAME || 'ai-meeting-turn' }}
-          NEXT_PUBLIC_TURN_CREDENTIAL: ${{ secrets.NEXT_PUBLIC_TURN_CREDENTIAL }}
-          NEXT_PUBLIC_FORCE_TURN: ${{ vars.NEXT_PUBLIC_FORCE_TURN || 'false' }}
+          NEXT_PUBLIC_TURN_URLS: ""
+          NEXT_PUBLIC_TURN_USERNAME: ""
+          NEXT_PUBLIC_TURN_CREDENTIAL: ""
+          NEXT_PUBLIC_FORCE_TURN: ${{ vars.NEXT_PUBLIC_FORCE_TURN || 'true' }}
 
       - name: AWS Login
         uses: aws-actions/configure-aws-credentials@v4

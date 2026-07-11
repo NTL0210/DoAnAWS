@@ -8,7 +8,11 @@
  * `fetchIceServersFromApi()`  → async fetch from backend (production).
  */
 
+import { getAuthToken } from '@/services/apiClient';
+
 const DEBUG = process.env.NODE_ENV === 'development';
+const DEFAULT_API_STAGE = 'prod';
+const DEFAULT_API_PREFIX = '/api/v1';
 
 // ─── Safe logging helpers ────────────────────────────────────────────────
 
@@ -171,7 +175,9 @@ function isValidTurnUrl(url) {
  */
 export async function fetchIceServersFromApi() {
   try {
-    const res = await fetch('/api/voice/ice-servers', { cache: 'no-cache' });
+    const token = getAuthToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const res = await fetch(buildIceServersUrl(), { cache: 'no-cache', headers });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const config = await res.json();
     if (DEBUG) {
@@ -184,6 +190,23 @@ export async function fetchIceServersFromApi() {
     }
     return getVoiceRtcConfig();
   }
+}
+
+function buildIceServersUrl() {
+  const configured = String(process.env.NEXT_PUBLIC_API_GATEWAY_URL || '').trim().replace(/\/+$/, '');
+  const prefix = normalizeApiPrefix(process.env.NEXT_PUBLIC_API_GATEWAY_API_PREFIX);
+  const path = `${prefix}/voice/ice-servers`;
+  if (!configured) return path;
+  if (/^https:\/\/[^/]+\.execute-api\.[^/]+\.amazonaws\.com$/.test(configured)) {
+    return `${configured}/${process.env.NEXT_PUBLIC_API_GATEWAY_STAGE || DEFAULT_API_STAGE}${path}`;
+  }
+  return `${configured}${path}`;
+}
+
+function normalizeApiPrefix(prefix) {
+  if (prefix === undefined) return DEFAULT_API_PREFIX;
+  const trimmed = String(prefix || '').trim().replace(/^\/+|\/+$/g, '');
+  return trimmed ? `/${trimmed}` : '';
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
