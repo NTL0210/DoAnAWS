@@ -23,7 +23,7 @@ TURN_PORT="${TURN_PORT:-3478}"
 TURN_MIN_PORT="${TURN_MIN_PORT:-49160}"
 TURN_MAX_PORT="${TURN_MAX_PORT:-49200}"
 TURN_USERNAME="${TURN_USERNAME:-ai-meeting-turn}"
-TURN_CREDENTIAL="${TURN_CREDENTIAL:-change-me-before-prod}"
+TURN_CREDENTIAL="${TURN_CREDENTIAL:-}"
 SIGNALING_DIR="/home/ec2-user/signaling"
 
 exec > >(tee /var/log/signaling-setup.log) 2>&1
@@ -79,6 +79,10 @@ docker run -d \
   voice-signaling-server
 
 echo "[4b/5] Starting TURN relay..."
+if [ -z "$TURN_CREDENTIAL" ]; then
+  echo "[ERROR] TURN_CREDENTIAL is required. Refusing to start TURN with a default password."
+  exit 1
+fi
 PUBLIC_IP="$(curl -sf http://169.254.169.254/latest/meta-data/public-ipv4 || true)"
 if [ -n "$PUBLIC_IP" ]; then
   docker rm -f coturn 2>/dev/null || true

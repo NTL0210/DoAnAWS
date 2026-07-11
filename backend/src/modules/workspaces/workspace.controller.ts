@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { hasSufficientRole, type WorkspaceRole } from "../auth/auth.types.js";
 import { toWorkspaceResponse } from "./workspace.mapper.js";
 import {
   createWorkspaceSchema,
@@ -78,6 +79,17 @@ export class WorkspaceController {
     try {
       const params = idParamsSchema.parse(req.params);
       const patch = updateWorkspaceSchema.parse(req.body);
+      const role = roleFromLocals(res.locals.workspaceRole);
+      if (hasManagementPatch(patch) && (!role || !hasSufficientRole(role, "MANAGER"))) {
+        res.status(403).json({
+          error: {
+            code: "FORBIDDEN",
+            message: "Only workspace managers, admins, or owners can change workspace settings",
+            requestId: res.locals.requestId,
+          },
+        });
+        return;
+      }
       // Remove undefined values from sub-entity arrays to satisfy exactOptionalPropertyTypes
       const cleanChannels = patch.channels?.map((ch) =>
         structuredClone(ch),
@@ -172,4 +184,20 @@ export class WorkspaceController {
       next(error);
     }
   };
+}
+
+function roleFromLocals(value: unknown): WorkspaceRole | null {
+  return typeof value === "string" ? value as WorkspaceRole : null;
+}
+
+function hasManagementPatch(patch: Record<string, unknown>): boolean {
+  return [
+    "name",
+    "description",
+    "iconColor",
+    "visibility",
+    "channels",
+    "teams",
+    "members",
+  ].some((key) => patch[key] !== undefined);
 }

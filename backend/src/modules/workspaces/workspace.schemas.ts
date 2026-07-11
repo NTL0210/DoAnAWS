@@ -70,7 +70,8 @@ export const updateWorkspaceSchema = z.object({
 
 export const createWorkspaceAttachmentUploadUrlSchema = z.object({
   fileName: z.string().min(1).max(240),
-  contentType: z.string().min(1).max(120).default("application/octet-stream"),
+  contentType: z.string().min(1).max(120).default("application/octet-stream")
+    .refine(isSafeAttachmentContentType, "Unsupported attachment content type"),
   size: z.coerce.number().int().nonnegative().max(25 * 1024 * 1024).optional(),
 });
 
@@ -91,3 +92,19 @@ export const removeMemberParamsSchema = z.object({
   id: z.string().min(1),
   userId: z.string().min(1),
 });
+
+function isSafeAttachmentContentType(value: string): boolean {
+  const contentType = value.toLowerCase().split(";")[0]?.trim() || "";
+  if (!contentType || contentType === "application/octet-stream") return true;
+  if (contentType === "text/html" || contentType === "image/svg+xml") return false;
+  if (contentType.startsWith("image/")) return true;
+  if (contentType.startsWith("audio/")) return true;
+  if (contentType.startsWith("video/")) return true;
+  return [
+    "application/pdf",
+    "text/plain",
+    "text/csv",
+    "application/json",
+    "application/zip",
+  ].includes(contentType);
+}

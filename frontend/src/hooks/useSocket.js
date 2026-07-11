@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { io } from 'socket.io-client';
+import { getAuthToken } from '@/services/apiClient';
 
 function isCloudModeNoSignalingUrl() {
   if (process.env.NEXT_PUBLIC_VOICE_SERVER_URL) return false;
@@ -96,6 +97,9 @@ export default function useSocket(options = {}) {
       reconnectionDelay: 5000,
       reconnectionDelayMax: 30000,
       timeout: 20000,
+      auth: {
+        token: getAuthToken() || undefined,
+      },
     });
 
     socket.on('connect', () => {

@@ -4,11 +4,11 @@ import type { VoiceRecordingController } from "./voice-recording.controller.js";
 
 export function buildVoiceRecordingRouter(
   controller: VoiceRecordingController,
-  _guard: GuardFn,
+  guard: GuardFn,
 ): Router {
   const router = Router();
-  router.get("/", controller.list);
-  router.post("/", controller.create);
+  router.get("/", guard("MEMBER", "ADMIN", "OWNER"), controller.list);
+  router.post("/", guard("MEMBER", "ADMIN", "OWNER"), controller.create);
   router.post("/:id/upload-url", controller.createUploadUrl);
   router.patch("/:id", controller.update);
   router.post("/:id/send-to-ai", controller.sendToAi);

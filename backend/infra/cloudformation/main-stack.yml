@@ -32,7 +32,6 @@ Parameters:
     Type: String
     NoEcho: true
     MinLength: 12
-    Default: change-me-before-prod
     Description: Static TURN credential for the single EC2 coturn relay
   GeminiApiKey:
     Type: String
@@ -1130,6 +1129,10 @@ Resources:
               -p 3001:3001 \
               -e VOICE_SIGNALING_PORT=3001 \
               -e NODE_ENV=production \
+              -e AWS_REGION="${AWS::Region}" \
+              -e COGNITO_USER_POOL_ID="${CognitoUserPool}" \
+              -e COGNITO_CLIENT_ID="${CognitoUserPoolClient}" \
+              -e VOICE_ALLOWED_ORIGINS="https://${CloudFrontDistribution.DomainName}" \
               -e REDIS_URL="$REDIS_URL" \
               voice-signaling-server
 
