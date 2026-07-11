@@ -31,19 +31,26 @@ export class IceServerService {
       ? splitList(process.env.STUN_URLS)
       : DEFAULT_STUN_URLS;
     const turnUrls = await this.getTurnUrls();
+    const hasTurn = turnUrls.length > 0 && Boolean(process.env.TURN_USERNAME && process.env.TURN_CREDENTIAL);
+    const forceTurn = process.env.FORCE_TURN === "true";
 
-    const iceServers: IceServer[] = [{ urls: stunUrls }];
-    if (turnUrls.length && process.env.TURN_USERNAME && process.env.TURN_CREDENTIAL) {
+    const iceServers: IceServer[] = [];
+    if (!forceTurn || !hasTurn) {
+      iceServers.push({ urls: stunUrls });
+    }
+    if (hasTurn) {
+      const username = process.env.TURN_USERNAME as string;
+      const credential = process.env.TURN_CREDENTIAL as string;
       iceServers.push({
         urls: turnUrls,
-        username: process.env.TURN_USERNAME,
-        credential: process.env.TURN_CREDENTIAL,
+        username,
+        credential,
       });
     }
 
     return {
       iceServers,
-      iceTransportPolicy: process.env.FORCE_TURN === "true" ? "relay" : "all",
+      iceTransportPolicy: forceTurn && hasTurn ? "relay" : "all",
       bundlePolicy: "max-bundle",
       rtcpMuxPolicy: "require",
       iceCandidatePoolSize: 2,

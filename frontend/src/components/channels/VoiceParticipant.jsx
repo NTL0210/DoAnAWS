@@ -42,6 +42,7 @@ function VoiceParticipant({
     participant?.name ||
     displayNameFromEmail(member?.email || participant?.email) ||
     'Member';
+  const avatar = member?.avatar || participant?.avatar || null;
   const effectiveMuted = participant.isMuted;
   const audioLevel = isLocal ? localAudioLevel : (participant.audioLevel || 0);
   const hasAudibleLevel = !effectiveMuted && audioLevel > 0.008;
@@ -64,6 +65,7 @@ function VoiceParticipant({
       {/* ─── Avatar ──────────────────────────────────────── */}
       <Avatar
         name={displayName}
+        avatar={avatar}
         recording={isRecorder}
         speaking={effectiveSpeaking}
         muted={effectiveMuted}
@@ -195,7 +197,7 @@ function getConnectionStatus(voiceConnectionState, micStatus, effectiveMuted) {
    Avatar — with speaking glow, mute dim, recording indicator,
    and connection dot for local user
    ══════════════════════════════════════════════════════════════ */
-function Avatar({ name, recording, speaking, muted, audioLevel = 0, connectionStatus = null }) {
+function Avatar({ name, avatar, recording, speaking, muted, audioLevel = 0, connectionStatus = null }) {
   const glowSize = Math.max(1, Math.round(audioLevel * 4));
 
   return (
@@ -210,7 +212,11 @@ function Avatar({ name, recording, speaking, muted, audioLevel = 0, connectionSt
               : ''
       }`}
     >
-      {getInitials(name)}
+      {avatar ? (
+        <img src={avatar} alt="" className="h-full w-full rounded-full object-cover" />
+      ) : (
+        getInitials(name)
+      )}
 
       {/* Speaking glow ring overlay */}
       {speaking && !muted && glowSize > 1 ? (

@@ -413,22 +413,9 @@ export default function useWebRTC(opts) {
     } catch (err) {
       console.error('[WebRTC] Failed to create RTCPeerConnection:', err);
       console.error('[WebRTC] RTCConfiguration:', rtcConfiguration);
-      // Try again with fallback config (STUN only)
-      try {
-        const fallbackConfig = {
-          iceServers: [
-            { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
-          ],
-          iceTransportPolicy: 'all',
-          bundlePolicy: 'balanced',
-          rtcpMuxPolicy: 'require',
-        };
-        pc = new RTCPeerConnection(fallbackConfig);
-        console.warn('[WebRTC] Using fallback STUN-only config');
-      } catch (fallbackErr) {
-        console.error('[WebRTC] Fallback RTCPeerConnection also failed:', fallbackErr);
-        return null;
-      }
+      setAudioWarning('Voice connection could not start because the RTC configuration is invalid.');
+      setLastWebRTCError(`RTC configuration failed: ${err.message}`);
+      return null;
     }
 
     peerMetaRef.current.set(peer.userId, peer);
