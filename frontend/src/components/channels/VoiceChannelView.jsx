@@ -564,16 +564,34 @@ export default function VoiceChannelView({ channel: propChannel }) {
   }, [workspaceMembers]);
 
   // ─── Recording panel shared helpers ────────────────────
-  const handleDownload = useCallback((record) => {
+  const handleDownload = useCallback(async (record) => {
     // If the record has _mp3Url (set by VoiceRecordingsPanel for MP3 downloads),
     // download that instead.
-    const url = record._mp3Url || record.objectUrl;
+    const url = record._mp3Url || record.downloadUrl || record.objectUrl;
     const name = record._mp3Name || record.fileName;
     if (!url) return;
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    a.click();
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Download failed: HTTP ${response.status}`);
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = name || 'voice-recording';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (error) {
+      // Keep the current workspace/voice session mounted even if S3 CORS blocks Blob download.
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = name || 'voice-recording';
+      anchor.target = '_blank';
+      anchor.rel = 'noopener noreferrer';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    }
   }, []);
 
   // ─── Render ──────────────────────────────────────────────

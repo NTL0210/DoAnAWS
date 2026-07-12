@@ -11,4 +11,5 @@ export interface VoiceRecordingRepository {
   }): Promise<PaginatedResult<VoiceRecording>>;
   create(recording: VoiceRecording): Promise<void>;
   update(recording: VoiceRecording): Promise<void>;
+  claimAiProcessing(recording: VoiceRecording, expectedUpdatedAt: string): Promise<boolean>;
 }

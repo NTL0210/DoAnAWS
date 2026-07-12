@@ -107,4 +107,26 @@ export class DynamoVoiceRecordingRepository implements VoiceRecordingRepository 
       }),
     );
   }
+
+  async claimAiProcessing(recording: VoiceRecording, expectedUpdatedAt: string): Promise<boolean> {
+    try {
+      await ddb.send(
+        new PutCommand({
+          TableName: env.DYNAMODB_TABLE_MAIN,
+          Item: toItem(recording),
+          ConditionExpression: "updatedAt = :expectedUpdatedAt AND (attribute_not_exists(#aiStatus) OR #aiStatus = :notSent OR #aiStatus = :failed)",
+          ExpressionAttributeNames: { "#aiStatus": "aiStatus" },
+          ExpressionAttributeValues: {
+            ":expectedUpdatedAt": expectedUpdatedAt,
+            ":notSent": "NOT_SENT",
+            ":failed": "FAILED",
+          },
+        }),
+      );
+      return true;
+    } catch (error) {
+      if (error instanceof Error && error.name === "ConditionalCheckFailedException") return false;
+      throw error;
+    }
+  }
 }
