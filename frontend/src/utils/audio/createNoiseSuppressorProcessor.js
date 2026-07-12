@@ -49,13 +49,16 @@ export async function createNoiseSuppressorProcessor(rawStream, options = {}) {
   }
 
   // ─── Step 2: AEC (if enabled, wrap the noise-suppressed stream) ──
-  if (aecEnabled && processedResult.stream) {
+  // Custom AEC only works when it receives the far-end playback reference.
+  // Browser echoCancellation remains enabled through getUserMedia constraints.
+  if (aecEnabled && options.farEndStream && processedResult.stream) {
     try {
       const aecResult = await createAecProcessedStream(
         processedResult.stream,
         processedResult.context || null,
         { enabled: true, ...options }
       );
+      aecResult.pushFarEnd?.(options.farEndStream);
 
       // Merge cleanup: both noise suppression and AEC
       const originalCleanup = processedResult.cleanup;

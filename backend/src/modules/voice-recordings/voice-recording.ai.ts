@@ -50,13 +50,26 @@ export async function createVoiceUploadUrl(recording: VoiceRecording): Promise<{
   return { uploadUrl, storageKey, bucket };
 }
 
-export async function createVoiceDownloadUrl(recording: VoiceRecording): Promise<string | null> {
+export async function createVoiceDownloadUrl(
+  recording: VoiceRecording,
+  options: { attachment?: boolean } = {},
+): Promise<string | null> {
   if (!recording.storageKey) return null;
   const command = new GetObjectCommand({
     Bucket: getVoiceRecordingBucket(),
     Key: recording.storageKey,
+    ...(options.attachment
+      ? { ResponseContentDisposition: contentDisposition(recording.fileName) }
+      : {}),
   });
   return getSignedUrl(s3, command, { expiresIn: 3600 });
+}
+
+function contentDisposition(fileName: string): string {
+  const safeAsciiName = (fileName || "voice-recording.webm")
+    .replace(/[^\x20-\x7E]+/g, "_")
+    .replace(/["\\]/g, "_");
+  return `attachment; filename="${safeAsciiName}"; filename*=UTF-8''${encodeURIComponent(fileName || safeAsciiName)}`;
 }
 
 export async function analyzeVoiceRecording(recording: VoiceRecording): Promise<{
@@ -182,7 +195,7 @@ async function waitForGeminiFile(fileName: string): Promise<void> {
 
 async function callGeminiWithFile(fileUri: string, mimeType: string, prompt: string): Promise<string> {
   const model = env.GEMINI_MODEL || "gemini-2.5-flash";
-  const response = await fetch(`${geminiBase}/${model}:generateContent?key=${env.GEMINI_API_KEY}`, {
+  const response = await fetchGeminiGeneration(`${geminiBase}/${model}:generateContent?key=${env.GEMINI_API_KEY}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -208,7 +221,7 @@ async function callGeminiWithFile(fileUri: string, mimeType: string, prompt: str
 
 async function callGeminiWithText(prompt: string): Promise<string> {
   const model = env.GEMINI_MODEL || "gemini-2.5-flash";
-  const response = await fetch(`${geminiBase}/${model}:generateContent?key=${env.GEMINI_API_KEY}`, {
+  const response = await fetchGeminiGeneration(`${geminiBase}/${model}:generateContent?key=${env.GEMINI_API_KEY}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -225,6 +238,21 @@ async function callGeminiWithText(prompt: string): Promise<string> {
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error("Gemini returned empty response");
   return text;
+}
+
+async function fetchGeminiGeneration(url: string, init: RequestInit): Promise<Response> {
+  const retryableStatuses = new Set([429, 500, 502, 503, 504]);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await fetch(url, init);
+    if (response.ok || !retryableStatuses.has(response.status) || attempt === 1) return response;
+    await response.body?.cancel().catch(() => {});
+    const retryAfterSeconds = Number(response.headers.get("retry-after"));
+    const delayMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+      ? Math.min(retryAfterSeconds * 1000, 3000)
+      : 750;
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  throw new Error("Gemini API request failed");
 }
 
 function normalizeGeminiJson(raw: string): VoiceAnalysisResult {

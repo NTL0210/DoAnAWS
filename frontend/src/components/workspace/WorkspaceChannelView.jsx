@@ -322,6 +322,14 @@ export default function WorkspaceChannelView() {
 
   const isActiveNav = (view) => activeView === view && !currentChannel;
   const viewKey = activeView === 'team-chat' ? `team-${activeTeamId}` : activeView || activeChannelId || 'home';
+  const selectedVoiceChannel = !activeView && currentChannel?.type === 'voice' ? currentChannel : null;
+  const joinedVoiceChannel = activeVoiceChannelId
+    ? voiceChannels.find((channel) => channel.id === activeVoiceChannelId) || null
+    : null;
+  const persistentVoiceChannel = joinedVoiceChannel || selectedVoiceChannel;
+  const persistentVoiceVisible = Boolean(
+    selectedVoiceChannel && persistentVoiceChannel?.id === selectedVoiceChannel.id
+  );
 
   const handleSendMessage = (event) => {
     event.preventDefault();
@@ -419,7 +427,9 @@ export default function WorkspaceChannelView() {
 
     if (currentChannel) {
       return currentChannel.type === 'voice' ? (
-        <VoiceChannelView channel={currentChannel} />
+        persistentVoiceChannel?.id === currentChannel.id
+          ? null
+          : <VoiceChannelView channel={currentChannel} />
       ) : (
         <TextChannelContent
           channel={currentChannel}
@@ -651,9 +661,16 @@ export default function WorkspaceChannelView() {
       {/* ═══════ MAIN CONTENT ═══════ */}
       <main className="workspace-main-surface flex min-w-0 flex-1 bg-white dark:bg-slate-900">
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <WorkspaceViewTransition viewKey={viewKey}>
-            {renderContent()}
-          </WorkspaceViewTransition>
+          {persistentVoiceChannel ? (
+            <div className={persistentVoiceVisible ? 'flex h-full flex-col' : 'hidden'}>
+              <VoiceChannelView key={persistentVoiceChannel.id} channel={persistentVoiceChannel} />
+            </div>
+          ) : null}
+          {!persistentVoiceVisible ? (
+            <WorkspaceViewTransition viewKey={viewKey}>
+              {renderContent()}
+            </WorkspaceViewTransition>
+          ) : null}
         </div>
 
         {/* ─── Member Panel (only for channels) ─── */}

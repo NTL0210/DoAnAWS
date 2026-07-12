@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { ForbiddenError, NotFoundError } from "../../shared/errors/app-error.js";
+import { ConflictError, ForbiddenError, NotFoundError } from "../../shared/errors/app-error.js";
 import { hasSufficientRole } from "../auth/auth.types.js";
 import type { WorkspaceRole } from "../auth/auth.types.js";
 import type { WorkspaceRepository } from "../auth/workspace.repository.js";
@@ -26,10 +26,13 @@ export class VoiceRecordingService {
     await this.assertWorkspaceMember(input.workspaceId, input.userId);
     const result = await this.repository.listByChannel(input);
     const items = await Promise.all(
-      result.items.map(async (recording) => ({
-        ...recording,
-        objectUrl: await createVoiceDownloadUrl(recording),
-      })),
+      result.items.map(async (recording) => {
+        const [objectUrl, downloadUrl] = await Promise.all([
+          createVoiceDownloadUrl(recording),
+          createVoiceDownloadUrl(recording, { attachment: true }),
+        ]);
+        return { ...recording, objectUrl, downloadUrl };
+      }),
     );
     return { ...result, items };
   }
@@ -106,6 +109,13 @@ export class VoiceRecordingService {
     const record = await this.getOwned(input.id, input.userId);
     await this.assertWorkspaceMember(record.workspaceId, input.userId, "MANAGER");
     if (!record.storageKey) throw new Error("Voice recording has not been uploaded");
+    if (record.aiStatus === "COMPLETED" && record.meetingId) {
+      const meeting = await this.meetingService.get({ workspaceId: record.workspaceId, meetingId: record.meetingId });
+      return { recording: record, meeting };
+    }
+    if (record.aiStatus === "PROCESSING") {
+      throw new ConflictError("Voice recording is already being analyzed");
+    }
 
     const processing: VoiceRecording = {
       ...record,
@@ -113,7 +123,15 @@ export class VoiceRecordingService {
       aiStatus: "PROCESSING",
       updatedAt: new Date().toISOString(),
     };
-    await this.repository.update(processing);
+    const claimed = await this.repository.claimAiProcessing(processing, record.updatedAt);
+    if (!claimed) {
+      const latest = await this.repository.getById(record.id);
+      if (latest?.aiStatus === "COMPLETED" && latest.meetingId) {
+        const meeting = await this.meetingService.get({ workspaceId: latest.workspaceId, meetingId: latest.meetingId });
+        return { recording: latest, meeting };
+      }
+      throw new ConflictError("Voice recording is already being analyzed");
+    }
 
     try {
       const analysis = await analyzeVoiceRecording(processing);

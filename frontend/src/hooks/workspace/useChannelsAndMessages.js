@@ -176,14 +176,14 @@ export default function useChannelsAndMessages({
   // ─── Derived ───────────────────────────────────────────
   const channelMessages = useMemo(() => {
     if (!activeChannelId) return [];
-    return messages[activeChannelId] || [];
+    return sortMessages(messages[activeChannelId] || []);
   }, [messages, activeChannelId]);
 
   const teamMessagesKey = activeTeamId ? 'team-chat-' + activeTeamId : null;
 
   const activeTeamMessages = useMemo(() => {
     if (!teamMessagesKey) return [];
-    return messages[teamMessagesKey] || [];
+    return sortMessages(messages[teamMessagesKey] || []);
   }, [messages, teamMessagesKey]);
 
   // ─── Channel Actions ───────────────────────────────────

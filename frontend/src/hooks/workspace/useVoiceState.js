@@ -91,6 +91,7 @@ export default function useVoiceState({
   const [activeVoiceRecordings, setActiveVoiceRecordings] = useState({});
   const [voiceRecords, setVoiceRecords] = useState([]);
   const voiceRecordsRef = useRef([]);
+  const aiRequestsInFlightRef = useRef(new Set());
   const mediaRecorderRefs = useRef({});
   const mediaStreamRefs = useRef({});
   const mediaChunkRefs = useRef({});
@@ -684,6 +685,13 @@ export default function useVoiceState({
       return;
     }
 
+    if (aiRequestsInFlightRef.current.has(recordId) || record.aiStatus === 'PROCESSING') {
+      showToast('info', 'This recording is already being analyzed.');
+      return;
+    }
+
+    aiRequestsInFlightRef.current.add(recordId);
+
     try {
       setVoiceRecords((prev) =>
         prev.map((item) => (item.id === recordId ? { ...item, aiStatus: 'PROCESSING' } : item))
@@ -709,10 +717,20 @@ export default function useVoiceState({
       showToast('success', 'Voice recording transcribed and analyzed.');
       return newMeeting;
     } catch (err) {
+      const alreadyProcessing = err?.statusCode === 409;
       setVoiceRecords((prev) =>
-        prev.map((item) => (item.id === recordId ? { ...item, aiStatus: 'FAILED' } : item))
+        prev.map((item) => (
+          item.id === recordId
+            ? { ...item, aiStatus: alreadyProcessing ? 'PROCESSING' : 'FAILED' }
+            : item
+        ))
       );
-      showToast('error', err.message || 'AI processing failed.');
+      showToast(
+        alreadyProcessing ? 'info' : 'error',
+        alreadyProcessing ? 'This recording is already being analyzed.' : (err.message || 'AI processing failed.')
+      );
+    } finally {
+      aiRequestsInFlightRef.current.delete(recordId);
     }
   }, [voiceChannels, canManageAIReview, canAccessVoice, setWorkspaceMeetings, addActivity, showToast]);
 
