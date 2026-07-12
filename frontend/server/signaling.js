@@ -221,13 +221,29 @@ function matchesAuthenticatedUser(socket, userId) {
   return !authenticatedUserId || authenticatedUserId === userId;
 }
 
-function canRelayVoiceSignal(socket, targetSocketId, channelId) {
+async function canRelayVoiceSignal(socket, targetSocketId, channelId) {
   const sourceState = socketVoiceState.get(socket.id);
+  if (!sourceState) return false;
+  if (channelId && sourceState.channelId !== channelId) return false;
+
   const targetState = socketVoiceState.get(targetSocketId);
-  if (!sourceState || !targetState) return false;
-  if (sourceState.workspaceId !== targetState.workspaceId) return false;
-  if (sourceState.channelId !== targetState.channelId) return false;
-  return !channelId || sourceState.channelId === channelId;
+  if (targetState) {
+    if (sourceState.workspaceId !== targetState.workspaceId) return false;
+    return sourceState.channelId === targetState.channelId;
+  }
+
+  // With multiple EC2 instances the target socket may live in another Node
+  // process. Validate it against shared voice presence before allowing the
+  // Socket.IO Redis adapter to relay the signaling packet cross-instance.
+  if (!redisReady) return false;
+  const participants = await readJsonHash(
+    voicePresenceKey(sourceState.workspaceId, sourceState.channelId),
+    VOICE_TTL_MS
+  );
+  const remoteTarget = participants.find((participant) => participant.socketId === targetSocketId);
+  if (!remoteTarget) return false;
+  if (remoteTarget.userId === sourceState.userId) return false;
+  return true;
 }
 
 function workspaceRoom(workspaceId) {
@@ -718,9 +734,9 @@ io.on('connection', (socket) => {
 
   socket.on('leave-room', async () => removeSocketFromVoice(socket));
 
-  socket.on('webrtc:offer', ({ to, from, channelId, offer } = {}) => {
+  socket.on('webrtc:offer', async ({ to, from, channelId, offer } = {}) => {
     if (!to || !offer) return;
-    if (!canRelayVoiceSignal(socket, to, channelId)) return;
+    if (!(await canRelayVoiceSignal(socket, to, channelId))) return;
     io.to(to).emit('webrtc:offer', {
       from: from || socket.id,
       fromUserId: socketVoiceState.get(socket.id)?.userId || socketUserMap.get(socket.id) || null,
@@ -729,9 +745,9 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('webrtc:answer', ({ to, from, channelId, answer } = {}) => {
+  socket.on('webrtc:answer', async ({ to, from, channelId, answer } = {}) => {
     if (!to || !answer) return;
-    if (!canRelayVoiceSignal(socket, to, channelId)) return;
+    if (!(await canRelayVoiceSignal(socket, to, channelId))) return;
     io.to(to).emit('webrtc:answer', {
       from: from || socket.id,
       fromUserId: socketVoiceState.get(socket.id)?.userId || socketUserMap.get(socket.id) || null,
@@ -740,9 +756,9 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('webrtc:ice-candidate', ({ to, from, channelId, candidate } = {}) => {
+  socket.on('webrtc:ice-candidate', async ({ to, from, channelId, candidate } = {}) => {
     if (!to || !candidate) return;
-    if (!canRelayVoiceSignal(socket, to, channelId)) return;
+    if (!(await canRelayVoiceSignal(socket, to, channelId))) return;
     io.to(to).emit('webrtc:ice-candidate', {
       from: from || socket.id,
       fromUserId: socketVoiceState.get(socket.id)?.userId || socketUserMap.get(socket.id) || null,
@@ -751,9 +767,9 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('peer-signal', ({ targetSocketId, signal, channelId } = {}) => {
+  socket.on('peer-signal', async ({ targetSocketId, signal, channelId } = {}) => {
     if (!targetSocketId || !signal) return;
-    if (!canRelayVoiceSignal(socket, targetSocketId, channelId)) return;
+    if (!(await canRelayVoiceSignal(socket, targetSocketId, channelId))) return;
     io.to(targetSocketId).emit('peer-signal', { socketId: socket.id, signal, channelId });
   });
 
