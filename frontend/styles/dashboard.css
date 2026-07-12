@@ -1,13 +1,13 @@
 .dashboard-hero-main {
   background:
-    linear-gradient(135deg, #7c3aed, #ec4899 52%, #0ea5e9);
+    linear-gradient(135deg, #ff6b35, #e83b12 52%, #111827);
 }
 
 .dashboard-hero-main > div {
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.97), rgba(255, 247, 251, 0.94) 48%, rgba(239, 246, 255, 0.94)),
-    linear-gradient(90deg, rgba(59, 130, 246, 0.055) 1px, transparent 1px),
-    linear-gradient(rgba(59, 130, 246, 0.045) 1px, transparent 1px);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(255, 247, 237, 0.94) 48%, rgba(241, 245, 249, 0.92)),
+    linear-gradient(90deg, rgba(255, 107, 53, 0.07) 1px, transparent 1px),
+    linear-gradient(rgba(15, 23, 42, 0.045) 1px, transparent 1px);
   background-size: auto, 52px 52px, 52px 52px;
 }
 
@@ -17,9 +17,92 @@
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 84% 16%, rgba(59, 130, 246, 0.13), transparent 24%),
-    radial-gradient(circle at 18% 0%, rgba(236, 72, 153, 0.10), transparent 28%),
-    radial-gradient(circle at 70% 96%, rgba(14, 165, 233, 0.12), transparent 26%);
+    linear-gradient(115deg, rgba(255, 107, 53, 0.12), transparent 38%),
+    repeating-linear-gradient(180deg, rgba(15, 23, 42, 0.035) 0, rgba(15, 23, 42, 0.035) 1px, transparent 1px, transparent 7px);
+}
+
+.dashboard-command-hero {
+  border: 1px solid rgba(255, 107, 53, 0.24);
+  background:
+    linear-gradient(115deg, rgba(8, 12, 18, 0.98), rgba(15, 23, 42, 0.94) 48%, rgba(124, 45, 18, 0.86)),
+    linear-gradient(90deg, rgba(255, 107, 53, 0.18), transparent);
+  box-shadow: 0 28px 72px rgba(15, 23, 42, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.dashboard-command-hero::after {
+  position: absolute;
+  right: 2rem;
+  bottom: 0;
+  width: 10rem;
+  height: 2px;
+  content: "";
+  background: #ff6b35;
+  box-shadow: 0 0 24px rgba(255, 107, 53, 0.45);
+}
+
+.dashboard-command-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: linear-gradient(90deg, black, transparent 92%);
+  opacity: 0.68;
+}
+
+.dashboard-metric-card,
+.dashboard-panel {
+  border: 1px solid rgba(203, 213, 225, 0.74);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.86)),
+    linear-gradient(90deg, rgba(255, 107, 53, 0.06) 0 1px, transparent 1px);
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  transition:
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.dark .dashboard-metric-card,
+.dark .dashboard-panel {
+  border-color: rgba(51, 65, 85, 0.78);
+  background:
+    linear-gradient(135deg, rgba(20, 24, 33, 0.94), rgba(13, 16, 23, 0.88)),
+    linear-gradient(90deg, rgba(255, 107, 53, 0.08) 0 1px, transparent 1px);
+  box-shadow: 0 22px 56px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.dashboard-metric-card:hover,
+.dashboard-panel:hover {
+  border-color: rgba(255, 107, 53, 0.34);
+  box-shadow: 0 26px 62px rgba(15, 23, 42, 0.13), 0 0 0 1px rgba(255, 107, 53, 0.08);
+}
+
+.dashboard-pill-button {
+  border: 1px solid rgba(203, 213, 225, 0.78);
+  background: rgba(255, 255, 255, 0.84);
+  color: rgb(71, 85, 105);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.dashboard-pill-button.is-active {
+  border-color: rgba(255, 107, 53, 0.34);
+  background: rgba(255, 237, 213, 0.86);
+  color: rgb(194, 65, 12);
+}
+
+.dark .dashboard-pill-button {
+  border-color: rgba(51, 65, 85, 0.82);
+  background: rgba(15, 23, 42, 0.86);
+  color: rgb(203, 213, 225);
+}
+
+.dark .dashboard-pill-button.is-active {
+  border-color: rgba(255, 107, 53, 0.38);
+  background: rgba(124, 45, 18, 0.38);
+  color: rgb(254, 215, 170);
 }
 
 .dashboard-shimmer {

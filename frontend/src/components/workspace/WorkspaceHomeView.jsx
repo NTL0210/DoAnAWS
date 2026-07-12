@@ -146,17 +146,17 @@ export default function WorkspaceHomeView() {
   return (
     <div className="h-full overflow-y-auto p-5 md:p-6 space-y-6">
       {isEmptyWorkspace ? (
-        <div className="rounded-xl border border-dashed border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800 p-6">
+        <div className="workspace-tactical-panel workspace-cut-corner border-dashed p-6">
           <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">Welcome to your new workspace</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">
             Start by creating a team, inviting members, or creating your first channel.
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
-            <button type="button" onClick={() => setShowCreateTeam(true)} className="workspace-action-lift rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-black text-white hover:bg-blue-700">Create Team</button>
-            <button type="button" onClick={() => setShowCreateChannel(true)} className="workspace-action-lift rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-black text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-slate-800">Create Text Channel</button>
-            <button type="button" onClick={() => setShowCreateChannel(true)} className="workspace-action-lift rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-black text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-slate-800">Create Voice Channel</button>
-            <button type="button" onClick={() => setShowInviteMember(true)} className="workspace-action-lift rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-black text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-slate-800">Invite Members</button>
-            <button type="button" onClick={() => selectView('meetings')} className="workspace-action-lift rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-black text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-slate-800">Upload Meeting</button>
+            <button type="button" onClick={() => setShowCreateTeam(true)} className="workspace-command-button is-primary">Create Team</button>
+            <button type="button" onClick={() => setShowCreateChannel(true)} className="workspace-command-button is-secondary">Create Text Channel</button>
+            <button type="button" onClick={() => setShowCreateChannel(true)} className="workspace-command-button is-secondary">Create Voice Channel</button>
+            <button type="button" onClick={() => setShowInviteMember(true)} className="workspace-command-button is-secondary">Invite Members</button>
+            <button type="button" onClick={() => selectView('meetings')} className="workspace-command-button is-secondary">Upload Meeting</button>
           </div>
         </div>
       ) : null}
@@ -164,12 +164,13 @@ export default function WorkspaceHomeView() {
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 p-6 text-white shadow-xl"
+        className="workspace-billing-hero workspace-cut-corner relative overflow-hidden p-6 text-white shadow-xl"
       >
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="workspace-billing-grid" aria-hidden="true" />
+        <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-blue-300">
+              <span className="rounded-full border border-orange-300/30 bg-orange-400/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-orange-100">
                 {activeWorkspace?.name || 'Workspace'}
               </span>
               <span className={`rounded-full px-3 py-1 text-xs font-bold ${getRoleBadgeColor(workspaceRole)}`}>
@@ -177,7 +178,7 @@ export default function WorkspaceHomeView() {
               </span>
             </div>
             <h1 className="text-2xl font-black md:text-3xl">
-              {greeting}, {currentUser?.name?.split(' ')[0] || 'User'}! 👋
+              {greeting}, {currentUser?.name?.split(' ')[0] || 'User'}.
             </h1>
             <p className="mt-1 text-sm text-slate-300 max-w-xl">
               Here&apos;s what&apos;s happening in your workspace today.
@@ -195,11 +196,11 @@ export default function WorkspaceHomeView() {
         </div>
 
         {/* ─── Quick Actions ─── */}
-        <div className="mt-5 flex flex-wrap gap-2">
+        <div className="relative z-10 mt-5 flex flex-wrap gap-2">
           {canUploadMeeting && (
             <button
               onClick={() => selectView('meetings')}
-              className="workspace-action-lift inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-600/30 hover:bg-blue-500 transition"
+              className="workspace-command-button is-primary inline-flex items-center gap-2"
             >
               <FiZap className="h-4 w-4" />
               Upload Meeting
@@ -208,7 +209,7 @@ export default function WorkspaceHomeView() {
           {canCreateTeam && (
             <button
               onClick={() => setShowCreateTeam(true)}
-              className="workspace-action-lift inline-flex items-center gap-2 rounded-lg bg-white/10 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/20 transition backdrop-blur-sm"
+              className="workspace-command-button is-secondary inline-flex items-center gap-2"
             >
               <FiPlus className="h-4 w-4" />
               Create Team
@@ -217,7 +218,7 @@ export default function WorkspaceHomeView() {
           {canInvite && (
             <button
               onClick={() => setShowInviteMember(true)}
-              className="workspace-action-lift inline-flex items-center gap-2 rounded-lg bg-white/10 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/20 transition backdrop-blur-sm"
+              className="workspace-command-button is-secondary inline-flex items-center gap-2"
             >
               <FiUserPlus className="h-4 w-4" />
               Invite Members
@@ -225,7 +226,7 @@ export default function WorkspaceHomeView() {
           )}
           <button
             onClick={() => selectView('tasks')}
-            className="workspace-action-lift inline-flex items-center gap-2 rounded-lg bg-white/10 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/20 transition backdrop-blur-sm"
+            className="workspace-command-button is-secondary inline-flex items-center gap-2"
           >
             <FiCheckSquare className="h-4 w-4" />
             View Tasks
