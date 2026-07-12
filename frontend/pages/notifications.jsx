@@ -144,7 +144,7 @@ export default function EmployeeNotifications() {
           <button
             type="button"
             onClick={markAllRead}
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-[#fbfcfe] px-4 text-sm font-bold text-slate-700 transition hover:bg-white hover:shadow-sm active:scale-[0.98] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            className="workspace-command-button is-secondary"
           >
             <FiCheckCircle className="h-4 w-4" />
             Mark all read
@@ -162,11 +162,7 @@ export default function EmployeeNotifications() {
               key={f.key}
               type="button"
               onClick={() => setFilter(f.key)}
-              className={`h-9 rounded-lg px-3 text-sm font-bold transition ${
-                filter === f.key
-                  ? 'bg-[#172033] text-white dark:bg-slate-100 dark:text-slate-950'
-                  : 'bg-slate-200/70 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
-              }`}
+              className={`dashboard-pill-button ${filter === f.key ? 'is-active' : ''}`}
             >
               {f.label} ({f.count})
             </button>
@@ -190,9 +186,9 @@ export default function EmployeeNotifications() {
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: idx * 0.03 }}
-                    className="flex w-full items-start gap-4 rounded-lg border border-blue-200/80 bg-blue-50/70 p-4 text-left dark:border-blue-900/60 dark:bg-blue-950/20"
+                    className="dashboard-panel workspace-cut-corner flex w-full items-start gap-4 border-l-4 border-l-orange-500 p-4 text-left"
                   >
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300">
                       <FiUserPlus className="h-5 w-5" />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -200,7 +196,7 @@ export default function EmployeeNotifications() {
                         <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                           Invitation to {invitation.workspaceName || 'Workspace'}
                         </h3>
-                        <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />
+                        <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-orange-500" />
                       </div>
                       <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                         {invitation.invitedByUserName || 'A teammate'} invited you to join as {formatRoleLabel(invitation.role)}.
@@ -212,7 +208,7 @@ export default function EmployeeNotifications() {
                         <button
                           type="button"
                           onClick={() => handleAcceptInvitation(invitation.id)}
-                          className="inline-flex h-9 items-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white transition hover:bg-emerald-700"
+                          className="workspace-command-button is-primary"
                         >
                           <FiCheck className="h-4 w-4" />
                           Accept
@@ -220,7 +216,7 @@ export default function EmployeeNotifications() {
                         <button
                           type="button"
                           onClick={() => handleDeclineInvitation(invitation.id)}
-                          className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-[#fbfcfe] px-4 text-sm font-bold text-slate-700 transition hover:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                          className="workspace-command-button is-secondary"
                         >
                           <FiX className="h-4 w-4" />
                           Decline
@@ -241,10 +237,10 @@ export default function EmployeeNotifications() {
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: idx * 0.03 }}
-                  className={`flex w-full items-start gap-4 rounded-lg border border-slate-200/80 p-4 text-left transition hover:border-primary-200 hover:shadow-sm ${
+                  className={`dashboard-panel workspace-cut-corner flex w-full items-start gap-4 p-4 text-left transition hover:-translate-y-0.5 ${
                     !n.isRead
-                      ? 'bg-primary-50/40 dark:bg-primary-900/10'
-                      : 'bg-[#fbfcfe] dark:bg-[#17212c]'
+                      ? 'border-l-4 border-l-orange-500 ring-1 ring-orange-100 dark:ring-orange-950/60'
+                      : 'opacity-80 hover:opacity-100'
                   }`}
                 >
                   <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${config.color}`}>
@@ -256,7 +252,7 @@ export default function EmployeeNotifications() {
                         {n.title || n.message || 'Notification'}
                       </h3>
                       {!n.isRead && (
-                        <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-primary-500" />
+                        <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-orange-500" />
                       )}
                     </div>
                     {n.message && <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{n.message}</p>}

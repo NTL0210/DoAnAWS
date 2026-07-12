@@ -504,7 +504,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: -8, scale: 0.96 }}
                       transition={{ duration: 0.18, ease: 'easeOut' }}
-                      className="absolute right-0 top-12 z-40 w-80 rounded-xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-900"
+                      className="dashboard-panel workspace-cut-corner absolute right-0 top-12 z-40 w-80 overflow-hidden p-0"
                     >
                       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
                         <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
@@ -549,10 +549,10 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                             {pendingInvitations.map((invitation) => (
                               <div
                                 key={invitation.id}
-                                className="border-b border-slate-100 bg-blue-50/60 px-4 py-3 text-left dark:border-slate-800 dark:bg-blue-950/20"
+                                className="border-b border-l-4 border-b-slate-100 border-l-orange-500 bg-orange-50/50 px-4 py-3 text-left dark:border-b-slate-800 dark:bg-orange-950/20"
                               >
                                 <div className="flex gap-3">
-                                  <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">
+                                  <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300">
                                     <FiUserPlus className="h-3.5 w-3.5" />
                                   </div>
                                   <div className="min-w-0 flex-1">
@@ -566,7 +566,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                                       <button
                                         type="button"
                                         onClick={() => handleAcceptInvitation(invitation.id)}
-                                        className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-xs font-black text-white transition hover:bg-emerald-700"
+                                        className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg bg-orange-600 px-3 text-xs font-black text-white transition hover:bg-orange-700"
                                       >
                                         <FiCheck className="h-3.5 w-3.5" />
                                         Accept
@@ -655,7 +655,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35, ease: 'easeOut' }}
-              className="mb-6 flex flex-col gap-4 rounded-lg border border-slate-200/80 bg-[#fbfcfe] p-5 shadow-sm shadow-slate-200/70 sm:flex-row sm:items-end sm:justify-between dark:border-slate-700/80 dark:bg-slate-900 dark:shadow-slate-950/70"
+              className="dashboard-panel workspace-cut-corner mb-6 flex flex-col gap-4 p-5 sm:flex-row sm:items-end sm:justify-between"
             >
               <div className="min-w-0">
                 {eyebrow && (
@@ -709,7 +709,7 @@ export function StatCard({ label, value, detail, icon: Icon, tone = 'blue' }) {
     <motion.div
       whileHover={{ y: -4, scale: 1.01 }}
       transition={{ type: 'spring', stiffness: 300, damping: 18 }}
-      className="rounded-lg border border-slate-200/80 bg-[#fbfcfe] p-5 shadow-sm shadow-slate-200/60 transition-shadow hover:shadow-md dark:border-slate-700/80 dark:bg-slate-900 dark:shadow-slate-950/60 dark:hover:shadow-slate-950/80"
+      className="dashboard-metric-card workspace-cut-corner p-5"
     >
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -736,10 +736,10 @@ export function Panel({ title, description, action, children, className = '' }) 
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className={`rounded-lg border border-slate-200/80 bg-[#fbfcfe] shadow-sm shadow-slate-200/60 dark:border-slate-700/80 dark:bg-slate-900 dark:shadow-slate-950/60 ${className}`}
+      className={`dashboard-panel workspace-cut-corner ${className}`}
     >
       {(title || description || action) && (
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200/80 px-5 py-4 dark:border-slate-800">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200/70 px-5 py-4 dark:border-slate-800/80">
           <div>
             {title && <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">{title}</h2>}
             {description && <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{description}</p>}

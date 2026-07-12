@@ -134,7 +134,7 @@ function WorkspaceSelector({ activeWorkspace, activeWorkspaceId, myWorkspaces, s
       <button
         type="button"
         onClick={() => setShow(!show)}
-        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+        className="workspace-command-button is-secondary"
       >
         <FiBriefcase className="h-4 w-4" />
         {activeWorkspace.name}
@@ -143,7 +143,7 @@ function WorkspaceSelector({ activeWorkspace, activeWorkspaceId, myWorkspaces, s
       {show && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setShow(false)} />
-          <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 shadow-lg">
+          <div className="dashboard-panel workspace-cut-corner absolute left-0 top-full z-20 mt-2 w-64 p-2">
             {myWorkspaces.map((ws) => (
               <button
                 key={ws.id}
@@ -151,7 +151,7 @@ function WorkspaceSelector({ activeWorkspace, activeWorkspaceId, myWorkspaces, s
                 onClick={() => { selectWorkspace(ws.id); setShow(false); }}
                 className={`w-full rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
                   ws.id === activeWorkspaceId
-                    ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                    ? 'bg-orange-50 text-orange-700 ring-1 ring-orange-200 dark:bg-orange-950/30 dark:text-orange-300 dark:ring-orange-900'
                     : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
                 }`}
               >
@@ -411,8 +411,8 @@ function ManagerDashboardContent({ user }) {
         <Panel title="Recent meetings" description={`${dashboard.departmentMeetings.length} meetings uploaded`}>
           <div className="space-y-3">
             {dashboard.departmentMeetings.slice(0, 5).map((meeting) => (
-              <Link key={meeting.id} href={`/meetings/${meeting.id}`} className="flex items-center gap-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 px-4 py-3 transition hover:bg-white dark:hover:bg-slate-700">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
+              <Link key={meeting.id} href={`/meetings/${meeting.id}`} className="workspace-tactical-panel workspace-cut-corner flex items-center gap-3 px-4 py-3 transition hover:-translate-y-0.5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300">
                   <FiFileText className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -436,7 +436,7 @@ function ManagerDashboardContent({ user }) {
 /*  ADMIN / OWNER DASHBOARD                                            */
 /* ------------------------------------------------------------------ */
 const quickActions = [
-  { id: 'invite', label: 'Invite user', icon: FiPlus, color: 'from-blue-500 to-cyan-400' },
+  { id: 'invite', label: 'Invite user', icon: FiPlus, color: 'from-orange-600 to-amber-400' },
   { id: 'roles', label: 'Roles', icon: FiLock, color: 'from-amber-500 to-orange-400' },
 ];
 
@@ -471,7 +471,7 @@ function AdminDashboardContent({ user }) {
     const processingMeetings = scopedMeetings.filter((m) => m.status === 'PROCESSING').length;
     const avgProgress = scopedTasks.length ? Math.round(scopedTasks.reduce((sum, t) => sum + (t.progress || 0), 0) / scopedTasks.length) : 0;
     return [
-      { label: 'Members', value: workspaceMembers.length, detail: `${workspaceTeams.length} teams`, icon: FiUsers, color: 'from-blue-500 to-cyan-400', progress: Math.min(100, workspaceMembers.length * 10) },
+      { label: 'Members', value: workspaceMembers.length, detail: `${workspaceTeams.length} teams`, icon: FiUsers, color: 'from-orange-600 to-amber-400', progress: Math.min(100, workspaceMembers.length * 10) },
       { label: 'Teams', value: workspaceTeams.length, detail: `${workspaceMembers.length} members`, icon: FiBriefcase, color: 'from-violet-500 to-fuchsia-400', progress: Math.min(100, workspaceTeams.length * 25) },
       { label: 'Meetings', value: scopedMeetings.length, detail: processingMeetings ? `${processingMeetings} processing` : 'All processed', icon: FiFileText, color: 'from-amber-500 to-orange-400', progress: 64 },
       { label: 'Task progress', value: `${avgProgress}%`, detail: `${completedTasks} completed`, icon: FiCheckCircle, color: 'from-emerald-500 to-teal-400', progress: avgProgress },
@@ -533,32 +533,30 @@ function AdminDashboardContent({ user }) {
     <AppShell user={user} showWorkspaceSwitcher={false}>
       <WorkspaceSelector {...{ activeWorkspace, activeWorkspaceId, myWorkspaces, selectWorkspace }} />
 
-      <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="dashboard-hero-main overflow-hidden rounded-2xl p-[1px] shadow-xl shadow-blue-900/10">
-        <div className="dashboard-shimmer relative overflow-hidden rounded-2xl bg-white/96 dark:bg-slate-900/80 p-6 backdrop-blur">
-          <div className="absolute inset-0 bg-gradient-to-br from-white via-white/95 to-blue-50/90 dark:from-slate-900 dark:via-slate-900/95 dark:to-slate-800/90" />
-          <div className="absolute right-8 top-4 h-36 w-36 rounded-full bg-pink-400/15 blur-3xl" />
-          <div className="absolute bottom-0 right-40 h-28 w-28 rounded-full bg-blue-400/15 blur-3xl" />
+      <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="dashboard-command-hero workspace-cut-corner relative overflow-hidden p-6 text-white">
+        <div className="dashboard-command-grid absolute inset-0" />
+        <div className="relative">
           <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
             <div>
-              <p className="text-sm font-bold text-primary-700 dark:text-primary-300">{activeWorkspace.name} — Owner dashboard</p>
-              <h1 className="mt-2 max-w-2xl text-3xl font-bold tracking-normal text-slate-950 dark:text-slate-100 lg:text-4xl">Turn meetings into tasks, track your workspace execution.</h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">Monitor {workspaceMembers.length} members, {workspaceTeams.length} teams, and all tasks from one workspace view.</p>
+              <p className="text-sm font-black uppercase tracking-normal text-orange-300">{activeWorkspace.name} · Owner command</p>
+              <h1 className="mt-2 max-w-2xl text-3xl font-bold tracking-normal text-white lg:text-4xl">Turn meetings into tasks, then keep execution moving.</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">Monitor {workspaceMembers.length} members, {workspaceTeams.length} teams, and all tasks from one workspace view.</p>
               <div className="mt-5 flex flex-wrap gap-3">
-                <Link href="/workspace?view=meetings" className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-slate-900/15 hover:bg-slate-800">
+                <Link href="/workspace?view=meetings" className="workspace-command-button is-primary">
                   <FiZap className="h-4 w-4" />Upload MP3 for AI summary
                 </Link>
-                <Link href="/workspace" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800">
+                <Link href="/workspace" className="workspace-command-button is-secondary">
                   <FiBriefcase className="h-4 w-4" />Open workspace
                 </Link>
               </div>
             </div>
             <div className="flex flex-col items-end gap-4">
               <div className="hidden lg:block">
-                <div className="grid grid-cols-3 gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/50 p-3 shadow-sm">
+                <div className="grid grid-cols-3 gap-3 border border-white/15 bg-black/20 p-3 backdrop-blur-sm">
                   {['Live', 'AI Ready', 'Secure'].map((label, index) => (
-                    <motion.div key={label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + index * 0.08 }} className="rounded-xl bg-slate-50 dark:bg-slate-800 px-4 py-3 text-center">
+                    <motion.div key={label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + index * 0.08 }} className="border border-white/10 bg-white/5 px-4 py-3 text-center">
                       <div className="mx-auto mb-2 h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-                      <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">{label}</div>
+                      <div className="text-xs font-semibold text-slate-200">{label}</div>
                     </motion.div>
                   ))}
                 </div>
@@ -570,7 +568,7 @@ function AdminDashboardContent({ user }) {
 
       <section className="mt-6 grid gap-4 xl:grid-cols-4">
         {metrics.map((metric, index) => (
-          <motion.div key={metric.label} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 + index * 0.07 }} whileHover={{ y: -4 }} className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/70 p-5 shadow-sm">
+          <motion.div key={metric.label} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 + index * 0.07 }} whileHover={{ y: -4 }} className="dashboard-metric-card workspace-cut-corner overflow-hidden p-5">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{metric.label}</p>
@@ -590,7 +588,7 @@ function AdminDashboardContent({ user }) {
       </section>
 
       <section className="mt-6 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/70 p-5 shadow-sm">
+        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="dashboard-panel workspace-cut-corner p-5">
           <div className="mb-5 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-bold text-slate-950 dark:text-slate-100">Team workload</h2>
@@ -601,13 +599,13 @@ function AdminDashboardContent({ user }) {
           <div className="space-y-5">
             {teamLoad.map((team, index) => (
               <button key={team.id} type="button" onClick={() => setSelectedTeamId(team.id)}
-                className={`w-full rounded-xl p-3 text-left transition ${selectedTeamId === team.id ? 'bg-blue-50 dark:bg-slate-800 ring-1 ring-blue-100 dark:ring-slate-700' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                className={`workspace-tactical-panel workspace-cut-corner w-full p-3 text-left transition ${selectedTeamId === team.id ? 'ring-2 ring-orange-400/60' : 'hover:-translate-y-0.5'}`}>
                 <div className="mb-2 flex items-center justify-between text-sm">
                   <div><span className="font-semibold text-slate-800 dark:text-slate-100">{team.name}</span><span className="ml-2 text-slate-400 dark:text-slate-500">{team.members} members</span></div>
                   <span className="font-semibold text-slate-700 dark:text-slate-300">{team.progress}%</span>
                 </div>
                 <div className="h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
-                  <motion.div initial={{ width: 0 }} animate={{ width: `${team.progress}%` }} transition={{ delay: 0.35 + index * 0.08, duration: 0.8, ease: 'easeOut' }} className="h-full rounded-full bg-gradient-to-r from-primary-500 to-sky-400" />
+                  <motion.div initial={{ width: 0 }} animate={{ width: `${team.progress}%` }} transition={{ delay: 0.35 + index * 0.08, duration: 0.8, ease: 'easeOut' }} className="h-full rounded-full bg-gradient-to-r from-orange-600 to-amber-400" />
                 </div>
               </button>
             ))}
@@ -615,7 +613,7 @@ function AdminDashboardContent({ user }) {
           </div>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/70 p-5 shadow-sm">
+        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }} className="dashboard-panel workspace-cut-corner p-5">
           <div className="mb-5 flex items-center justify-between">
             <div><h2 className="text-lg font-bold text-slate-950 dark:text-slate-100">Selected team</h2><p className="text-sm text-slate-500 dark:text-slate-400">Click a team to inspect workload.</p></div>
             <FiBriefcase className="h-5 w-5 text-primary-500 dark:text-primary-400" />
@@ -636,7 +634,7 @@ function AdminDashboardContent({ user }) {
                   <span className="font-semibold text-primary-600 dark:text-primary-400">{selectedTeam.progress}%</span>
                 </div>
                 <div className="h-3 overflow-hidden rounded-full bg-white dark:bg-slate-700">
-                  <motion.div initial={{ width: 0 }} animate={{ width: `${selectedTeam.progress}%` }} transition={{ duration: 0.55 }} className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400" />
+                  <motion.div initial={{ width: 0 }} animate={{ width: `${selectedTeam.progress}%` }} transition={{ duration: 0.55 }} className="h-full rounded-full bg-gradient-to-r from-orange-600 to-amber-400" />
                 </div>
               </div>
               <div className="flex items-center justify-between rounded-xl border border-orange-100 dark:border-orange-900/30 bg-orange-50 dark:bg-orange-900/20 px-4 py-3 text-sm">
@@ -651,7 +649,7 @@ function AdminDashboardContent({ user }) {
       </section>
 
       <section className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.36 }} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/70 p-5 shadow-sm">
+        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.36 }} className="dashboard-panel workspace-cut-corner p-5">
           <div className="mb-5 flex items-center justify-between">
             <div><h2 className="text-lg font-bold text-slate-950 dark:text-slate-100">Quick actions</h2><p className="text-sm text-slate-500 dark:text-slate-400">Common owner operations.</p></div>
           </div>
@@ -659,7 +657,7 @@ function AdminDashboardContent({ user }) {
             {quickActions.map((action) => (
               <button key={action.label} type="button"
                 onClick={() => { setActivePanel(action.id); requestAnimationFrame(() => document.getElementById('admin-action-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }}
-                className="float-action group rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-4 text-left transition hover:-translate-y-1 hover:bg-white dark:hover:bg-slate-700 hover:shadow-lg hover:shadow-slate-200/70 dark:hover:shadow-slate-950/70">
+                className="workspace-tactical-panel workspace-cut-corner group p-4 text-left transition hover:-translate-y-1">
                 <div className={`mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${action.color} text-white`}><action.icon className="h-5 w-5" /></div>
                 <div className="flex items-center justify-between"><span className="font-semibold text-slate-900 dark:text-slate-100">{action.label}</span><FiChevronRight className="h-4 w-4 text-slate-400 dark:text-slate-500 transition group-hover:translate-x-1" /></div>
               </button>
@@ -682,20 +680,20 @@ function AdminDashboardContent({ user }) {
           </div>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.44 }} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/70 p-5 shadow-sm">
+        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.44 }} className="dashboard-panel workspace-cut-corner p-5">
           <div className="mb-5 flex items-center justify-between">
             <div><h2 className="text-lg font-bold text-slate-950 dark:text-slate-100">Recent activity</h2><p className="text-sm text-slate-500 dark:text-slate-400">Latest meetings and tasks in this workspace.</p></div>
-            <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
+            <div className="flex gap-1 p-1">
               {['all', 'meeting', 'task'].map((item) => (
                 <button key={item} type="button" onClick={() => setActivityFilter(item)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition ${activityFilter === item ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-300 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>{item}</button>
+                  className={`dashboard-pill-button capitalize ${activityFilter === item ? 'is-active' : ''}`}>{item}</button>
               ))}
             </div>
           </div>
           <div className="space-y-3">
             {filteredActivity.map((activity, index) => (
               <motion.div key={activity.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.52 + index * 0.07 }}
-                className="flex items-center gap-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 px-4 py-3">
+                className="workspace-tactical-panel workspace-cut-corner flex items-center gap-4 px-4 py-3">
                 <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${activity.color}`}><activity.icon className="h-5 w-5" /></div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{activity.title}</p>
@@ -719,7 +717,7 @@ function AdminDashboardContent({ user }) {
 function AdminActionPanel({ activePanel, members, tasks }) {
   const panelTitle = { overview: 'Workspace overview', invite: 'Invite member preview', roles: 'Role overview' }[activePanel];
   return (
-    <motion.div key={activePanel} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/70 p-4">
+    <motion.div key={activePanel} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="workspace-tactical-panel workspace-cut-corner mt-5 p-4">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-bold text-slate-950 dark:text-slate-100">{panelTitle}</h3>
         <Link href="/workspace?view=meetings" className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-700">Upload MP3</Link>

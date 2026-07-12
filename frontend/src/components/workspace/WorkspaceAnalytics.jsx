@@ -16,7 +16,7 @@ import {
 
 const statusConfig = {
   TODO: { label: 'Todo', color: 'bg-slate-400', accent: 'text-slate-500' },
-  IN_PROGRESS: { label: 'In Progress', color: 'bg-blue-500', accent: 'text-blue-600' },
+  IN_PROGRESS: { label: 'In Progress', color: 'bg-orange-500', accent: 'text-orange-600' },
   REVIEW: { label: 'Review', color: 'bg-amber-400', accent: 'text-amber-600' },
   COMPLETED: { label: 'Completed', color: 'bg-emerald-500', accent: 'text-emerald-600' },
   OVERDUE: { label: 'Overdue', color: 'bg-rose-500', accent: 'text-rose-600' },
@@ -99,7 +99,7 @@ export default function WorkspaceAnalytics() {
       value: analytics.meetingsTotal,
       detail: `${analytics.meetingsProcessedByAI} processed by AI`,
       icon: FiCalendar,
-      tone: 'from-blue-500 to-cyan-400',
+      tone: 'from-orange-500 to-red-500',
       badge: '+18%',
     },
     {
@@ -129,19 +129,20 @@ export default function WorkspaceAnalytics() {
   ];
 
   return (
-    <div className="h-full overflow-y-auto discord-scroll bg-slate-50 dark:bg-slate-900 px-5 py-5 md:px-6">
+    <div className="h-full overflow-y-auto discord-scroll px-5 py-5 md:px-6">
       <div className="mx-auto max-w-7xl space-y-5">
-        <section className="rounded-3xl border border-white dark:border-slate-800 bg-white/90 dark:bg-slate-900/80 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:ring-slate-800/70 md:p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <section className="dashboard-command-hero workspace-cut-corner relative overflow-hidden p-5 text-white md:p-6">
+          <div className="dashboard-command-grid" aria-hidden="true" />
+          <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-orange-100">
                 <FiBarChart2 className="h-4 w-4" />
                 Workspace Analytics
               </div>
-              <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-slate-950 dark:text-slate-100 md:text-3xl">
+              <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
                 Team delivery overview
               </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400">
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
                 Monitor meeting output, AI-created tasks, workload balance, and delivery risk for{' '}
                 {activeWorkspace?.name || 'AI Workforce'}.
               </p>
@@ -158,10 +159,10 @@ export default function WorkspaceAnalytics() {
                   type="button"
                   onClick={() => setTimeRange(key)}
                   aria-pressed={timeRange === key}
-                  className={`rounded-full border px-3.5 py-2 text-xs font-bold transition ${
+                  className={`dashboard-pill-button rounded-full px-3.5 py-2 text-xs font-bold transition ${
                     timeRange === key
-                      ? 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-sm'
-                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600 hover:text-slate-700 dark:hover:text-slate-300'
+                      ? 'is-active'
+                      : ''
                   }`}
                 >
                   {label}
@@ -222,7 +223,7 @@ export default function WorkspaceAnalytics() {
               <InsightStat value={analytics.meetingsProcessedByAI} label="AI reviewed" tone="text-emerald-600" />
               <InsightStat value={analytics.aiGeneratedTasks} label="AI task candidates" tone="text-violet-600" />
             </div>
-            <div className="mt-5 rounded-2xl border border-blue-100 dark:border-blue-900/30 bg-gradient-to-br from-blue-50 to-white dark:from-blue-950/30 dark:to-slate-900 p-4">
+            <div className="workspace-tactical-panel workspace-cut-corner mt-5 p-4">
               <p className="text-sm font-bold text-slate-900 dark:text-slate-100">Next best action</p>
               <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
                 Review overdue and in-progress work before the next standup so managers can adjust ownership early.
@@ -256,7 +257,7 @@ export default function WorkspaceAnalytics() {
                   key={item.label}
                   type="button"
                   onClick={item.action}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300 shadow-sm transition hover:border-blue-200 dark:hover:border-blue-800 hover:text-blue-700 dark:hover:text-blue-300"
+                  className="workspace-command-button is-secondary inline-flex items-center gap-2"
                 >
                   {item.label}
                   <FiArrowRight className="h-3.5 w-3.5" />
@@ -270,7 +271,7 @@ export default function WorkspaceAnalytics() {
           <Panel eyebrow="Team distribution" title="Tasks by team" icon={FiUsers}>
             <div className="space-y-3">
               {analytics.tasksByTeam.map((team) => (
-                <ProgressRow key={team.id} label={team.name} count={team.count} total={Math.max(analytics.totalTasks, 1)} barClassName="bg-blue-500" accentClassName="text-blue-600" />
+                <ProgressRow key={team.id} label={team.name} count={team.count} total={Math.max(analytics.totalTasks, 1)} barClassName="bg-orange-500" accentClassName="text-orange-600" />
               ))}
               {analytics.tasksByTeam.length === 0 && <p className="text-sm font-medium text-slate-400 dark:text-slate-500">No teams yet.</p>}
             </div>
@@ -285,7 +286,7 @@ export default function WorkspaceAnalytics() {
           <Panel eyebrow="AI activity" title="Recent AI activities" icon={FiZap}>
             <div className="space-y-3">
               {analytics.recentAIActivities.map((activity) => (
-                <div key={activity.id} className="rounded-2xl border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3">
+                <div key={activity.id} className="workspace-tactical-panel workspace-cut-corner p-3">
                   <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{activity.message}</p>
                   <p className="mt-1 text-xs font-medium text-slate-400 dark:text-slate-500">{formatDateTime(activity.timestamp)}</p>
                 </div>
@@ -301,7 +302,7 @@ export default function WorkspaceAnalytics() {
 
 function KpiCard({ label, value, detail, icon: Icon, tone, badge }) {
   return (
-    <article className="group rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/70 dark:hover:shadow-slate-950/70">
+    <article className="dashboard-metric-card workspace-cut-corner group p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{label}</p>
@@ -323,15 +324,15 @@ function KpiCard({ label, value, detail, icon: Icon, tone, badge }) {
 
 function Panel({ eyebrow, title, icon: Icon, action, onAction, highlighted = false, children }) {
   return (
-    <section className={`rounded-3xl border bg-white dark:bg-slate-900/80 p-5 shadow-sm transition md:p-6 ${
+    <section className={`dashboard-panel workspace-cut-corner p-5 transition md:p-6 ${
       highlighted
-        ? 'border-blue-300 ring-4 ring-blue-100 dark:border-blue-700 dark:ring-blue-900/30'
-        : 'border-slate-200 dark:border-slate-800'
+        ? 'ring-4 ring-orange-100 dark:ring-orange-900/30'
+        : ''
     }`}>
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-            <Icon className="h-4 w-4 text-blue-500" />
+            <Icon className="h-4 w-4 text-orange-500" />
             {eyebrow}
           </div>
           <h2 className="mt-1 text-lg font-extrabold text-slate-950 dark:text-slate-100">{title}</h2>
@@ -340,7 +341,7 @@ function Panel({ eyebrow, title, icon: Icon, action, onAction, highlighted = fal
           <button
             type="button"
             onClick={onAction}
-            className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 transition hover:bg-white dark:hover:bg-slate-700 hover:text-blue-700 dark:hover:text-blue-300"
+            className="dashboard-pill-button rounded-full px-3 py-1.5 text-xs font-bold transition"
           >
             {action}
           </button>
@@ -372,9 +373,9 @@ function ProgressRow({ label, count, total, barClassName, accentClassName }) {
 
 function WorkloadRow({ member }) {
   return (
-    <div className="rounded-2xl border border-slate-100 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/60 p-3.5">
+    <div className="workspace-tactical-panel workspace-cut-corner p-3.5">
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-500 text-xs font-extrabold text-white">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-red-500 text-xs font-extrabold text-white">
           {getInitials(member.name)}
         </div>
         <div className="min-w-0 flex-1">
@@ -399,7 +400,7 @@ function WorkloadRow({ member }) {
 
 function InsightStat({ value, label, tone }) {
   return (
-    <div className="rounded-2xl border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-4 text-center">
+    <div className="workspace-tactical-panel workspace-cut-corner p-4 text-center">
       <p className={`text-2xl font-extrabold ${tone}`}>{value}</p>
       <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">{label}</p>
     </div>
@@ -408,7 +409,7 @@ function InsightStat({ value, label, tone }) {
 
 function SignalCard({ label, value, state, color }) {
   const colors = {
-    blue: 'bg-blue-50 text-blue-700 border-blue-100',
+    blue: 'bg-orange-50 text-orange-700 border-orange-100',
     emerald: 'bg-emerald-50 text-emerald-700 border-emerald-100',
     rose: 'bg-rose-50 text-rose-700 border-rose-100',
   };
