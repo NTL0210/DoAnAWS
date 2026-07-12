@@ -50,20 +50,12 @@ export function getSafeRtcConfigForLog(config) {
  */
 export function getVoiceRtcConfig() {
   // ── STUN (always included) ──────────────────────────────────────────────
-  // Multiple servers on different ports for better coverage through various NAT/firewalls
+  // Keep the fallback list short. Each unreachable URL emits a browser 701 event
+  // and delays gathering; TURN from the API remains the cross-network path.
   const defaultStunUrls = [
-    // Google STUN (public, widely available)
     'stun:stun.l.google.com:19302',
     'stun:stun1.l.google.com:19302',
-    'stun:stun2.l.google.com:19302',
-    'stun:stun3.l.google.com:19302',
-    'stun:stun4.l.google.com:19302',
-    // Twilio STUN (fallback port 3478)
     'stun:global.stun.twilio.com:3478',
-    // Additional public STUN servers on common ports
-    'stun:stun.l.google.com:3478',
-    'stun:stun1.l.google.com:3478',
-    'stun:stun.services.mozilla.com:3478',
   ];
 
   const stunUrls = (
