@@ -29,6 +29,7 @@ const ENVIRONMENT = ENV_FLAG.split('=')[1] || 'dev';
 const STACK_NAME = `ai-meeting-stack-${ENVIRONMENT}`;
 const TURN_USERNAME = process.env.TURN_USERNAME || 'ai-meeting-turn';
 const TURN_CREDENTIAL = process.env.TURN_CREDENTIAL || '';
+const SIGNALING_REDIS_URL = process.env.SIGNALING_REDIS_URL || '';
 
 console.log(`\n🚀 Deploying AI Meeting Workforce Platform`);
 console.log(`   Environment: ${ENVIRONMENT}`);
@@ -76,6 +77,7 @@ async function main() {
     `Environment=${ENVIRONMENT}`,
     `TurnUsername=${shellQuote(TURN_USERNAME)}`,
     `TurnCredential=${shellQuote(requireSecret(TURN_CREDENTIAL, 'TURN_CREDENTIAL'))}`,
+    `SignalingRedisUrl=${shellQuote(SIGNALING_REDIS_URL)}`,
     '--capabilities CAPABILITY_NAMED_IAM',
     '--no-fail-on-empty-changeset',
   ].join(' ');
