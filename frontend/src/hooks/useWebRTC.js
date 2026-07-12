@@ -89,6 +89,11 @@ export default function useWebRTC(opts) {
   } = opts;
 
   const [rtcConfiguration, setRtcConfiguration] = useState(() => getVoiceRtcConfig());
+  const rtcConfigurationRef = useRef(rtcConfiguration);
+  const iceConfigPromiseRef = useRef(null);
+  const iceRefreshInFlightRef = useRef(null);
+  const lastIceRefreshAtRef = useRef(0);
+  const restartingPeersRef = useRef(new Set());
   const localStreamRef = useRef(localStream);
   const peersRef = useRef(new Map());
   const peerMetaRef = useRef(new Map());
@@ -120,14 +125,20 @@ export default function useWebRTC(opts) {
 
   useEffect(() => {
     let cancelled = false;
-    fetchIceServersFromApi().then((config) => {
+    const request = fetchIceServersFromApi();
+    iceConfigPromiseRef.current = request;
+    request.then((config) => {
       if (cancelled || !config?.iceServers?.length) return;
+      rtcConfigurationRef.current = config;
       setRtcConfiguration(config);
       if (DEBUG) {
         console.info('[Voice/WebRTC] RTC config:', getSafeRtcConfigForLog(config));
       }
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (iceConfigPromiseRef.current === request) iceConfigPromiseRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -352,11 +363,57 @@ export default function useWebRTC(opts) {
     await Promise.all(replacements);
   }, []);
 
+  const refreshIceConfiguration = useCallback(async (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastIceRefreshAtRef.current < 10000) {
+      return rtcConfigurationRef.current;
+    }
+    if (iceRefreshInFlightRef.current) return iceRefreshInFlightRef.current;
+
+    const request = fetchIceServersFromApi()
+      .then((nextConfig) => {
+        if (!nextConfig?.iceServers?.length) return rtcConfigurationRef.current;
+
+        // Do not downgrade an active TURN configuration during the brief window
+        // where ASG is replacing instances and has no healthy relay yet.
+        if (hasTurnServer(rtcConfigurationRef.current) && !hasTurnServer(nextConfig)) {
+          return rtcConfigurationRef.current;
+        }
+
+        rtcConfigurationRef.current = nextConfig;
+        setRtcConfiguration(nextConfig);
+        peersRef.current.forEach((pc, peerUserId) => {
+          if (!pc || pc.connectionState === 'closed') return;
+          try {
+            pc.setConfiguration({
+              iceServers: nextConfig.iceServers,
+              iceTransportPolicy: nextConfig.iceTransportPolicy,
+            });
+          } catch (error) {
+            debugLog('set refreshed ICE config failed', peerUserId, error.message);
+          }
+        });
+        lastIceRefreshAtRef.current = Date.now();
+        return nextConfig;
+      })
+      .finally(() => {
+        if (iceRefreshInFlightRef.current === request) iceRefreshInFlightRef.current = null;
+      });
+
+    iceRefreshInFlightRef.current = request;
+    return request;
+  }, []);
+
   const restartPeerIce = useCallback(async (peerUserId, reason = 'restart') => {
     const pc = peersRef.current.get(peerUserId);
     const peer = peerMetaRef.current.get(peerUserId);
     if (!pc || !peer || pc.connectionState === 'closed' || !socket?.connected) return;
+    if (restartingPeersRef.current.has(peerUserId)) return;
+    restartingPeersRef.current.add(peerUserId);
     try {
+      if (reason === 'failed' || reason === 'disconnected-timeout') {
+        await refreshIceConfiguration();
+      }
       debugLog('restart ICE', peerUserId, reason);
       pc.restartIce?.();
       const offer = await pc.createOffer({ iceRestart: true, offerToReceiveAudio: true });
@@ -369,8 +426,10 @@ export default function useWebRTC(opts) {
     } catch (err) {
       setLastWebRTCError(`ICE restart failed for ${peerUserId}: ${err.message}`);
       debugLog('restart ICE failed', peerUserId, err.message);
+    } finally {
+      restartingPeersRef.current.delete(peerUserId);
     }
-  }, [channelId, socket, userId]);
+  }, [channelId, refreshIceConfiguration, socket, userId]);
 
   /** Periodically poll selected candidate pair info and store in peer state. */
   const pollCandidateInfo = useCallback(async (peerUserId) => {
@@ -409,10 +468,10 @@ export default function useWebRTC(opts) {
 
     let pc = null;
     try {
-      pc = new RTCPeerConnection(rtcConfiguration);
+      pc = new RTCPeerConnection(rtcConfigurationRef.current);
     } catch (err) {
       console.error('[WebRTC] Failed to create RTCPeerConnection:', err);
-      console.error('[WebRTC] RTCConfiguration:', rtcConfiguration);
+      console.error('[WebRTC] RTCConfiguration:', getSafeRtcConfigForLog(rtcConfigurationRef.current));
       setAudioWarning('Voice connection could not start because the RTC configuration is invalid.');
       setLastWebRTCError(`RTC configuration failed: ${err.message}`);
       return null;
@@ -437,12 +496,19 @@ export default function useWebRTC(opts) {
 
     // Handle ICE errors
     pc.onicecandidateerror = (event) => {
-      console.error('[WebRTC] ICE candidate error:', {
+      const details = {
         userId: peer.userId,
         errorCode: event.errorCode,
         errorText: event.errorText,
-      });
-      // Don't fail on candidate errors - continue trying
+        url: event.url || 'unknown',
+      };
+      // 701 is emitted per unreachable STUN/TURN URL. Other candidates may still
+      // succeed, so only expose it in explicit voice-debug builds.
+      if (event.errorCode === 701) {
+        if (DEBUG) console.warn('[WebRTC] ICE server unreachable:', details);
+        return;
+      }
+      console.error('[WebRTC] ICE candidate error:', details);
     };
 
     pc.ontrack = (event) => {
@@ -539,7 +605,7 @@ export default function useWebRTC(opts) {
     setPeerCount(peersRef.current.size);
     startPeerPing(peer.userId);
     return pc;
-  }, [addLocalTracks, channelId, cleanupPeer, clearReconnectTimer, restartPeerIce, rtcConfiguration, setupDataChannel, socket, startPeerPing, updatePeerState, pollCandidateInfo, userId]);
+  }, [addLocalTracks, channelId, cleanupPeer, clearReconnectTimer, restartPeerIce, setupDataChannel, socket, startPeerPing, updatePeerState, pollCandidateInfo, userId]);
 
   const sendOffer = useCallback(async (peer) => {
     const pc = createPeerConnection(peer);
@@ -744,6 +810,16 @@ export default function useWebRTC(opts) {
     if (joinedRef.current && !options.force) return;
     if (joinedRef.current && options.force) leaveChannel();
     joiningRef.current = true;
+
+    try {
+      const latestConfig = await iceConfigPromiseRef.current;
+      if (latestConfig?.iceServers?.length) {
+        rtcConfigurationRef.current = latestConfig;
+        setRtcConfiguration(latestConfig);
+      }
+    } catch (error) {
+      debugLog('ICE config load before join failed', error.message);
+    }
 
     const onJoined = ({ peers = [], channelId: joinedChannelId }) => {
       if (joinedChannelId !== targetChannelId) return;

@@ -25,6 +25,8 @@ const DEFAULT_STUN_URLS = [
 export class IceServerService {
   private readonly asg = new AutoScalingClient({ region: env.AWS_REGION });
   private readonly ec2 = new EC2Client({ region: env.AWS_REGION });
+  private cachedTurnUrls: string[] = [];
+  private turnUrlsExpireAt = 0;
 
   async getConfig(): Promise<IceConfig> {
     const stunUrls = splitList(process.env.STUN_URLS).length
@@ -58,6 +60,8 @@ export class IceServerService {
   }
 
   private async getTurnUrls(): Promise<string[]> {
+    if (Date.now() < this.turnUrlsExpireAt) return this.cachedTurnUrls;
+
     const dynamicHosts = await this.getAsgPublicIps().catch(() => []);
     const fallbackHosts = splitList(process.env.TURN_HOSTS);
     const explicitUrls = splitList(process.env.TURN_URLS);
@@ -66,7 +70,9 @@ export class IceServerService {
       `turn:${host}:3478?transport=udp`,
       `turn:${host}:3478?transport=tcp`,
     ]);
-    return unique([...urls, ...explicitUrls]).filter(isValidTurnUrl);
+    this.cachedTurnUrls = unique([...urls, ...explicitUrls]).filter(isValidTurnUrl);
+    this.turnUrlsExpireAt = Date.now() + 10000;
+    return this.cachedTurnUrls;
   }
 
   private async getAsgPublicIps(): Promise<string[]> {

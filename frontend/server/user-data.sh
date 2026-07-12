@@ -83,8 +83,14 @@ if [ -z "$TURN_CREDENTIAL" ]; then
   echo "[ERROR] TURN_CREDENTIAL is required. Refusing to start TURN with a default password."
   exit 1
 fi
-PUBLIC_IP="$(curl -sf http://169.254.169.254/latest/meta-data/public-ipv4 || true)"
-if [ -n "$PUBLIC_IP" ]; then
+IMDS_TOKEN="$(curl -sf -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600' http://169.254.169.254/latest/api/token || true)"
+METADATA_HEADER=()
+if [ -n "$IMDS_TOKEN" ]; then
+  METADATA_HEADER=(-H "X-aws-ec2-metadata-token: $IMDS_TOKEN")
+fi
+PUBLIC_IP="$(curl -sf "${METADATA_HEADER[@]}" http://169.254.169.254/latest/meta-data/public-ipv4 || true)"
+PRIVATE_IP="$(curl -sf "${METADATA_HEADER[@]}" http://169.254.169.254/latest/meta-data/local-ipv4 || true)"
+if [ -n "$PUBLIC_IP" ] && [ -n "$PRIVATE_IP" ]; then
   docker rm -f coturn 2>/dev/null || true
   docker run -d \
     --name coturn \
@@ -98,15 +104,17 @@ if [ -n "$PUBLIC_IP" ]; then
     --lt-cred-mech \
     --user="${TURN_USERNAME}:${TURN_CREDENTIAL}" \
     --realm="ai-meeting-voice" \
-    --external-ip="${PUBLIC_IP}" \
+    --listening-ip="${PRIVATE_IP}" \
+    --relay-ip="${PRIVATE_IP}" \
+    --external-ip="${PUBLIC_IP}/${PRIVATE_IP}" \
     --min-port="${TURN_MIN_PORT}" \
     --max-port="${TURN_MAX_PORT}" \
     --no-cli \
     --no-tls \
     --no-dtls
-  echo "[OK] TURN relay started on ${PUBLIC_IP}:${TURN_PORT}"
+  echo "[OK] TURN relay started on ${PUBLIC_IP}:${TURN_PORT} (interface ${PRIVATE_IP})"
 else
-  echo "[WARN] TURN relay skipped because public IP was not available"
+  echo "[WARN] TURN relay skipped because EC2 public/private IP metadata was not available"
 fi
 
 # ── 5. Verify ─────────────────────────────────────────────

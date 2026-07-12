@@ -1088,6 +1088,10 @@ Resources:
       LaunchTemplateData:
         InstanceType: t4g.nano
         ImageId: !Ref LatestAMIRA
+        MetadataOptions:
+          HttpEndpoint: enabled
+          HttpTokens: required
+          HttpPutResponseHopLimit: 2
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         NetworkInterfaces:
@@ -1137,8 +1141,10 @@ Resources:
               voice-signaling-server
 
             # TURN relay for WebRTC across different networks/NAT.
-            PUBLIC_IP="$(curl -sf http://169.254.169.254/latest/meta-data/public-ipv4 || true)"
-            if [ -n "$PUBLIC_IP" ]; then
+            IMDS_TOKEN="$(curl -sf -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600' http://169.254.169.254/latest/api/token || true)"
+            PUBLIC_IP="$(curl -sf -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4 || true)"
+            PRIVATE_IP="$(curl -sf -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4 || true)"
+            if [ -n "$PUBLIC_IP" ] && [ -n "$PRIVATE_IP" ]; then
               docker rm -f coturn 2>/dev/null || true
               docker run -d \
                 --name coturn \
@@ -1152,15 +1158,17 @@ Resources:
                 --lt-cred-mech \
                 --user="${TurnUsername}:${TurnCredential}" \
                 --realm="ai-meeting-${Environment}" \
-                --external-ip="$PUBLIC_IP" \
+                --listening-ip="$PRIVATE_IP" \
+                --relay-ip="$PRIVATE_IP" \
+                --external-ip="$PUBLIC_IP/$PRIVATE_IP" \
                 --min-port=49160 \
                 --max-port=49200 \
                 --no-cli \
                 --no-tls \
                 --no-dtls
-              echo "[OK] TURN relay started on $PUBLIC_IP:3478"
+              echo "[OK] TURN relay started on $PUBLIC_IP:3478 (interface $PRIVATE_IP)"
             else
-              echo "[WARN] TURN relay skipped because public IP was not available" >&2
+              echo "[WARN] TURN relay skipped because EC2 public/private IP metadata was not available" >&2
             fi
 
             # ─── Health check ─────────────────────────────────
