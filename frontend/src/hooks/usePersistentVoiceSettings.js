@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { VOICE_AUDIO_CONFIG } from '@/config/voiceAudioConfig';
 
+const MAX_REMOTE_VOLUME = VOICE_AUDIO_CONFIG.maxRemotePlaybackGain ?? 2;
+
 export const DEFAULT_VOICE_SETTINGS = {
   selectedMicId: null,
   inputDeviceId: '',
@@ -43,6 +45,22 @@ function normalizeNoiseSuppressionMode(mode) {
   return mode || VOICE_AUDIO_CONFIG.noiseSuppressionMode;
 }
 
+function normalizeRemoteVolume(value, fallback = 1) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(0, Math.min(MAX_REMOTE_VOLUME, numeric));
+}
+
+function normalizePerUserVolumes(perUserVolumes) {
+  if (!perUserVolumes || typeof perUserVolumes !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(perUserVolumes).map(([userId, volume]) => [
+      userId,
+      normalizeRemoteVolume(volume),
+    ])
+  );
+}
+
 export default function usePersistentVoiceSettings(userId, workspaceId) {
   const key = useMemo(() => storageKey(userId, workspaceId), [userId, workspaceId]);
   const [settings, setSettings] = useState(DEFAULT_VOICE_SETTINGS);
@@ -58,6 +76,8 @@ export default function usePersistentVoiceSettings(userId, workspaceId) {
         inputDeviceId: parsed.inputDeviceId ?? parsed.selectedMicId ?? '',
         noiseSuppressionMode: normalizeNoiseSuppressionMode(parsed.noiseSuppressionMode),
         inputVolume: parsed.inputVolume <= 1 ? Math.round(parsed.inputVolume * 100) : parsed.inputVolume,
+        outputVolume: normalizeRemoteVolume(parsed.outputVolume, DEFAULT_VOICE_SETTINGS.outputVolume),
+        perUserVolumes: normalizePerUserVolumes(parsed.perUserVolumes),
         inputSensitivity: parsed.inputSensitivity > 1
           ? Math.max(0.005, Math.min(0.08, parsed.inputSensitivity / 720))
           : parsed.inputSensitivity,
@@ -94,7 +114,7 @@ export default function usePersistentVoiceSettings(userId, workspaceId) {
 
   const setPerUserVolume = useCallback((targetUserId, volume) => {
     if (!targetUserId) return;
-    const normalized = Math.max(0, Math.min(1, Number(volume)));
+    const normalized = normalizeRemoteVolume(volume);
     saveSettings((prev) => ({
       perUserVolumes: {
         ...(prev.perUserVolumes || {}),

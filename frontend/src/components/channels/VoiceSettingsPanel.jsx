@@ -254,7 +254,7 @@ export default function VoiceSettingsPanel({ settings, onChange, onClose }) {
             </label>
           ) : null}
 
-          <Slider label="Output volume" value={Math.round((settings.outputVolume ?? 1) * 100)} min={0} max={100} suffix="%" onChange={(value) => onChange('outputVolume', value / 100)} />
+          <Slider label="Output volume" value={Math.round((settings.outputVolume ?? 1) * 100)} min={0} max={200} suffix="%" onChange={(value) => onChange('outputVolume', value / 100)} />
           <Slider label="Local recording gain" value={Math.round((settings.localRecordingGain ?? VOICE_AUDIO_CONFIG.recordingLocalGain) * 100)} min={50} max={180} suffix="%" onChange={(value) => onChange('localRecordingGain', value / 100)} />
           <Slider label="Remote recording gain" value={Math.round((settings.remoteRecordingGain ?? VOICE_AUDIO_CONFIG.recordingRemoteGain) * 100)} min={50} max={180} suffix="%" onChange={(value) => onChange('remoteRecordingGain', value / 100)} />
         </div>

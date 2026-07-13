@@ -4,10 +4,47 @@ import { useEffect, useRef, useState } from 'react';
 import { VOICE_AUDIO_CONFIG } from '@/config/voiceAudioConfig';
 
 const DEBUG = process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_ENABLE_VOICE_DEBUG === 'true';
+const MAX_REMOTE_VOLUME = VOICE_AUDIO_CONFIG.maxRemotePlaybackGain ?? 2;
+
+function clampRemoteVolume(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.max(0, Math.min(MAX_REMOTE_VOLUME, numeric));
+}
+
+function getAudioContextConstructor() {
+  if (typeof window === 'undefined') return null;
+  return window.AudioContext || window.webkitAudioContext || null;
+}
+
+function createRemotePlaybackGraph(stream) {
+  const AudioContextConstructor = getAudioContextConstructor();
+  if (!AudioContextConstructor) return null;
+
+  const context = new AudioContextConstructor();
+  const sourceNode = context.createMediaStreamSource(stream);
+  const gainNode = context.createGain();
+  const destinationNode = context.createMediaStreamDestination();
+
+  sourceNode.connect(gainNode);
+  gainNode.connect(destinationNode);
+
+  return {
+    context,
+    gainNode,
+    stream: destinationNode.stream,
+    cleanup() {
+      sourceNode.disconnect();
+      gainNode.disconnect();
+      context.close?.().catch(() => {});
+    },
+  };
+}
 
 function RemoteAudio({ userId, stream, deafen = false, outputDeviceId = '', volume = 1, onBlocked }) {
   const audioRef = useRef(null);
   const streamRef = useRef(null);
+  const graphRef = useRef(null);
 
   // Effect 1: Stream setup — only runs when the actual stream reference changes.
   // Removing srcObject or pausing on deafen toggle destroys playback permanently.
@@ -18,7 +55,10 @@ function RemoteAudio({ userId, stream, deafen = false, outputDeviceId = '', volu
     // Only re-assign srcObject if the stream identity changed
     if (streamRef.current !== stream) {
       streamRef.current = stream;
-      audio.srcObject = stream;
+      graphRef.current?.cleanup();
+      graphRef.current = createRemotePlaybackGraph(stream);
+      audio.__voiceAudioContext = graphRef.current?.context || null;
+      audio.srcObject = graphRef.current?.stream || stream;
       if (DEBUG) {
         console.info('[Voice/Audio] attached remote stream', {
           userId,
@@ -29,7 +69,10 @@ function RemoteAudio({ userId, stream, deafen = false, outputDeviceId = '', volu
       }
     }
 
-    const playPromise = audio.play();
+    const resumePromise = audio.__voiceAudioContext?.state === 'suspended'
+      ? audio.__voiceAudioContext.resume?.()
+      : null;
+    const playPromise = Promise.resolve(resumePromise).then(() => audio.play());
     if (playPromise?.catch) {
       playPromise.catch((error) => {
         if (DEBUG) console.warn('[Voice/Audio] play blocked', userId, error.message);
@@ -42,6 +85,9 @@ function RemoteAudio({ userId, stream, deafen = false, outputDeviceId = '', volu
       // NOT when deafen/volume/outputDevice change
       if (streamRef.current === stream) {
         streamRef.current = null;
+        graphRef.current?.cleanup();
+        graphRef.current = null;
+        audio.__voiceAudioContext = null;
         audio.pause();
         audio.srcObject = null;
       }
@@ -59,16 +105,28 @@ function RemoteAudio({ userId, stream, deafen = false, outputDeviceId = '', volu
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    const nextVolume = clampRemoteVolume(volume);
     const wasDeafened = audio.muted;
     audio.muted = Boolean(deafen);
-    audio.volume = Math.max(0, Math.min(1, Number(volume)));
+    if (graphRef.current?.gainNode) {
+      graphRef.current.gainNode.gain.setTargetAtTime(
+        nextVolume,
+        graphRef.current.context.currentTime,
+        0.01
+      );
+      audio.volume = 1;
+    } else {
+      audio.volume = Math.min(1, nextVolume);
+    }
 
     // When undeafening (deafen goes from true → false), browser may have
     // paused the audio element. Explicitly resume playback.
     if (!deafen && wasDeafened && audio.paused) {
-      audio.play().catch(() => {
+      Promise.resolve(audio.__voiceAudioContext?.resume?.())
+        .then(() => audio.play())
+        .catch(() => {
         // Autoplay blocked — handled by the "Enable audio" button in RemoteAudioRenderer
-      });
+        });
     }
   }, [deafen, volume]);
 
@@ -94,7 +152,9 @@ export default function RemoteAudioRenderer({ remoteStreams, settings = {} }) {
   const unlockAudio = () => {
     setBlocked(false);
     document.querySelectorAll('audio').forEach((audio) => {
-      audio.play?.().catch(() => setBlocked(true));
+      Promise.resolve(audio.__voiceAudioContext?.resume?.())
+        .then(() => audio.play?.())
+        .catch(() => setBlocked(true));
     });
   };
 

@@ -137,7 +137,7 @@ function VoiceParticipant({
             <input
               type="range"
               min="0"
-              max="100"
+              max="200"
               value={Math.round(volume * 100)}
               onChange={(event) => onVolumeChange(Number(event.target.value) / 100)}
               className="h-1 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-blue-500 dark:bg-slate-600"
