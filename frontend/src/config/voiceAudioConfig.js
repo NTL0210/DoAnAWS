@@ -41,6 +41,7 @@ export const VOICE_AUDIO_CONFIG = {
   dtx: 'disabled',
   senderDtx: 'disabled',
   remoteDefaultVolume: 1,
+  maxRemotePlaybackGain: 2,
 };
 
 export const VOICE_NOISE_SUPPRESSION_MODES = [
