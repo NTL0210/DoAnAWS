@@ -6,21 +6,14 @@
  * @module services/apiClient
  */
 
-const APP_MODE = getAppMode();
-
-function getAppMode() {
-  if (typeof process !== 'undefined') {
-    return process.env.NEXT_PUBLIC_APP_MODE || 'cloud';
-  }
-  return 'cloud';
-}
+import { cloudDeploymentConfig } from '@/config/cloudDeploymentConfig';
 
 /**
  * Check if the app is running in cloud (API Gateway) mode.
  * @returns {boolean}
  */
 export function isCloudMode() {
-  return APP_MODE === 'cloud';
+  return true;
 }
 
 /**
@@ -40,10 +33,7 @@ export function getApiBaseUrl() {
  * @returns {string}
  */
 export function getApiGatewayUrl() {
-  if (typeof process !== 'undefined') {
-    return process.env.NEXT_PUBLIC_API_GATEWAY_URL || '';
-  }
-  return '';
+  return cloudDeploymentConfig.apiGatewayUrl;
 }
 
 // ─── Token Management ─────────────────────────────────

@@ -2,12 +2,12 @@
 
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { io } from 'socket.io-client';
-import { getAuthToken } from '@/services/apiClient';
+import { getAuthToken, isCloudMode } from '@/services/apiClient';
 
 function isCloudModeNoSignalingUrl() {
   if (process.env.NEXT_PUBLIC_VOICE_SERVER_URL) return false;
   if (process.env.NEXT_PUBLIC_SIGNALING_URL) return false;
-  return typeof process !== 'undefined' && process.env.NEXT_PUBLIC_APP_MODE === 'cloud';
+  return isCloudMode();
 }
 
 function getDefaultSignalingUrl() {

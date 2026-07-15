@@ -1,12 +1,10 @@
-/**
- * Runtime Configuration - API Gateway and Cognito settings.
- */
+import { cloudDeploymentConfig } from './cloudDeploymentConfig';
+
+/** Runtime configuration for the cloud-only application. */
 
 export const runtimeConfig = {
-  /** @type {'api'|'cloud'} */
-  appMode: (typeof process !== 'undefined'
-    ? process.env.NEXT_PUBLIC_APP_MODE
-    : 'cloud') || 'cloud',
+  /** @type {'cloud'} */
+  appMode: cloudDeploymentConfig.appMode,
 
   /** @type {string} */
   apiBaseUrl: (typeof process !== 'undefined'
@@ -14,14 +12,10 @@ export const runtimeConfig = {
     : '/api') || '/api',
 
   /** @type {string} */
-  apiGatewayUrl: (typeof process !== 'undefined'
-    ? process.env.NEXT_PUBLIC_API_GATEWAY_URL
-    : '') || '',
+  apiGatewayUrl: cloudDeploymentConfig.apiGatewayUrl,
 
   /** @type {boolean} Enable CloudFront/Cognito integration */
-  enableCloudAuth: (typeof process !== 'undefined'
-    ? process.env.NEXT_PUBLIC_ENABLE_CLOUD_AUTH
-    : 'false') === 'true',
+  enableCloudAuth: true,
 };
 
 /**
@@ -29,7 +23,7 @@ export const runtimeConfig = {
  * @returns {boolean}
  */
 export function isApiMode() {
-  return runtimeConfig.appMode === 'api';
+  return false;
 }
 
 /**
@@ -37,7 +31,7 @@ export function isApiMode() {
  * @returns {boolean}
  */
 export function isCloudMode() {
-  return runtimeConfig.appMode === 'cloud';
+  return true;
 }
 
 export default runtimeConfig;
