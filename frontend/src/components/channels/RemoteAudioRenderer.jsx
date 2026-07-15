@@ -46,6 +46,11 @@ function RemoteAudio({ userId, stream, deafen = false, outputDeviceId = '', volu
   const streamRef = useRef(null);
   const graphRef = useRef(null);
 
+  const cleanupPlaybackGraph = () => {
+    graphRef.current?.cleanup();
+    graphRef.current = null;
+  };
+
   // Effect 1: Stream setup — only runs when the actual stream reference changes.
   // Removing srcObject or pausing on deafen toggle destroys playback permanently.
   useEffect(() => {
@@ -55,10 +60,9 @@ function RemoteAudio({ userId, stream, deafen = false, outputDeviceId = '', volu
     // Only re-assign srcObject if the stream identity changed
     if (streamRef.current !== stream) {
       streamRef.current = stream;
-      graphRef.current?.cleanup();
-      graphRef.current = createRemotePlaybackGraph(stream);
-      audio.__voiceAudioContext = graphRef.current?.context || null;
-      audio.srcObject = graphRef.current?.stream || stream;
+      cleanupPlaybackGraph();
+      audio.__voiceAudioContext = null;
+      audio.srcObject = stream;
       if (DEBUG) {
         console.info('[Voice/Audio] attached remote stream', {
           userId,
@@ -85,8 +89,7 @@ function RemoteAudio({ userId, stream, deafen = false, outputDeviceId = '', volu
       // NOT when deafen/volume/outputDevice change
       if (streamRef.current === stream) {
         streamRef.current = null;
-        graphRef.current?.cleanup();
-        graphRef.current = null;
+        cleanupPlaybackGraph();
         audio.__voiceAudioContext = null;
         audio.pause();
         audio.srcObject = null;
@@ -108,14 +111,26 @@ function RemoteAudio({ userId, stream, deafen = false, outputDeviceId = '', volu
     const nextVolume = clampRemoteVolume(volume);
     const wasDeafened = audio.muted;
     audio.muted = Boolean(deafen);
-    if (graphRef.current?.gainNode) {
-      graphRef.current.gainNode.gain.setTargetAtTime(
-        nextVolume,
-        graphRef.current.context.currentTime,
-        0.01
-      );
+    if (nextVolume > 1 && streamRef.current) {
+      if (!graphRef.current) {
+        graphRef.current = createRemotePlaybackGraph(streamRef.current);
+        audio.__voiceAudioContext = graphRef.current?.context || null;
+        audio.srcObject = graphRef.current?.stream || streamRef.current;
+      }
+      if (graphRef.current?.gainNode) {
+        graphRef.current.gainNode.gain.setTargetAtTime(
+          nextVolume,
+          graphRef.current.context.currentTime,
+          0.01
+        );
+      }
       audio.volume = 1;
     } else {
+      if (graphRef.current && streamRef.current) {
+        cleanupPlaybackGraph();
+        audio.__voiceAudioContext = null;
+        audio.srcObject = streamRef.current;
+      }
       audio.volume = Math.min(1, nextVolume);
     }
 
