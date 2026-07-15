@@ -9,6 +9,7 @@
  */
 
 import { getAuthToken } from '@/services/apiClient';
+import { cloudDeploymentConfig } from '@/config/cloudDeploymentConfig';
 
 const DEBUG = process.env.NODE_ENV === 'development';
 const DEFAULT_API_STAGE = 'prod';
@@ -186,7 +187,7 @@ export async function fetchIceServersFromApi() {
 }
 
 function buildIceServersUrl() {
-  const configured = String(process.env.NEXT_PUBLIC_API_GATEWAY_URL || '').trim().replace(/\/+$/, '');
+  const configured = String(cloudDeploymentConfig.apiGatewayUrl || '').trim().replace(/\/+$/, '');
   const prefix = normalizeApiPrefix(process.env.NEXT_PUBLIC_API_GATEWAY_API_PREFIX);
   const path = `${prefix}/voice/ice-servers`;
   if (!configured) return path;

@@ -4,10 +4,10 @@
  * Only configures Amplify when Cognito env vars are populated.
  */
 
-const userPoolId =
-  (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID : '') || '';
-const userPoolClientId =
-  (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID : '') || '';
+import { cloudDeploymentConfig } from '@/config/cloudDeploymentConfig';
+
+const userPoolId = cloudDeploymentConfig.cognitoUserPoolId;
+const userPoolClientId = cloudDeploymentConfig.cognitoClientId;
 
 if (userPoolId && userPoolClientId) {
   // Dynamic import keeps Amplify out of bundles that do not configure Cognito.

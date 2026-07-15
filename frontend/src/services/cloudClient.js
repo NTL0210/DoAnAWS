@@ -8,6 +8,7 @@
  */
 
 import { getAuthToken, clearAuthToken } from './apiClient';
+import { cloudDeploymentConfig } from '@/config/cloudDeploymentConfig';
 
 const DEFAULT_API_STAGE = 'prod';
 const DEFAULT_API_PREFIX = '/api/v1';
@@ -34,6 +35,10 @@ function getApiPrefix() {
 }
 
 function buildUrl(path) {
+  if (!BASE_URL) {
+    throw new CloudError('Cloud API endpoint is not configured.', 'CONFIG_ERROR', 500);
+  }
+
   const normalizedPath = String(path || '').startsWith('/') ? path : `/${path || ''}`;
   const apiPath = normalizedPath.startsWith('/api/') || !API_PREFIX
     ? normalizedPath
@@ -57,7 +62,7 @@ async function readJson(response) {
   }
 }
 
-const RAW_BASE_URL = process.env.NEXT_PUBLIC_API_GATEWAY_URL;
+const RAW_BASE_URL = cloudDeploymentConfig.apiGatewayUrl;
 const BASE_URL = normalizeBaseUrl(RAW_BASE_URL);
 const API_PREFIX = getApiPrefix();
 
