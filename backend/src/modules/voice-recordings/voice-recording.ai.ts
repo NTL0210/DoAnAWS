@@ -27,6 +27,12 @@ interface AnalysisOptions {
   referenceDate?: string | undefined;
 }
 
+type TaskCandidate = {
+  title?: string | undefined;
+  description?: string | undefined;
+  sourceQuote?: string | undefined;
+};
+
 export function getVoiceRecordingBucket(): string {
   const bucket = env.VOICE_RECORDINGS_BUCKET || env.AUDIO_BUCKET;
   if (!bucket) throw new Error("VOICE_RECORDINGS_BUCKET or AUDIO_BUCKET is required");
@@ -119,18 +125,27 @@ export async function analyzeStoredAudio(input: { storageKey: string; mimeType: 
   if (buffer.length === 0) throw new Error("Meeting file is empty");
 
   if (isTextInput(input.mimeType, input.storageKey)) {
-    return analyzeTranscriptText(buffer.toString("utf8"));
+    return analyzeTranscriptText(decodeTranscriptBuffer(buffer), { referenceDate: input.referenceDate });
   }
 
   const geminiMimeType = toGeminiMimeType(input.mimeType, input.storageKey);
   const fileUri = await uploadToGemini(buffer, geminiMimeType, input.storageKey);
-  const raw = await callGeminiWithFile(fileUri, geminiMimeType, audioPrompt(input.referenceDate));
-  return ensureActionableAnalysis(normalizeGeminiJson(raw), "", input.referenceDate);
+  try {
+    const transcript = await transcribeAudioWithGemini(fileUri, geminiMimeType);
+    const analysis = await analyzeTranscriptText(transcript, { referenceDate: input.referenceDate });
+    // Preserve the dedicated transcript; the second pass only extracts execution data.
+    return { ...analysis, transcript };
+  } catch {
+    // Keep the existing one-pass path available if the provider rejects a
+    // dedicated transcription request.
+    const raw = await callGeminiWithFile(fileUri, geminiMimeType, audioPrompt(input.referenceDate));
+    return ensureActionableAnalysis(normalizeGeminiJson(raw), "", input.referenceDate);
+  }
 }
 
 export async function analyzeTranscriptText(transcriptText: string, options: AnalysisOptions = {}): Promise<VoiceAnalysisResult> {
   if (!env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is required");
-  const trimmed = transcriptText.trim();
+  const trimmed = normalizeTranscriptText(transcriptText).trim();
   if (!trimmed) return emptyAnalysis();
   const referenceDate = resolveReferenceDate(trimmed, options.referenceDate);
   const raw = await callGeminiWithText(textPrompt(trimmed, referenceDate));
@@ -193,7 +208,12 @@ async function waitForGeminiFile(fileName: string): Promise<void> {
   throw new Error("Gemini file processing timed out");
 }
 
-async function callGeminiWithFile(fileUri: string, mimeType: string, prompt: string): Promise<string> {
+async function callGeminiWithFile(
+  fileUri: string,
+  mimeType: string,
+  prompt: string,
+  generation: { temperature?: number; maxOutputTokens?: number } = {},
+): Promise<string> {
   const model = env.GEMINI_MODEL || "gemini-2.5-flash";
   const response = await fetchGeminiGeneration(`${geminiBase}/${model}:generateContent?key=${env.GEMINI_API_KEY}`, {
     method: "POST",
@@ -205,7 +225,11 @@ async function callGeminiWithFile(fileUri: string, mimeType: string, prompt: str
           { text: prompt },
         ],
       }],
-      generationConfig: { temperature: 0.15, maxOutputTokens: 8192, responseMimeType: "application/json" },
+      generationConfig: {
+        temperature: generation.temperature ?? 0.15,
+        maxOutputTokens: generation.maxOutputTokens ?? 8192,
+        responseMimeType: "application/json",
+      },
     }),
   });
   if (!response.ok) {
@@ -217,6 +241,16 @@ async function callGeminiWithFile(fileUri: string, mimeType: string, prompt: str
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error("Gemini returned empty response");
   return text;
+}
+
+async function transcribeAudioWithGemini(fileUri: string, mimeType: string): Promise<string> {
+  const raw = await callGeminiWithFile(fileUri, mimeType, transcriptionPrompt(), {
+    temperature: 0,
+    maxOutputTokens: 16384,
+  });
+  const transcript = normalizeGeminiJson(raw).transcript.trim();
+  if (!transcript) throw new Error("Gemini returned an empty transcription");
+  return transcript;
 }
 
 async function callGeminiWithText(prompt: string): Promise<string> {
@@ -266,20 +300,20 @@ function normalizeGeminiJson(raw: string): VoiceAnalysisResult {
   }
   if (!isRecord(parsed)) return emptyAnalysis();
   return {
-    transcript: stringValue(parsed.transcript),
-    summary: stringValue(parsed.summary),
-    keyDecisions: stringArray(parsed.keyDecisions),
-    actionItems: stringArray(parsed.actionItems),
-    risks: stringArray(parsed.risks),
+    transcript: normalizeTranscriptText(stringValue(parsed.transcript)),
+    summary: normalizeTranscriptText(stringValue(parsed.summary)),
+    keyDecisions: stringArray(parsed.keyDecisions).map(normalizeTranscriptText),
+    actionItems: stringArray(parsed.actionItems).map(normalizeTranscriptText),
+    risks: stringArray(parsed.risks).map(normalizeTranscriptText),
     tasks: Array.isArray(parsed.tasks)
       ? parsed.tasks.filter(isRecord).map((task) => ({
-          title: stringValue(task.title),
-          description: stringValue(task.description),
-          assignee: stringValue(task.assignee),
+          title: normalizeTranscriptText(stringValue(task.title)),
+          description: normalizeTranscriptText(stringValue(task.description)),
+          assignee: normalizeTranscriptText(stringValue(task.assignee)),
           priority: stringValue(task.priority),
           deadline: stringValue(task.deadline),
-          sourceQuote: stringValue(task.sourceQuote),
-          reason: stringValue(task.reason),
+          sourceQuote: normalizeTranscriptText(stringValue(task.sourceQuote)),
+          reason: normalizeTranscriptText(stringValue(task.reason)),
         }))
       : [],
   };
@@ -289,15 +323,21 @@ function emptyAnalysis(): VoiceAnalysisResult {
   return { transcript: "", summary: "", keyDecisions: [], actionItems: [], risks: [], tasks: [] };
 }
 
-function executionPromptHeader(referenceDate?: string): string {
+function executionPromptHeader(referenceDate?: string, sourceText?: string): string {
+  const language = sourceText ? detectTranscriptLanguage(sourceText) : undefined;
   return [
     "You are the execution analyst for AI Meeting Workforce Platform.",
     "The user provides only meeting notes, work notes, transcript text, or audio. Do not ask follow-up questions.",
     "Transform the content into execution: synthesized summary, decisions, risks, action items, and task suggestions.",
-    "Output language: Vietnamese. Keep person names exactly as spoken/written.",
+    language
+      ? `Output language: ${language}. Keep every summary, decision, action item, task title, description, reason, and source quote in ${language}. Do not translate the input.`
+      : "Output language: match the primary language spoken in the input. Do not translate the input.",
+    "Keep person names exactly as spoken/written.",
     referenceDate ? `Reference date for relative deadlines: ${referenceDate}.` : "No reliable reference date is available for relative deadlines.",
     "Do not copy the transcript as the summary. The summary must be 3-6 synthesized sentences.",
     "Extract concrete work only. Ignore small talk unless it creates a risk or task.",
+    "Create a task only for an explicit delegation or commitment with a concrete work verb and an assignee, a due date, or a direct request. Do not create tasks for questions, discussion topics, decisions, status updates, acknowledgements, or deferred work.",
+    "Each task must include an exact short sourceQuote from the transcript. Combine duplicate mentions into one task and do not target a fixed number of tasks.",
     "If the content has no work, decision, risk, deadline, or assignment, keep tasks, actionItems, keyDecisions, and risks as empty arrays.",
     "For each task, infer assignee from explicit assignment, speaker context, or responsibility phrase. Leave empty only if unclear.",
     "Use priority HIGH for blockers, customer escalations, login/auth failures, budget/credit risk, deadlines, production issues, or VIP customers.",
@@ -334,7 +374,7 @@ function ensureActionableAnalysis(analysis: VoiceAnalysisResult, fallbackTranscr
       transcript,
       summary: isUsefulSummary(analysis.summary, transcript)
         ? analysis.summary.trim()
-        : "No work-related action items were detected in this audio/transcript. The transcript is preserved for review.",
+        : noWorkSummary(transcript),
       keyDecisions: [],
       actionItems: [],
       risks: [],
@@ -343,7 +383,7 @@ function ensureActionableAnalysis(analysis: VoiceAnalysisResult, fallbackTranscr
   }
   const local = buildLocalActionableAnalysis(transcript);
   const summary = isUsefulSummary(analysis.summary, transcript) ? analysis.summary.trim() : local.summary;
-  const tasks = analysis.tasks
+  const tasks = filterActionableTaskCandidates(analysis.tasks
     .filter((task) => (task.title || task.description || "").trim())
     .map((task, index) => ({
       title: task.title || local.tasks[index]?.title || `Task ${index + 1}`,
@@ -353,7 +393,7 @@ function ensureActionableAnalysis(analysis: VoiceAnalysisResult, fallbackTranscr
       deadline: normalizeDeadline(task.deadline || local.tasks[index]?.deadline || "", task.sourceQuote || task.description || task.title || "", transcript, referenceDate),
       sourceQuote: task.sourceQuote || local.tasks[index]?.sourceQuote || task.description || task.title || "",
       reason: task.reason || local.tasks[index]?.reason || "Extracted from meeting content",
-    }));
+    })), transcript);
 
   return {
     transcript,
@@ -375,8 +415,15 @@ function isUsefulSummary(summary: string, transcript: string): boolean {
   return cleanSummary.length < transcript.length * 0.55;
 }
 
+function noWorkSummary(transcript: string): string {
+  return detectTranscriptLanguage(transcript) === "Vietnamese"
+    ? "Khong phat hien dau viec can xu ly trong noi dung nay. Transcript duoc giu lai de review."
+    : "No work-related action items were detected in this audio/transcript. The transcript is preserved for review.";
+}
+
 function buildLocalActionableAnalysis(transcript: string): VoiceAnalysisResult {
   if (!transcript.trim()) return emptyAnalysis();
+  const language = detectTranscriptLanguage(transcript);
   const lines = transcript
     .split(/\n+|(?<=[.!?])\s+/)
     .map((line) => line.trim())
@@ -387,22 +434,26 @@ function buildLocalActionableAnalysis(transcript: string): VoiceAnalysisResult {
   const decisionLines = actionableLines.filter((line) => hasDecisionSignal(line)).slice(0, 6);
   const riskLines = actionableLines.filter((line) => hasRiskSignal(line)).slice(0, 6);
   const selected = actionLines.slice(0, 12);
-  const tasks = selected.map((line, index) => ({
+  const tasks = filterActionableTaskCandidates(selected.map((line, index) => ({
     title: toLocalTaskTitle(line, index),
     description: stripSpeaker(line),
     assignee: inferAssigneeName(line),
     priority: inferLocalPriority(line),
     deadline: "",
     sourceQuote: line.slice(0, 280),
-    reason: "Detected action wording in the meeting content",
-  }));
+    reason: language === "Vietnamese" ? "Phat hien giao viec ro rang trong noi dung cuoc hop" : "Detected explicit action wording in the meeting content",
+  })), transcript);
 
   const themes = inferThemes(lines);
-  const summary = themes.length
-    ? `Cuoc hop ghi nhan cac chu de chinh: ${themes.join(", ")}. Nhung viec can xu ly tiep theo gom ${tasks.slice(0, 4).map((task) => task.title).join("; ")}.`
-    : tasks.length
-      ? `Cuoc hop co ${lines.length} y noi dung va ${tasks.length} viec can theo doi. Nen review lai cac task duoc de xuat truoc khi tao cong viec chinh thuc.`
-      : "No work-related action items were detected in this audio/transcript. The transcript is preserved for review.";
+  const summary = language === "English"
+    ? tasks.length
+      ? `The meeting contains ${lines.length} discussion points and ${tasks.length} actionable follow-ups. Review the suggestions before creating official tasks.`
+      : noWorkSummary(transcript)
+    : themes.length
+      ? `Cuoc hop ghi nhan cac chu de chinh: ${themes.join(", ")}. Nhung viec can xu ly tiep theo gom ${tasks.slice(0, 4).map((task) => task.title).join("; ")}.`
+      : tasks.length
+        ? `Cuoc hop co ${lines.length} y noi dung va ${tasks.length} viec can theo doi. Nen review lai cac task duoc de xuat truoc khi tao cong viec chinh thuc.`
+        : noWorkSummary(transcript);
 
   return {
     transcript,
@@ -435,6 +486,56 @@ function hasActionSignal(line: string): boolean {
   return /\b(can|phai|deadline|truoc|fix|review|chuan bi|thong bao|check|goi|follow up|demo|cap|set|doi|viet|tao|update|chot|ping|bao|xu ly|lam|gui)\b/.test(text)
     || /\bhoi\s+(gia|y kien|vendor|sep|s3|quyen|khach|doi tac)\b/.test(text)
     || /\b(need|needs|must|should|todo|task|prepare|send|create|update|review|finish|call|ask|notify|follow up|fix|demo)\b/.test(text);
+}
+
+/** Keeps task cards limited to explicit, evidenced work from the meeting. */
+export function filterActionableTaskCandidates<T extends TaskCandidate>(tasks: T[], transcript: string): T[] {
+  const seen = new Set<string>();
+  return tasks.filter((task) => {
+    if (!isActionableTaskCandidate(task, transcript)) return false;
+    const key = normalizeText(task.title || task.description || task.sourceQuote || "").replace(/\b(task|viec|cong viec)\b/g, "");
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function isActionableTaskCandidate(task: TaskCandidate, transcript: string): boolean {
+  const evidence = (task.sourceQuote || task.description || task.title || "").trim();
+  if (!evidence || !hasTranscriptEvidence(evidence, transcript)) return false;
+
+  const text = normalizeText(evidence);
+  if (isNoWorkStatement(evidence) || isStatusUpdate(text)) return false;
+
+  const actionPattern = "fix|review|chuan bi|thong bao|check|goi|follow up|demo|cap|set|doi|viet|tao|update|ping|xu ly|lam|gui|nghien cuu|phan quyen|ghi|day|upload";
+  const hasWorkVerb = new RegExp(`\\b(?:${actionPattern})\\b`).test(text);
+  if (!hasWorkVerb) return false;
+
+  const assignedAction = new RegExp(`(?:^|[\\s\\]])(?:anh|chi|em|ban)?\\s*[a-z]{2,20}\\s+(?:${actionPattern})\\b`).test(text);
+  const taskCue = /\b(hay|nho|giup|nha|truoc|hom nay|tuan|deadline|xong|ping|demo|gui|cap quyen|tao|set)\b/.test(text);
+  const questionOnly = /\?|\b(cho .* hoi|co .* khong|hay .* khong|sao anh)\b/.test(text) && !assignedAction && !taskCue;
+  if (questionOnly) return false;
+
+  const decisionOnly = /\b(giu|quyet dinh|uu tien|tam dung|de .* sprint sau|tap trung)\b/.test(text) && !assignedAction && !taskCue;
+  return !decisionOnly && (assignedAction || taskCue);
+}
+
+function hasTranscriptEvidence(evidence: string, transcript: string): boolean {
+  const normalizedEvidence = normalizeText(evidence);
+  const normalizedTranscript = normalizeText(transcript);
+  if (!normalizedEvidence || !normalizedTranscript) return false;
+  if (normalizedTranscript.includes(normalizedEvidence)) return true;
+
+  const ignored = new Set(["anh", "chi", "em", "ban", "minh", "voi", "cho", "cua", "the", "nay", "mot", "cac", "phan"]);
+  const terms = [...new Set(normalizedEvidence.split(/[^a-z0-9]+/).filter((term) => term.length >= 2 && !ignored.has(term)))];
+  if (terms.length < 2) return false;
+  const matches = terms.filter((term) => normalizedTranscript.includes(term)).length;
+  const minimum = terms.length <= 3 ? 2 : Math.max(3, Math.ceil(terms.length / 2));
+  return matches >= minimum;
+}
+
+function isStatusUpdate(text: string): boolean {
+  return /\b(da xong|gan xong|dang lam|van lam|da lam|da xu ly)\b/.test(text);
 }
 
 function hasDecisionSignal(line: string): boolean {
@@ -519,12 +620,20 @@ function normalizeDeadline(value: string, source: string, transcript: string, re
   const generated = parseIsoDate(deadline);
   if (!generated) return "";
 
-  if (hasAbsoluteDeadlineEvidence(evidence)) return deadline;
+  if (hasAbsoluteDeadlineEvidence(evidence)) return isFutureOrToday(deadline) ? deadline : "";
   if (!hasRelativeDeadlineEvidence(evidence)) return "";
 
   if (!reference) return "";
   const diffDays = Math.round((generated.getTime() - reference.getTime()) / 86400000);
-  return diffDays >= 0 && diffDays <= 45 ? deadline : "";
+  return diffDays >= 0 && diffDays <= 45 && isFutureOrToday(deadline) ? deadline : "";
+}
+
+function isFutureOrToday(value: string): boolean {
+  const date = parseIsoDate(value);
+  if (!date) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return date.getTime() >= today.getTime();
 }
 
 function resolveReferenceDate(transcript: string, fallback?: string): string | undefined {
@@ -624,7 +733,9 @@ function toIsoDate(day: number, month: number, year: number): string | undefined
 }
 
 function audioPrompt(referenceDate?: string): string {
-  return executionPromptHeader(referenceDate);
+  return `${executionPromptHeader(referenceDate)}
+
+Listen to the whole audio carefully before producing JSON. Transcribe the spoken language faithfully, preserve names and technical terms, then produce the execution analysis in that same language.`;
   return `Bạn là trợ lý phân tích cuộc họp. Hãy nghe file audio và thực hiện:
 
 1. Transcribe toàn bộ nội dung bằng tiếng Việt (giữ nguyên speaker nếu phân biệt được)
@@ -646,8 +757,19 @@ CHỈ trả về JSON:
 }`;
 }
 
+function transcriptionPrompt(): string {
+  return [
+    "You are a precise multilingual meeting transcription engine.",
+    "Listen to the entire audio before responding. Return a faithful, complete transcription only.",
+    "Keep the language actually spoken. Do not translate Vietnamese to English or English to Vietnamese.",
+    "Preserve Vietnamese diacritics, names, numbers, and technical terms such as Cognito, LiveKit, DynamoDB, S3, WebSocket, and VNPay.",
+    "Use speaker labels only when the speaker is clear. Do not summarize, omit sentences, or invent words; write [unclear] for unintelligible speech.",
+    "Return valid JSON only: {\"transcript\": \"full verbatim transcript in the spoken language\"}",
+  ].join("\n");
+}
+
 function textPrompt(transcriptText: string, referenceDate?: string): string {
-  return `${executionPromptHeader(referenceDate)}
+  return `${executionPromptHeader(referenceDate, transcriptText)}
 
 Transcript:
 ${transcriptText}`;
@@ -681,6 +803,63 @@ HƯỚNG DẪN QUAN TRỌNG:
 
 Transcript:
 ${transcriptText}`;
+}
+
+export function decodeTranscriptBuffer(buffer: Uint8Array): string {
+  const candidates = [
+    decodeWithEncoding(buffer, "utf-8"),
+    decodeWithEncoding(buffer, "windows-1258"),
+    decodeWithEncoding(buffer, "windows-1252"),
+  ].filter((value): value is string => value !== null);
+  const best = candidates.reduce((current, candidate) => (
+    textQuality(candidate) > textQuality(current) ? candidate : current
+  ), candidates[0] || "");
+  return normalizeTranscriptText(best);
+}
+
+export function normalizeTranscriptText(value: string): string {
+  return repairCommonMojibake(String(value || ""))
+    .normalize("NFC")
+    .replace(/\r\n?/g, "\n");
+}
+
+export function detectTranscriptLanguage(value: string): "Vietnamese" | "English" {
+  const original = String(value || "");
+  if (/[ăâđêôơưà-ỹ]/i.test(original)) return "Vietnamese";
+
+  const text = normalizeText(original);
+  const vietnameseWords = text.match(/\b(va|la|cho|khong|duoc|trong|voi|can|phai|nhung|mot|nguoi|ngay|tuan|thang|hop|viec|giao|lam|gui)\b/g)?.length || 0;
+  const englishWords = text.match(/\b(the|and|for|with|this|that|need|will|should|task|meeting|review|please|before|next|week)\b/g)?.length || 0;
+  return vietnameseWords > englishWords ? "Vietnamese" : "English";
+}
+
+function decodeWithEncoding(buffer: Uint8Array, encoding: string): string | null {
+  try {
+    return new TextDecoder(encoding, { fatal: false }).decode(buffer);
+  } catch {
+    return null;
+  }
+}
+
+function textQuality(value: string): number {
+  const invalid = (value.match(/[\uFFFD]/g) || []).length;
+  const mojibake = (value.match(/(?:Ã.|Â.|â.|Ä.|á»)/g) || []).length;
+  const vietnamese = (value.match(/[ăâđêôơưà-ỹ]/gi) || []).length;
+  return value.length + vietnamese * 4 - invalid * 80 - mojibake * 12;
+}
+
+function repairCommonMojibake(value: string): string {
+  if (!/(?:Ã.|Â.|â.|Ä.|á»)/.test(value)) return value;
+  const windows1252 = new Map<number, number>([[0x20AC, 0x80], [0x201A, 0x82], [0x201E, 0x84], [0x2026, 0x85], [0x2013, 0x96], [0x2014, 0x97], [0x2018, 0x91], [0x2019, 0x92], [0x201C, 0x93], [0x201D, 0x94], [0x2122, 0x99]]);
+  const bytes: number[] = [];
+  for (const char of value) {
+    const code = char.codePointAt(0) || 0;
+    const byte = code <= 0xFF ? code : windows1252.get(code);
+    if (byte === undefined) return value;
+    bytes.push(byte);
+  }
+  const candidate = Buffer.from(bytes).toString("utf8");
+  return textQuality(candidate) > textQuality(value) ? candidate : value;
 }
 
 function extensionForMime(mimeType: string): string {

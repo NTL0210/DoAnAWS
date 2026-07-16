@@ -370,10 +370,6 @@ export async function postProcess(event) {
     return badRequest('Meeting ID is required');
   }
 
-  if (authUser.role === 'EMPLOYEE') {
-    return badRequest('Only managers and admins can process meetings', 'FORBIDDEN');
-  }
-
   // Fetch meeting
   const record = await db.getItem({
     PK: pk(ENTITY.MEETING, resourceId),
@@ -383,6 +379,13 @@ export async function postProcess(event) {
 
   if (!meeting) {
     return notFound('Meeting not found');
+  }
+
+  // A meeting creator can review their own uploaded transcript even when their
+  // account-level role is Employee. Workspace owners/managers remain covered
+  // by the existing non-Employee path.
+  if (authUser.role === 'EMPLOYEE' && meeting.createdBy !== authUser.userId) {
+    return badRequest('Only the meeting creator, managers, and admins can process meetings', 'FORBIDDEN');
   }
 
   if (meeting.status !== 'UPLOADED') {

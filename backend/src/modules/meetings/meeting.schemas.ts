@@ -4,6 +4,7 @@ export const meetingStatusSchema = z.enum([
   "UPLOADED",
   "PROCESSING",
   "AI_REVIEW_READY",
+  "TASKS_GENERATED",
   "COMPLETED",
   "FAILED"
 ]);
@@ -26,7 +27,23 @@ export const updateMeetingSchema = z.object({
   keyDecisions: z.array(z.string().max(1_000)).optional(),
   risks: z.array(z.string().max(1_000)).optional(),
   actionItems: z.array(z.string().max(1_000)).optional(),
-  expectedVersion: z.coerce.number().int().positive()
+  suggestedTasks: z.array(z.object({
+    id: z.string().min(1),
+    title: z.string().min(1).max(200),
+    description: z.string().max(5_000).default(""),
+    assigneeId: z.string().min(1).nullable().optional().default(null),
+    assignee: z.string().max(200).optional(),
+    teamId: z.string().min(1).nullable().optional(),
+    startDate: z.string().date().nullable().optional(),
+    priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).default("MEDIUM"),
+    deadline: z.string().date().nullable().optional().default(null),
+    confidence: z.coerce.number().min(0).max(1).default(0.5),
+    approved: z.boolean().optional(),
+    sourceQuote: z.string().max(10_000).optional(),
+    reason: z.string().max(2_000).optional(),
+  }).passthrough()).optional(),
+  generatedTaskIds: z.array(z.string().min(1)).optional(),
+  expectedVersion: z.coerce.number().int().positive().optional()
 });
 
 export const createMeetingUploadUrlSchema = z.object({

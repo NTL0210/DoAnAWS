@@ -43,6 +43,7 @@ function toRecord(task) {
     status: task.status || 'TODO',
     priority: task.priority || 'MEDIUM',
     progress: task.progress || 0,
+    startDate: task.startDate || null,
     deadline: task.deadline || null,
     generatedFromAI: Boolean(task.generatedFromAI),
     aiConfidence: task.aiConfidence ?? null,

@@ -28,6 +28,7 @@ export class TaskService {
     const task: Task = {
       id: randomUUID(),
       workspaceId: input.workspaceId,
+      teamId: input.teamId ?? null,
       meetingId: input.meetingId ?? null,
       sourceMeetingId: input.meetingId ?? null,
       title: input.title.trim(),
@@ -37,9 +38,10 @@ export class TaskService {
       priority: input.priority ?? "MEDIUM",
       status: "PENDING",
       progress: 0,
+      startDate: input.startDate ?? null,
       deadline: input.deadline ?? null,
-      generatedFromAI: false,
-      aiConfidence: null,
+      generatedFromAI: input.generatedFromAI ?? false,
+      aiConfidence: input.aiConfidence ?? null,
       version: 1,
       createdAt: now,
       updatedAt: now
@@ -69,6 +71,9 @@ export class TaskService {
         input.patch.assigneeId === undefined
           ? current.assigneeId
           : input.patch.assigneeId,
+      priority: input.patch.priority ?? current.priority,
+      startDate: input.patch.startDate === undefined ? current.startDate : input.patch.startDate,
+      deadline: input.patch.deadline === undefined ? current.deadline : input.patch.deadline,
       version: current.version + 1,
       updatedAt: new Date().toISOString()
     };

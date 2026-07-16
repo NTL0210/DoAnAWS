@@ -9,10 +9,10 @@ export function buildTaskRouter(
   const router = Router();
 
   router.get("/", guard("MEMBER", "ADMIN", "OWNER"), controller.list);
-  router.post("/", guard("ADMIN", "OWNER"), controller.create);
+  router.post("/", guard("ADMIN", "OWNER", "MANAGER"), controller.create);
   router.get("/:id", guard("MEMBER", "ADMIN", "OWNER"), controller.get);
-  router.patch("/:id", guard("ADMIN", "OWNER"), controller.update);
-  router.delete("/:id", guard("ADMIN", "OWNER"), controller.delete);
+  router.patch("/:id", guard("ADMIN", "OWNER", "MANAGER"), controller.update);
+  router.delete("/:id", guard("ADMIN", "OWNER", "MANAGER"), controller.delete);
 
   return router;
 }

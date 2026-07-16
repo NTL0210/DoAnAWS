@@ -45,7 +45,6 @@ export default function WorkspaceMeetingsView() {
     toggleSuggestedTaskSelection,
     removeMeetingSuggestion,
     createTasksFromSuggestions,
-    getTasksByMeeting,
     selectView,
     reAnalyzeMeeting,
   } = useWorkspace();
@@ -78,7 +77,6 @@ export default function WorkspaceMeetingsView() {
     [workspaceMeetings, selectedMeetingId]
   );
 
-  const generatedTasks = selectedMeeting ? getTasksByMeeting(selectedMeeting.id) : [];
   const canManageMeetings = ['OWNER', 'VICE_ADMIN', 'MANAGER'].includes(workspaceRole);
   const billingPlan = getWorkspacePlan(activeWorkspace);
   const billingUsage = getWorkspaceUsageSnapshot({
@@ -171,7 +169,6 @@ export default function WorkspaceMeetingsView() {
       .map((task) => task.id);
     const created = await createTasksFromSuggestions(selectedMeeting.id, selectedIds);
     if (created.length > 0) {
-      setActiveSection('generated');
       selectView('tasks');
     }
   };
@@ -256,7 +253,6 @@ export default function WorkspaceMeetingsView() {
                   workspaceTeams={workspaceTeams}
                   workspaceMembers={workspaceMembers}
                   workspaceTasks={workspaceTasks}
-                  generatedTasks={generatedTasks}
                   activeSection={activeSection}
                   onSectionChange={setActiveSection}
                   onUpdateSuggestion={(suggestionId, patch) => updateSuggestedTask(selectedMeeting.id, suggestionId, patch)}

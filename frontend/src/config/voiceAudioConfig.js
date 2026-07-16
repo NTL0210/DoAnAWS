@@ -23,7 +23,7 @@ export const VOICE_AUDIO_CONFIG = {
   micGain: 1.45,
   localMicMakeupGain: 1.5,
   recordingLocalGain: 1.6,
-  recordingRemoteGain: 1,
+  recordingRemoteGain: 1.35,
   recordingMasterGain: 1,
   maxRecordingGain: 1.8,
   mixedRoomMinHeadroom: 0.65,
