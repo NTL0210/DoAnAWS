@@ -12,6 +12,7 @@
  * @property {string} [assigneeId]
  * @property {'TODO'|'IN_PROGRESS'|'REVIEW'|'COMPLETED'|'CANCELLED'|'OVERDUE'} status
  * @property {'LOW'|'MEDIUM'|'HIGH'|'URGENT'} [priority]
+ * @property {string} [startDate]
  * @property {string} [deadline]
  * @property {number} [progress]
  * @property {boolean} [generatedFromAI]
@@ -55,6 +56,7 @@ export function createTask(data) {
     assigneeId: data.assigneeId || null,
     status: data.status || TASK_STATUSES.TODO,
     priority: data.priority || TASK_PRIORITIES.MEDIUM,
+    startDate: data.startDate || null,
     deadline: data.deadline || null,
     progress: data.progress || 0,
     generatedFromAI: Boolean(data.generatedFromAI),

@@ -29,6 +29,7 @@ export default function KanbanBoard() {
     description: '',
     assigneeId: '',
     priority: 'MEDIUM',
+    startDate: '',
     deadline: '',
   });
   const [visibleByColumn, setVisibleByColumn] = useState({
@@ -74,11 +75,12 @@ export default function KanbanBoard() {
       description: newTask.description.trim(),
       priority: newTask.priority,
       assigneeId: newTask.assigneeId || null,
+      startDate: newTask.startDate || null,
       deadline: newTask.deadline || null,
     };
 
     addWorkspaceTasks([task]);
-    setNewTask({ title: '', description: '', assigneeId: '', priority: 'MEDIUM', deadline: '' });
+    setNewTask({ title: '', description: '', assigneeId: '', priority: 'MEDIUM', startDate: '', deadline: '' });
     setShowCreateTask(false);
   };
 
@@ -196,7 +198,7 @@ export default function KanbanBoard() {
                   onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Priority</label>
                   <select
@@ -213,11 +215,23 @@ export default function KanbanBoard() {
                   </select>
                 </div>
                 <div>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Start date</label>
+                  <input
+                    id="task-start-date"
+                    name="taskStartDate"
+                    type="date"
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    value={newTask.startDate}
+                    onChange={(e) => setNewTask({ ...newTask, startDate: e.target.value })}
+                  />
+                </div>
+                <div>
                   <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Deadline</label>
                   <input
                     id="task-deadline"
                     name="taskDeadline"
                     type="date"
+                    min={newTask.startDate || undefined}
                     className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     value={newTask.deadline}
                     onChange={(e) => setNewTask({ ...newTask, deadline: e.target.value })}

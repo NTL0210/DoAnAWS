@@ -2,6 +2,7 @@ export type MeetingStatus =
   | "UPLOADED"
   | "PROCESSING"
   | "AI_REVIEW_READY"
+  | "TASKS_GENERATED"
   | "COMPLETED"
   | "FAILED";
 
@@ -10,12 +11,15 @@ export interface SuggestedTask {
   title: string;
   description: string;
   assigneeId: string | null;
-  assignee?: string;
-  priority: "LOW" | "MEDIUM" | "HIGH";
+  assignee?: string | undefined;
+  teamId?: string | null | undefined;
+  startDate?: string | null | undefined;
+  priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
   deadline: string | null;
   confidence: number;
-  sourceQuote?: string;
-  reason?: string;
+  approved?: boolean | undefined;
+  sourceQuote?: string | undefined;
+  reason?: string | undefined;
 }
 
 export interface Meeting {
@@ -59,5 +63,6 @@ export interface UpdateMeetingInput {
   risks?: string[] | undefined;
   actionItems?: string[] | undefined;
   suggestedTasks?: SuggestedTask[] | undefined;
-  expectedVersion: number;
+  generatedTaskIds?: string[] | undefined;
+  expectedVersion?: number | undefined;
 }

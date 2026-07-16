@@ -55,6 +55,7 @@ function fromItem(item: Record<string, unknown>): Task {
   return {
     id: text(item.id),
     workspaceId: text(item.workspaceId),
+    teamId: nullableText(item.teamId),
     meetingId: nullableText(item.meetingId),
     sourceMeetingId: nullableText(item.sourceMeetingId),
     title: text(item.title),
@@ -64,6 +65,7 @@ function fromItem(item: Record<string, unknown>): Task {
     priority: text(item.priority, "MEDIUM") as Task["priority"],
     status: text(item.status, "PENDING") as Task["status"],
     progress: num(item.progress, 0),
+    startDate: nullableText(item.startDate),
     deadline: nullableText(item.deadline),
     generatedFromAI: bool(item.generatedFromAI),
     aiConfidence: nullableNum(item.aiConfidence),

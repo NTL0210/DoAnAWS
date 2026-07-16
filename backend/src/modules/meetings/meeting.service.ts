@@ -9,7 +9,7 @@ import type {
   UpdateMeetingInput
 } from "./meeting.types.js";
 import { createMeetingUploadUrl, mimeTypeForStorageKey } from "./meeting.upload.js";
-import { analyzeStoredAudio, analyzeTranscriptText } from "../voice-recordings/voice-recording.ai.js";
+import { analyzeStoredAudio, analyzeTranscriptText, isActionableTaskCandidate } from "../voice-recordings/voice-recording.ai.js";
 
 export class MeetingService {
   constructor(private readonly repository: MeetingRepository) {}
@@ -73,10 +73,11 @@ export class MeetingService {
       risks: input.patch.risks ?? current.risks,
       actionItems: input.patch.actionItems ?? current.actionItems,
       suggestedTasks: input.patch.suggestedTasks ?? current.suggestedTasks,
+      generatedTaskIds: input.patch.generatedTaskIds ?? current.generatedTaskIds,
       version: current.version + 1,
       updatedAt: new Date().toISOString()
     };
-    await this.repository.update(updated, input.patch.expectedVersion);
+    await this.repository.update(updated, input.patch.expectedVersion ?? current.version);
     return updated;
   }
 
@@ -184,6 +185,8 @@ async function analyzeTranscriptMeeting(transcriptText: string, referenceDate?: 
         description: task.description || task.title || "",
         assignee: task.assignee || "",
         assigneeId: null,
+        teamId: null,
+        startDate: null,
         priority: normalizePriority(task.priority),
         deadline: task.deadline || null,
         confidence: 0.78,
@@ -230,6 +233,8 @@ async function analyzeStoredMeeting(meeting: Meeting): Promise<{
       description: task.description || task.title || "",
       assignee: task.assignee || "",
       assigneeId: null,
+      teamId: null,
+      startDate: null,
       priority: normalizePriority(task.priority),
       deadline: task.deadline || null,
       confidence: 0.72,
@@ -264,13 +269,17 @@ function extractMeetingWork(transcriptText: string): {
   const selectedActionItems = normalizedActionItems.length ? normalizedActionItems : actionItems;
   const keyDecisions = sentences.filter((sentence) => hasDecisionSignal(sentence)).slice(0, 6);
   const risks = sentences.filter((sentence) => hasRiskSignal(sentence)).slice(0, 6);
-  const selected = selectedActionItems.slice(0, 10);
+  const selected = selectedActionItems
+    .filter((sentence) => isActionableTaskCandidate({ sourceQuote: sentence, description: sentence }, transcriptText))
+    .slice(0, 10);
   const suggestedTasks = selected.map((sentence, index) => ({
     id: `suggestion-${index + 1}`,
     title: toTaskTitle(sentence),
     description: sentence,
     assignee: inferAssigneeName(sentence),
     assigneeId: null,
+    teamId: null,
+    startDate: null,
     priority: inferPriority(sentence),
     deadline: null,
     confidence: selectedActionItems.includes(sentence) ? 0.72 : 0.45,
@@ -372,8 +381,9 @@ function inferAssigneeName(sentence: string): string {
   return direct || speaker || "";
 }
 
-function normalizePriority(value?: string): "LOW" | "MEDIUM" | "HIGH" {
+function normalizePriority(value?: string): "LOW" | "MEDIUM" | "HIGH" | "URGENT" {
   const priority = String(value || "").toUpperCase();
+  if (priority === "URGENT") return "URGENT";
   if (priority === "HIGH") return "HIGH";
   if (priority === "LOW") return "LOW";
   return "MEDIUM";

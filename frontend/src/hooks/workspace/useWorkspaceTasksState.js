@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { generateId } from '@/lib/workspaceData';
 import { analyzeMeeting as serviceAnalyzeMeeting, createMeeting as serviceCreateMeeting, deleteMeeting as serviceDeleteMeeting, updateMeeting as serviceUpdateMeeting, uploadMeetingFile as serviceUploadMeetingFile } from '@/services/meetingService';
 import { getTasksByMeeting as filterTasksByMeeting } from '@/services/taskService';
@@ -34,6 +34,14 @@ function normalizeMeetingForUi(meeting, activeWorkspaceId, currentUserId) {
 
 function normalizeTaskStatusForApi(status) {
   return UI_TO_API_STATUS[status] || status;
+}
+
+function getMeetingSuggestions(meeting) {
+  return meeting?.suggestedTasks || meeting?.suggestions || [];
+}
+
+function withMeetingSuggestions(meeting, suggestedTasks) {
+  return { ...meeting, suggestedTasks, suggestions: suggestedTasks };
 }
 
 /**
@@ -92,6 +100,12 @@ export default function useWorkspaceTasksState({
   const [workspaceTasks, setWorkspaceTasks] = useState([]);
   const [workspaceMeetings, setWorkspaceMeetings] = useState([]);
   const [trashItems, setTrashItems] = useState(EMPTY_TRASH);
+  const suggestionSaveTimersRef = useRef(new Map());
+  const suggestionDraftsRef = useRef(new Map());
+
+  useEffect(() => () => {
+    suggestionSaveTimersRef.current.forEach((timer) => clearTimeout(timer));
+  }, []);
 
   useEffect(() => {
     if (!isCloudMode() || !activeWorkspaceId || !currentUser?.id) {
@@ -364,52 +378,65 @@ export default function useWorkspaceTasksState({
     await processMeetingWithAI(meetingId);
   }, [workspaceMeetings, activeWorkspaceId, processMeetingWithAI]);
 
+  const saveMeetingSuggestions = useCallback((meetingId, workspaceId, suggestedTasks, extraUpdates = {}) => {
+    suggestionDraftsRef.current.set(meetingId, { workspaceId, suggestedTasks, extraUpdates });
+    clearTimeout(suggestionSaveTimersRef.current.get(meetingId));
+    suggestionSaveTimersRef.current.set(meetingId, setTimeout(async () => {
+      const draft = suggestionDraftsRef.current.get(meetingId);
+      if (!draft) return;
+      try {
+        const { meetingsApi } = await import('@/services/cloudClient');
+        await meetingsApi.update(meetingId, {
+          workspaceId: draft.workspaceId || activeWorkspaceId,
+          suggestedTasks: draft.suggestedTasks,
+          ...draft.extraUpdates,
+        });
+      } catch (err) {
+        showToast('error', err?.message || 'Failed to save the edited AI suggestion.');
+      }
+    }, 350));
+  }, [activeWorkspaceId, showToast]);
+
   const updateMeetingSuggestion = useCallback((meetingId, suggestionId, patch) => {
-    setWorkspaceMeetings((prev) =>
-      prev.map((m) => {
-        if (m.id !== meetingId) return m;
-        return {
-          ...m,
-          suggestions: (m.suggestions || []).map((s) =>
-            s.id === suggestionId ? { ...s, ...patch } : s
-          ),
-        };
-      })
+    const meeting = workspaceMeetings.find((item) => item.id === meetingId);
+    if (!meeting) return;
+    const suggestedTasks = getMeetingSuggestions(meeting).map((suggestion) =>
+      suggestion.id === suggestionId ? { ...suggestion, ...patch } : suggestion
     );
-  }, []);
+    setWorkspaceMeetings((prev) =>
+      prev.map((item) => item.id === meetingId ? withMeetingSuggestions(item, suggestedTasks) : item)
+    );
+    saveMeetingSuggestions(meetingId, meeting.workspaceId, suggestedTasks);
+  }, [workspaceMeetings, saveMeetingSuggestions]);
 
   const updateSuggestedTask = updateMeetingSuggestion;
 
   const toggleSuggestedTaskSelection = useCallback((meetingId, suggestionId) => {
-    setWorkspaceMeetings((prev) =>
-      prev.map((m) => {
-        if (m.id !== meetingId) return m;
-        return {
-          ...m,
-          suggestions: (m.suggestions || []).map((s) =>
-            s.id === suggestionId ? { ...s, approved: !s.approved } : s
-          ),
-        };
-      })
+    const meeting = workspaceMeetings.find((item) => item.id === meetingId);
+    if (!meeting) return;
+    const suggestedTasks = getMeetingSuggestions(meeting).map((suggestion) =>
+      suggestion.id === suggestionId ? { ...suggestion, approved: !suggestion.approved } : suggestion
     );
-  }, []);
+    setWorkspaceMeetings((prev) =>
+      prev.map((item) => item.id === meetingId ? withMeetingSuggestions(item, suggestedTasks) : item)
+    );
+    saveMeetingSuggestions(meetingId, meeting.workspaceId, suggestedTasks);
+  }, [workspaceMeetings, saveMeetingSuggestions]);
 
   const removeMeetingSuggestion = useCallback((meetingId, suggestionId) => {
+    const meeting = workspaceMeetings.find((item) => item.id === meetingId);
+    if (!meeting) return;
+    const suggestedTasks = getMeetingSuggestions(meeting).filter((suggestion) => suggestion.id !== suggestionId);
     setWorkspaceMeetings((prev) =>
-      prev.map((m) => {
-        if (m.id !== meetingId) return m;
-        return {
-          ...m,
-          suggestions: (m.suggestions || []).filter((s) => s.id !== suggestionId),
-        };
-      })
+      prev.map((item) => item.id === meetingId ? withMeetingSuggestions(item, suggestedTasks) : item)
     );
-  }, []);
+    saveMeetingSuggestions(meetingId, meeting.workspaceId, suggestedTasks);
+  }, [workspaceMeetings, saveMeetingSuggestions]);
 
   const createTasksFromMeeting = useCallback(async (meetingId, selectedSuggestedTaskIds) => {
     if (!currentUser) return [];
     const meeting = workspaceMeetings.find((m) => m.id === meetingId);
-    const meetingSuggestions = meeting?.suggestions || meeting?.suggestedTasks || [];
+    const meetingSuggestions = getMeetingSuggestions(meeting);
     if (!meeting || meetingSuggestions.length === 0) return [];
 
     const suggestions = selectedSuggestedTaskIds
@@ -418,6 +445,14 @@ export default function useWorkspaceTasksState({
 
     if (suggestions.length === 0) {
       showToast('info', 'No tasks selected to create.');
+      return [];
+    }
+
+    const invalidSuggestion = suggestions.find((suggestion) =>
+      !suggestion.title?.trim() || (suggestion.startDate && suggestion.deadline && suggestion.startDate > suggestion.deadline)
+    );
+    if (invalidSuggestion) {
+      showToast('error', 'Each selected task needs a title, and its start date cannot be after its deadline.');
       return [];
     }
 
@@ -431,9 +466,13 @@ export default function useWorkspaceTasksState({
           title: suggestion.title.trim(),
           description: suggestion.description || '',
           assigneeId: suggestion.assigneeId || undefined,
-          priority: ['LOW', 'MEDIUM', 'HIGH'].includes(suggestion.priority) ? suggestion.priority : 'MEDIUM',
+          teamId: suggestion.teamId || undefined,
+          priority: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'].includes(suggestion.priority) ? suggestion.priority : 'MEDIUM',
+          startDate: suggestion.startDate || undefined,
           deadline: suggestion.deadline || undefined,
           createdBy: currentUser.id,
+          generatedFromAI: true,
+          aiConfidence: suggestion.confidence ?? suggestion.confidenceScore ?? undefined,
         });
         newTasks.push(normalizeTaskForUi(created));
       }
@@ -442,10 +481,23 @@ export default function useWorkspaceTasksState({
         setWorkspaceTasks((prev) => [...newTasks, ...prev]);
         addActivity('tasks_created', newTasks.length + ' tasks created from meeting "' + (meeting.title || 'Meeting') + '"');
 
-        // Auto-post to team chat
+        const createdSuggestionIds = new Set(suggestions.map((suggestion) => suggestion.id));
+        const remainingSuggestions = meetingSuggestions.filter((suggestion) => !createdSuggestionIds.has(suggestion.id));
+        const generatedTaskIds = [...(meeting.generatedTaskIds || []), ...newTasks.map((task) => task.id)];
+
         setWorkspaceMeetings((prev) =>
-          prev.map((m) => (m.id === meetingId ? { ...m, suggestions: [] } : m))
+          prev.map((item) => item.id === meetingId
+            ? withMeetingSuggestions({
+              ...item,
+              status: remainingSuggestions.length ? 'AI_REVIEW_READY' : 'TASKS_GENERATED',
+              generatedTaskIds,
+            }, remainingSuggestions)
+            : item)
         );
+        saveMeetingSuggestions(meetingId, meeting.workspaceId, remainingSuggestions, {
+          status: remainingSuggestions.length ? 'AI_REVIEW_READY' : 'TASKS_GENERATED',
+          generatedTaskIds,
+        });
 
         showToast('success', `${newTasks.length} task(s) created from meeting.`);
       }
@@ -454,7 +506,7 @@ export default function useWorkspaceTasksState({
       showToast('error', 'Failed to create tasks: ' + (err.message || 'Unknown error'));
       return [];
     }
-  }, [currentUser, workspaceMeetings, activeWorkspaceId, addActivity, showToast]);
+  }, [currentUser, workspaceMeetings, activeWorkspaceId, addActivity, showToast, saveMeetingSuggestions]);
 
   const createTasksFromSuggestions = createTasksFromMeeting;
 

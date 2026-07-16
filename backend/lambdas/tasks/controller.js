@@ -35,6 +35,7 @@ function taskToRecord(task) {
     status: task.status || 'TODO',
     priority: task.priority || 'MEDIUM',
     progress: task.progress || 0,
+    startDate: task.startDate || null,
     deadline: task.deadline || null,
     generatedFromAI: Boolean(task.generatedFromAI),
     aiConfidence: task.aiConfidence ?? null,
@@ -54,6 +55,10 @@ function recordToTask(record) {
   if (!record) return null;
   const { PK, SK, GSI1PK, GSI1SK, GSI2PK, GSI2SK, ...task } = record;
   return task;
+}
+
+function hasInvalidDateRange(startDate, deadline) {
+  return Boolean(startDate && deadline && startDate > deadline);
 }
 
 // ─── Handlers ─────────────────────────────────────────
@@ -141,6 +146,9 @@ export async function create(event) {
   if (!parsedBody.title || !parsedBody.workspaceId) {
     return badRequest('Title and workspaceId are required');
   }
+  if (hasInvalidDateRange(parsedBody.startDate, parsedBody.deadline)) {
+    return badRequest('Start date cannot be after the deadline');
+  }
 
   const now = new Date().toISOString();
   const task = taskToRecord({
@@ -156,6 +164,7 @@ export async function create(event) {
     status: parsedBody.status || 'TODO',
     priority: parsedBody.priority || 'MEDIUM',
     progress: parsedBody.progress || 0,
+    startDate: parsedBody.startDate || null,
     deadline: parsedBody.deadline || null,
     generatedFromAI: Boolean(parsedBody.generatedFromAI),
     aiConfidence: parsedBody.aiConfidence ?? null,
@@ -210,6 +219,9 @@ export async function update(event) {
   if (!current) {
     return notFound('Task not found');
   }
+  if (hasInvalidDateRange(parsedBody.startDate ?? current.startDate, parsedBody.deadline ?? current.deadline)) {
+    return badRequest('Start date cannot be after the deadline');
+  }
 
   // Determine allowed fields based on role
   let allowedFields;
@@ -223,7 +235,7 @@ export async function update(event) {
   } else {
     allowedFields = [
       'title', 'description', 'status', 'priority', 'progress',
-      'assigneeId', 'deadline', 'generatedFromAI', 'aiConfidence',
+      'assigneeId', 'startDate', 'deadline', 'generatedFromAI', 'aiConfidence',
     ];
   }
 
