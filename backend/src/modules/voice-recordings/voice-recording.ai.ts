@@ -5,6 +5,53 @@ import type { VoiceRecording } from "./voice-recording.types.js";
 
 const s3 = new S3Client({ region: env.AWS_REGION });
 const geminiBase = "https://generativelanguage.googleapis.com/v1beta/models";
+const transcriptionResponseSchema = {
+  type: "OBJECT",
+  properties: {
+    transcript: { type: "STRING" },
+  },
+  required: ["transcript"],
+};
+const analysisResponseSchema = {
+  type: "OBJECT",
+  properties: {
+    transcript: { type: "STRING" },
+    summary: { type: "STRING" },
+    keyDecisions: { type: "ARRAY", items: { type: "STRING" } },
+    actionItems: { type: "ARRAY", items: { type: "STRING" } },
+    risks: { type: "ARRAY", items: { type: "STRING" } },
+    tasks: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          title: { type: "STRING" },
+          description: { type: "STRING" },
+          assignee: { type: "STRING" },
+          priority: { type: "STRING", enum: ["LOW", "MEDIUM", "HIGH"] },
+          startDate: { type: "STRING" },
+          deadline: { type: "STRING" },
+          sourceQuote: { type: "STRING" },
+          reason: { type: "STRING" },
+        },
+        required: ["title", "description", "assignee", "priority", "startDate", "deadline", "sourceQuote", "reason"],
+      },
+    },
+  },
+  required: ["transcript", "summary", "keyDecisions", "actionItems", "risks", "tasks"],
+};
+
+export interface VoiceAnalysisTask {
+  title: string;
+  description: string;
+  assignee: string;
+  priority: string;
+  startDate: string;
+  deadline: string;
+  confidence: number;
+  sourceQuote?: string;
+  reason?: string;
+}
 
 interface VoiceAnalysisResult {
   transcript: string;
@@ -12,15 +59,7 @@ interface VoiceAnalysisResult {
   keyDecisions: string[];
   actionItems: string[];
   risks: string[];
-  tasks: Array<{
-    title: string;
-    description: string;
-    assignee: string;
-    priority: string;
-    deadline: string;
-    sourceQuote?: string;
-    reason?: string;
-  }>;
+  tasks: VoiceAnalysisTask[];
 }
 
 interface AnalysisOptions {
@@ -84,15 +123,7 @@ export async function analyzeVoiceRecording(recording: VoiceRecording): Promise<
   keyDecisions: string[];
   actionItems: string[];
   risks: string[];
-  tasks: Array<{
-    title?: string;
-    description?: string;
-    assignee?: string;
-    priority?: string;
-    deadline?: string;
-    sourceQuote?: string;
-    reason?: string;
-  }>;
+  tasks: Array<Partial<VoiceAnalysisTask>>;
 }> {
   if (!recording.storageKey) throw new Error("Voice recording storageKey is missing");
   return analyzeStoredAudio({ storageKey: recording.storageKey, mimeType: recording.mimeType });
@@ -104,15 +135,7 @@ export async function analyzeStoredAudio(input: { storageKey: string; mimeType: 
   keyDecisions: string[];
   actionItems: string[];
   risks: string[];
-  tasks: Array<{
-    title?: string;
-    description?: string;
-    assignee?: string;
-    priority?: string;
-    deadline?: string;
-    sourceQuote?: string;
-    reason?: string;
-  }>;
+  tasks: Array<Partial<VoiceAnalysisTask>>;
 }> {
   if (!input.storageKey) throw new Error("Audio storageKey is missing");
   if (!env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is required");
@@ -138,7 +161,9 @@ export async function analyzeStoredAudio(input: { storageKey: string; mimeType: 
   } catch {
     // Keep the existing one-pass path available if the provider rejects a
     // dedicated transcription request.
-    const raw = await callGeminiWithFile(fileUri, geminiMimeType, audioPrompt(input.referenceDate));
+    const raw = await callGeminiWithFile(fileUri, geminiMimeType, audioPrompt(input.referenceDate), {
+      responseSchema: analysisResponseSchema,
+    });
     return ensureActionableAnalysis(normalizeGeminiJson(raw), "", input.referenceDate);
   }
 }
@@ -212,7 +237,7 @@ async function callGeminiWithFile(
   fileUri: string,
   mimeType: string,
   prompt: string,
-  generation: { temperature?: number; maxOutputTokens?: number } = {},
+  generation: { temperature?: number; maxOutputTokens?: number; responseSchema?: Record<string, unknown> } = {},
 ): Promise<string> {
   const model = env.GEMINI_MODEL || "gemini-2.5-flash";
   const response = await fetchGeminiGeneration(`${geminiBase}/${model}:generateContent?key=${env.GEMINI_API_KEY}`, {
@@ -229,6 +254,7 @@ async function callGeminiWithFile(
         temperature: generation.temperature ?? 0.15,
         maxOutputTokens: generation.maxOutputTokens ?? 8192,
         responseMimeType: "application/json",
+        ...(generation.responseSchema ? { responseSchema: generation.responseSchema } : {}),
       },
     }),
   });
@@ -247,6 +273,7 @@ async function transcribeAudioWithGemini(fileUri: string, mimeType: string): Pro
   const raw = await callGeminiWithFile(fileUri, mimeType, transcriptionPrompt(), {
     temperature: 0,
     maxOutputTokens: 16384,
+    responseSchema: transcriptionResponseSchema,
   });
   const transcript = normalizeGeminiJson(raw).transcript.trim();
   if (!transcript) throw new Error("Gemini returned an empty transcription");
@@ -260,7 +287,12 @@ async function callGeminiWithText(prompt: string): Promise<string> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.15, maxOutputTokens: 8192, responseMimeType: "application/json" },
+      generationConfig: {
+        temperature: 0.15,
+        maxOutputTokens: 8192,
+        responseMimeType: "application/json",
+        responseSchema: analysisResponseSchema,
+      },
     }),
   });
   if (!response.ok) {
@@ -311,7 +343,9 @@ function normalizeGeminiJson(raw: string): VoiceAnalysisResult {
           description: normalizeTranscriptText(stringValue(task.description)),
           assignee: normalizeTranscriptText(stringValue(task.assignee)),
           priority: stringValue(task.priority),
+          startDate: stringValue(task.startDate),
           deadline: stringValue(task.deadline),
+          confidence: numberValue(task.confidence),
           sourceQuote: normalizeTranscriptText(stringValue(task.sourceQuote)),
           reason: normalizeTranscriptText(stringValue(task.reason)),
         }))
@@ -337,18 +371,19 @@ function executionPromptHeader(referenceDate?: string, sourceText?: string): str
     "Do not copy the transcript as the summary. The summary must be 3-6 synthesized sentences.",
     "Extract concrete work only. Ignore small talk unless it creates a risk or task.",
     "Create a task only for an explicit delegation or commitment with a concrete work verb and an assignee, a due date, or a direct request. Do not create tasks for questions, discussion topics, decisions, status updates, acknowledgements, or deferred work.",
-    "Each task must include an exact short sourceQuote from the transcript. Combine duplicate mentions into one task and do not target a fixed number of tasks.",
+    "Before adding a task, verify that its sourceQuote is a short, exact quote from the transcript and that the quote itself proves the requested work. If it does not, omit the task.",
+    "Combine duplicate mentions into one task and do not target a fixed number of tasks. An empty task list is correct when the meeting has no explicit work.",
     "If the content has no work, decision, risk, deadline, or assignment, keep tasks, actionItems, keyDecisions, and risks as empty arrays.",
     "For each task, infer assignee from explicit assignment, speaker context, or responsibility phrase. Leave empty only if unclear.",
     "Use priority HIGH for blockers, customer escalations, login/auth failures, budget/credit risk, deadlines, production issues, or VIP customers.",
-    "Use deadline as YYYY-MM-DD only when the content contains an explicit deadline or a relative deadline that can be resolved from the reference date; otherwise use an empty string.",
+    "Use startDate as YYYY-MM-DD only when the content explicitly states when work starts. Use deadline as YYYY-MM-DD only when the content contains an explicit deadline or a relative deadline that can be resolved from the reference date; otherwise use an empty string.",
     "Never invent years or calendar dates that are not supported by the transcript and reference date.",
     "Return valid JSON only. No Markdown, no commentary.",
     "",
     "JSON schema:",
     "{",
     '  "transcript": "full transcript or original text",',
-    '  "summary": "synthesized Vietnamese summary",',
+    '  "summary": "synthesized summary in the input language",',
     '  "keyDecisions": ["decision"],',
     '  "actionItems": ["action item"],',
     '  "tasks": [',
@@ -357,6 +392,7 @@ function executionPromptHeader(referenceDate?: string, sourceText?: string): str
     '      "description": "clear task description",',
     '      "assignee": "person name if known",',
     '      "priority": "HIGH|MEDIUM|LOW",',
+    '      "startDate": "YYYY-MM-DD or empty string",',
     '      "deadline": "YYYY-MM-DD or empty string",',
     '      "sourceQuote": "short evidence from transcript",',
     '      "reason": "why this is a task"',
@@ -390,10 +426,21 @@ function ensureActionableAnalysis(analysis: VoiceAnalysisResult, fallbackTranscr
       description: task.description || task.title || local.tasks[index]?.description || "",
       assignee: task.assignee || local.tasks[index]?.assignee || "",
       priority: normalizeAiPriority(task.priority || local.tasks[index]?.priority || "MEDIUM"),
+      startDate: normalizeStartDate(task.startDate || local.tasks[index]?.startDate || "", task.sourceQuote || task.description || task.title || "", transcript, referenceDate),
       deadline: normalizeDeadline(task.deadline || local.tasks[index]?.deadline || "", task.sourceQuote || task.description || task.title || "", transcript, referenceDate),
       sourceQuote: task.sourceQuote || local.tasks[index]?.sourceQuote || task.description || task.title || "",
       reason: task.reason || local.tasks[index]?.reason || "Extracted from meeting content",
-    })), transcript);
+    })), transcript).map((task) => ({
+    ...task,
+    confidence: calculateTaskConfidence(task, transcript),
+  }));
+
+  const localTasks = local.tasks.map((task) => ({
+    ...task,
+    startDate: normalizeStartDate(task.startDate, task.sourceQuote || task.description, transcript, referenceDate),
+    deadline: normalizeDeadline(task.deadline, task.sourceQuote || task.description, transcript, referenceDate),
+    confidence: calculateTaskConfidence(task, transcript),
+  }));
 
   return {
     transcript,
@@ -401,7 +448,7 @@ function ensureActionableAnalysis(analysis: VoiceAnalysisResult, fallbackTranscr
     keyDecisions: analysis.keyDecisions.length ? analysis.keyDecisions : local.keyDecisions,
     actionItems: analysis.actionItems.length ? analysis.actionItems : local.actionItems,
     risks: analysis.risks.length ? analysis.risks : local.risks,
-    tasks: tasks.length ? tasks : local.tasks,
+    tasks: tasks.length ? tasks : localTasks,
   };
 }
 
@@ -439,7 +486,9 @@ function buildLocalActionableAnalysis(transcript: string): VoiceAnalysisResult {
     description: stripSpeaker(line),
     assignee: inferAssigneeName(line),
     priority: inferLocalPriority(line),
+    startDate: "",
     deadline: "",
+    confidence: 0,
     sourceQuote: line.slice(0, 280),
     reason: language === "Vietnamese" ? "Phat hien giao viec ro rang trong noi dung cuoc hop" : "Detected explicit action wording in the meeting content",
   })), transcript);
@@ -606,6 +655,56 @@ function normalizeAiPriority(value: string): "LOW" | "MEDIUM" | "HIGH" {
   if (priority === "HIGH" || priority === "URGENT") return "HIGH";
   if (priority === "LOW") return "LOW";
   return "MEDIUM";
+}
+
+export function calculateTaskConfidence(
+  task: Pick<VoiceAnalysisTask, "title" | "description" | "assignee" | "startDate" | "deadline" | "sourceQuote">,
+  transcript: string,
+): number {
+  const evidence = (task.sourceQuote || task.description || task.title || "").trim();
+  if (!evidence || !isActionableTaskCandidate(task, transcript)) return 0;
+
+  const text = normalizeText(evidence);
+  let score = hasExactTranscriptEvidence(evidence, transcript) ? 0.6 : 0.48;
+  if (task.assignee.trim() || hasExplicitAssignee(text)) score += 0.14;
+  if (task.deadline.trim() || hasRelativeDeadlineEvidence(evidence)) score += 0.12;
+  if (task.startDate.trim() || hasStartDateEvidence(evidence)) score += 0.05;
+  if (hasDirectRequestCue(text)) score += 0.06;
+  return Math.round(Math.min(score, 0.97) * 100) / 100;
+}
+
+function hasExactTranscriptEvidence(evidence: string, transcript: string): boolean {
+  const normalizedEvidence = normalizeText(evidence);
+  return Boolean(normalizedEvidence) && normalizeText(transcript).includes(normalizedEvidence);
+}
+
+function hasExplicitAssignee(text: string): boolean {
+  return /(?:^|[\s\]])(?:anh|chi|em|ban)?\s*[a-z]{2,20}\s+(?:fix|review|chuan bi|check|goi|demo|cap|set|doi|viet|tao|update|ping|xu ly|lam|gui|nghien cuu)\b/.test(text);
+}
+
+function hasDirectRequestCue(text: string): boolean {
+  return /\b(hay|nho|giup|please|need to|needs to|must|should|will)\b/.test(text);
+}
+
+function hasStartDateEvidence(text: string): boolean {
+  const normalized = normalizeText(text);
+  return /\b(bat dau|tu ngay|ke tu|starting|start on|begin on)\b/.test(normalized);
+}
+
+export function normalizeStartDate(value: string, source: string, transcript: string, referenceDate?: string): string {
+  const startDate = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !parseIsoDate(startDate)) return "";
+
+  const evidence = `${source}\n${transcript}`;
+  if (!hasStartDateEvidence(evidence)) return "";
+  if (hasAbsoluteDeadlineEvidence(evidence)) return startDate;
+
+  const reference = parseIsoDate(referenceDate || "");
+  if (!reference) return "";
+  const generated = parseIsoDate(startDate);
+  if (!generated) return "";
+  const diffDays = Math.round((generated.getTime() - reference.getTime()) / 86400000);
+  return diffDays >= 0 && diffDays <= 45 ? startDate : "";
 }
 
 function normalizeDeadline(value: string, source: string, transcript: string, referenceDate?: string): string {
@@ -896,6 +995,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function stringValue(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function numberValue(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 function stringArray(value: unknown): string[] {

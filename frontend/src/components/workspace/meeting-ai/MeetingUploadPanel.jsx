@@ -128,18 +128,19 @@ export default function MeetingUploadPanel({
   const isLargeFile = fileSizeMB > (WARNING_AI_AUDIO_SIZE_BYTES / (1024 * 1024));
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+    <section className="relative border border-white/10 bg-[#0b1017] p-4 shadow-[0_12px_28px_rgba(0,0,0,0.18)]">
+      <span className="absolute left-0 top-0 h-px w-16 bg-[#ff6b35]" />
       <div className="mb-4">
-        <p className="text-xs font-black uppercase tracking-wide text-slate-400 dark:text-slate-500">Input</p>
-        <h2 className="text-lg font-black text-slate-950 dark:text-slate-100">Upload meeting</h2>
+        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#ff6b35]">Source intake</p>
+        <h2 className="mt-1 text-lg font-black text-white">Upload meeting</h2>
       </div>
 
       {/* Auto ASR flow hint */}
-      <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+      <div className="mb-5 border border-[#ff6b35]/25 bg-[#181313] p-3">
         <div className="flex items-start gap-3">
-          <FiInfo className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
-          <div className="text-xs leading-6 text-slate-600 dark:text-slate-400">
-            <p className="font-black text-blue-800 dark:text-blue-300">Automatic speech-to-text:</p>
+          <FiInfo className="mt-0.5 h-4 w-4 shrink-0 text-[#ff6b35]" />
+          <div className="text-xs leading-6 text-slate-400">
+            <p className="font-black uppercase tracking-wide text-[#ffb38e]">Automatic speech-to-text</p>
             <ol className="mt-1 list-inside list-decimal space-y-1 font-medium">
               <li>Upload audio file (MP3, WAV, M4A, WebM) or paste a transcript</li>
               <li>Click <strong>Analyze with AI</strong></li>
@@ -151,7 +152,7 @@ export default function MeetingUploadPanel({
       </div>
 
       {!canManageMeetings ? (
-        <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm font-semibold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400">
+        <div className="border border-amber-500/35 bg-amber-950/20 p-4 text-sm font-semibold text-amber-200">
           Only Owner, Vice Admin, or Manager can analyze meetings.
         </div>
       ) : (
@@ -160,7 +161,7 @@ export default function MeetingUploadPanel({
             <input
               value={form.title}
               onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50 dark:border-slate-700 dark:bg-slate-800 dark:focus:border-blue-500 dark:focus:ring-blue-900/30"
+              className="w-full rounded-sm border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-[#ff6b35] focus:ring-2 focus:ring-[#ff6b35]/15"
               placeholder="Optional - AI will generate one if blank"
             />
           </Field>
@@ -170,7 +171,7 @@ export default function MeetingUploadPanel({
               <select
                 value={form.teamId}
                 onChange={(event) => setForm((prev) => ({ ...prev, teamId: event.target.value }))}
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-800 dark:focus:border-blue-500"
+                className="w-full rounded-sm border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-[#ff6b35]"
               >
                 <option value="">Workspace-wide</option>
                 {workspaceTeams.map((team) => (
@@ -182,7 +183,7 @@ export default function MeetingUploadPanel({
               <select
                 value={form.type}
                 onChange={(event) => setForm((prev) => ({ ...prev, type: event.target.value }))}
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-800 dark:focus:border-blue-500"
+                className="w-full rounded-sm border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-[#ff6b35]"
               >
                 <option value="TRANSCRIPT">Transcript</option>
                 <option value="AUDIO">Audio</option>
@@ -209,26 +210,26 @@ export default function MeetingUploadPanel({
               onClick={() => fileRef.current?.click()}
               className={`flex min-h-[88px] w-full flex-col items-center justify-center rounded-xl border border-dashed px-4 py-4 text-center transition ${
                 isDragging
-                  ? 'border-blue-400 bg-blue-50 ring-4 ring-blue-100 dark:border-blue-500 dark:bg-blue-900/20 dark:ring-blue-900/30'
+                  ? 'border-[#ff6b35] bg-[#211411] ring-2 ring-[#ff6b35]/20'
                   : isLargeFile
                   ? 'border-amber-300 bg-amber-50 hover:border-amber-400 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-900/20 dark:hover:border-amber-600 dark:hover:bg-amber-900/30'
-                  : 'border-slate-300 bg-slate-50 hover:border-blue-300 hover:bg-blue-50 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-blue-600 dark:hover:bg-blue-900/20'
+                  : 'border-white/15 bg-white/[0.02] hover:border-[#ff6b35]/65 hover:bg-[#181313]'
               }`}
             >
               {file ? (
-                <FiFileText className={`h-7 w-7 ${isLargeFile ? 'text-amber-500' : 'text-blue-500'}`} />
+                <FiFileText className={`h-7 w-7 ${isLargeFile ? 'text-amber-400' : 'text-[#ff6b35]'}`} />
               ) : (
-                <FiUploadCloud className={`h-7 w-7 ${isLargeFile ? 'text-amber-500' : 'text-blue-500'}`} />
+                <FiUploadCloud className={`h-7 w-7 ${isLargeFile ? 'text-amber-400' : 'text-[#ff6b35]'}`} />
               )}
-              <span className="mt-2 text-sm font-black text-slate-700 dark:text-slate-300">
+              <span className="mt-2 text-sm font-black text-slate-100">
                 {file ? file.name : isDragging ? 'Drop file to attach' : 'Drag and drop audio or transcript'}
               </span>
-              <span className="mt-1 text-xs font-medium text-slate-400 dark:text-slate-500">
+              <span className="mt-1 text-xs font-medium text-slate-500">
                 MP3, WAV, M4A, WebM, TXT, VTT, SRT. Max {billingPlan?.maxUploadMbPerFile || Math.round(MAX_FILE_SIZE / (1024 * 1024))} MB.
               </span>
             </button>
             {file ? (
-              <div className="mt-2 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+              <div className="mt-2 flex items-center justify-between border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-400">
                 <span className="truncate">{fileSizeMB || '<1'} MB - est. {estimatedMinutes} min {fileHash ? `- hash ${fileHash.slice(0, 8)}` : ''}</span>
                 <button type="button" onClick={clearFile} className="rounded-md p-1 text-slate-400 hover:bg-white hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-slate-300">
                   <FiX className="h-3.5 w-3.5" />
@@ -261,7 +262,7 @@ export default function MeetingUploadPanel({
               value={form.transcript}
               onChange={(event) => setForm((prev) => ({ ...prev, transcript: event.target.value }))}
               rows={6}
-              className="w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm leading-6 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50 dark:border-slate-700 dark:bg-slate-800 dark:focus:border-blue-500 dark:focus:ring-blue-900/30"
+              className="w-full resize-none rounded-sm border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm leading-6 text-white outline-none focus:border-[#ff6b35] focus:ring-2 focus:ring-[#ff6b35]/15"
             />
           </Field>
 
@@ -276,8 +277,8 @@ export default function MeetingUploadPanel({
                     onClick={() => toggleParticipant(member.userId)}
                     className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs font-bold transition ${
                       selected
-                        ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                        : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800'
+                        ? 'border-[#ff6b35]/65 bg-[#211411] text-[#ffb38e]'
+                        : 'border-white/10 bg-white/[0.02] text-slate-400 hover:border-white/25 hover:bg-white/[0.05]'
                     }`}
                   >
                     <span className="min-w-0 flex-1 truncate">{member.name || member.nickname || 'Unknown'}</span>
@@ -296,7 +297,7 @@ export default function MeetingUploadPanel({
           <button
             type="submit"
             disabled={processing || (!file && !form.transcript.trim())}
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-700"
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-sm bg-[#ff5824] text-sm font-black uppercase tracking-wide text-white shadow-lg shadow-[#ff5824]/20 transition hover:bg-[#ef4518] disabled:cursor-not-allowed disabled:bg-slate-700"
           >
             {processing ? <FiLoader className="h-4 w-4 animate-spin" /> : <FiZap className="h-4 w-4" />}
             {processing ? 'Analyzing...' : 'Analyze with AI'}
@@ -310,7 +311,7 @@ export default function MeetingUploadPanel({
 function Field({ label, children }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-bold uppercase text-slate-500 dark:text-slate-400">{label}</label>
+      <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-slate-500">{label}</label>
       {children}
     </div>
   );

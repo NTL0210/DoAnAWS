@@ -148,9 +148,10 @@ export class VoiceRecordingService {
         description: task.description || task.title || "",
         assignee: task.assignee || "",
         assigneeId: null,
+        startDate: task.startDate || null,
         priority: normalizePriority(task.priority),
         deadline: task.deadline || null,
-        confidence: 0.72,
+        confidence: task.confidence ?? 0.5,
         ...(task.sourceQuote || task.description || task.title ? { sourceQuote: task.sourceQuote || task.description || task.title } : {}),
         ...(task.reason ? { reason: task.reason } : {}),
       }));

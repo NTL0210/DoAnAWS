@@ -174,21 +174,31 @@ export default function WorkspaceMeetingsView() {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-slate-50 dark:bg-slate-900 p-5 md:p-6">
-      <div className="mx-auto max-w-7xl space-y-5">
-        <header className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-5 shadow-sm">
-          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-blue-600 dark:text-blue-400">
+    <div className="dark h-full overflow-y-auto bg-[#07090d] p-4 text-white md:p-6">
+      <div className="mx-auto max-w-7xl space-y-4">
+        <header className="relative overflow-hidden border border-[#ff6b35]/45 bg-[#0b1017] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.24)] md:p-6">
+          <span className="absolute left-0 top-0 h-px w-28 bg-[#ff6b35]" />
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-[#ff6b35]">
             <FiZap className="h-4 w-4" />
-            AI Suggested Tasks Review Flow
-          </p>
-          <h1 className="mt-2 text-2xl font-black text-slate-950 dark:text-slate-100">Meetings become reviewed work</h1>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400">
+                Execution intelligence
+              </p>
+              <h1 className="mt-3 text-2xl font-black text-white md:text-3xl">Meetings become reviewed work.</h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
             AI only suggests tasks. Managers edit, select, and approve before official tasks are created.
-          </p>
+              </p>
+            </div>
+            <div className="grid grid-cols-3 border border-white/10 text-center text-[10px] font-black uppercase tracking-wide text-slate-500 sm:w-[330px]">
+              {['Capture', 'Review', 'Execute'].map((step, index) => (
+                <span key={step} className={`px-2 py-3 ${index === 1 ? 'border-x border-white/10 bg-white/[0.04] text-[#ffb38e]' : ''}`}>{step}</span>
+              ))}
+            </div>
+          </div>
         </header>
 
         {error && (
-          <div className="flex items-center gap-3 rounded-xl border border-red-100 dark:border-red-900/30 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm font-bold text-red-700 dark:text-red-300">
+          <div className="flex items-center gap-3 border border-red-500/40 bg-red-950/30 px-4 py-3 text-sm font-bold text-red-200">
             <FiAlertTriangle className="h-4 w-4" />
             {error}
           </div>
@@ -241,7 +251,7 @@ export default function WorkspaceMeetingsView() {
                     <button
                       type="button"
                       onClick={handleReAnalyze}
-                      className="flex items-center gap-2 rounded-xl border border-amber-200 dark:border-amber-900/30 bg-amber-50 dark:bg-amber-900/20 px-4 py-2 text-xs font-bold text-amber-700 dark:text-amber-300 transition hover:bg-amber-100 dark:hover:bg-amber-900/40"
+                      className="flex items-center gap-2 border border-[#ff6b35]/50 bg-[#181313] px-4 py-2 text-xs font-black uppercase tracking-wide text-[#ffb38e] transition hover:border-[#ff6b35] hover:bg-[#251714]"
                     >
                       <FiRefreshCw className="h-3.5 w-3.5" />
                       {selectedMeeting.status === 'UPLOADED' || selectedMeeting.status === 'FAILED' ? 'Analyze with AI' : 'Re-analyze with AI'}
@@ -274,13 +284,13 @@ export default function WorkspaceMeetingsView() {
 
 function MeetingList({ meetings, selectedMeetingId, canManageMeetings, onSelect, onDelete }) {
   return (
-    <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-5 shadow-sm">
+    <section className="border border-white/10 bg-[#0b1017] p-4 shadow-[0_12px_28px_rgba(0,0,0,0.18)]">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-black text-slate-950 dark:text-slate-100">Meeting history</h2>
-        <span className="rounded-full bg-slate-100 dark:bg-slate-700 px-2.5 py-1 text-xs font-black text-slate-500 dark:text-slate-400">{meetings.length}</span>
+        <h2 className="text-sm font-black uppercase tracking-wide text-white">Meeting history</h2>
+        <span className="border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs font-black text-[#ffb38e]">{meetings.length}</span>
       </div>
       {meetings.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-5 text-center text-sm font-medium text-slate-400 dark:text-slate-500">
+        <p className="border border-dashed border-white/15 bg-white/[0.02] p-5 text-center text-sm font-medium text-slate-500">
           No meetings yet.
         </p>
       ) : (
@@ -289,7 +299,7 @@ function MeetingList({ meetings, selectedMeetingId, canManageMeetings, onSelect,
             <div
               key={meeting.id}
               className={`w-full rounded-xl border px-3 py-3 text-left transition ${
-                selectedMeetingId === meeting.id ? 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-700'
+                selectedMeetingId === meeting.id ? 'border-[#ff6b35]/65 bg-[#211411]' : 'border-white/10 bg-white/[0.02] hover:border-white/25 hover:bg-white/[0.05]'
               }`}
             >
               <button type="button" onClick={() => onSelect(meeting.id)} className="w-full text-left">
@@ -305,7 +315,7 @@ function MeetingList({ meetings, selectedMeetingId, canManageMeetings, onSelect,
                 <button
                   type="button"
                   onClick={() => onDelete(meeting.id)}
-                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-red-100 dark:border-red-900/30 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-[11px] font-black text-red-500 dark:text-red-400 transition hover:bg-red-50 dark:hover:bg-red-900/20"
+                  className="mt-2 inline-flex items-center gap-1.5 border border-red-500/30 bg-red-950/20 px-2.5 py-1.5 text-[11px] font-black text-red-300 transition hover:bg-red-950/45"
                 >
                   <FiTrash2 className="h-3.5 w-3.5" />
                   Move to Trash
@@ -321,7 +331,7 @@ function MeetingList({ meetings, selectedMeetingId, canManageMeetings, onSelect,
 
 function EmptyState() {
   return (
-    <section className="flex min-h-[520px] items-center justify-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/80 p-8 text-center">
+    <section className="flex min-h-[520px] items-center justify-center border border-dashed border-white/15 bg-[#0b1017] p-8 text-center">
       <div>
         <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">No meeting selected</h2>
         <p className="mt-2 max-w-md text-sm leading-6 text-slate-500 dark:text-slate-400">
