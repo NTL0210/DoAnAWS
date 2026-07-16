@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  calculateTaskConfidence,
   decodeTranscriptBuffer,
   detectTranscriptLanguage,
   filterActionableTaskCandidates,
   isActionableTaskCandidate,
+  normalizeStartDate,
   normalizeTranscriptText,
 } from "../../src/modules/voice-recordings/voice-recording.ai.js";
 
@@ -48,5 +50,33 @@ describe("transcript encoding and language", () => {
   it("selects the output language from the transcript language", () => {
     expect(detectTranscriptLanguage("H\u00e3y giao Minh fix dang nhap truoc thu Sau.")).toBe("Vietnamese");
     expect(detectTranscriptLanguage("Please assign Minh to fix login before Friday.")).toBe("English");
+  });
+});
+
+describe("suggested task verification", () => {
+  const datedTranscript = "[Luc] An bat dau fix refresh token tu ngay 2026-07-18 va hoan thanh truoc thu Sau.";
+
+  it("keeps an evidenced start date and scores explicit delegation above review threshold", () => {
+    const sourceQuote = "An bat dau fix refresh token tu ngay 2026-07-18 va hoan thanh truoc thu Sau.";
+    expect(normalizeStartDate("2026-07-18", sourceQuote, datedTranscript, "2026-07-16")).toBe("2026-07-18");
+    expect(calculateTaskConfidence({
+      title: "Fix refresh token",
+      description: sourceQuote,
+      assignee: "An",
+      startDate: "2026-07-18",
+      deadline: "2026-07-17",
+      sourceQuote,
+    }, datedTranscript)).toBeGreaterThanOrEqual(0.8);
+  });
+
+  it("gives no confidence to an unsupported task", () => {
+    expect(calculateTaskConfidence({
+      title: "Build mobile redesign",
+      description: "Build mobile redesign",
+      assignee: "",
+      startDate: "",
+      deadline: "",
+      sourceQuote: "Build mobile redesign",
+    }, transcript)).toBe(0);
   });
 });
