@@ -11,30 +11,35 @@
 
 @layer base {
   :root {
-    --background: 210 38% 95%;
+    --background: 210 18% 90%;
     --foreground: 222 36% 12%;
-    --card: 210 40% 99%;
+    --card: 210 18% 94%;
     --card-foreground: 222 36% 12%;
-    --popover: 210 40% 99%;
+    --popover: 210 20% 96%;
     --popover-foreground: 222 36% 12%;
     --primary: 0 0% 9%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 210 32% 92%;
+    --secondary: 210 17% 87%;
     --secondary-foreground: 0 0% 9%;
-    --muted: 210 32% 92%;
+    --muted: 210 17% 87%;
     --muted-foreground: 215 16% 40%;
-    --accent: 210 32% 92%;
+    --accent: 210 17% 87%;
     --accent-foreground: 0 0% 9%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 214 24% 86%;
-    --input: 214 24% 86%;
+    --border: 212 17% 79%;
+    --input: 212 17% 79%;
     --ring: 0 0% 3.9%;
     --radius: 0.5rem;
-    --workspace-sidebar-bg: rgba(248, 250, 252, 0.88);
-    --workspace-sidebar-border: rgba(203, 213, 225, 0.78);
-    --workspace-item-hover: rgba(255, 255, 255, 0.92);
-    --workspace-item-active: linear-gradient(135deg, rgba(255, 237, 213, 0.98), rgba(255, 247, 237, 0.94));
+    --surface-canvas: 210 18% 90%;
+    --surface-base: 210 18% 93%;
+    --surface-raised: 210 20% 95%;
+    --surface-muted: 210 16% 87%;
+    --surface-hover: 210 16% 84%;
+    --workspace-sidebar-bg: hsla(var(--surface-base) / 0.92);
+    --workspace-sidebar-border: rgba(148, 163, 184, 0.58);
+    --workspace-item-hover: hsla(var(--surface-raised) / 0.94);
+    --workspace-item-active: linear-gradient(135deg, rgba(255, 237, 213, 0.92), rgba(238, 232, 225, 0.96));
     --workspace-item-active-text: #c2410c;
     --workspace-card-shadow: 0 10px 28px rgba(15, 23, 42, 0.07);
     --workspace-card-shadow-hover: 0 18px 42px rgba(15, 23, 42, 0.13);
@@ -64,6 +69,11 @@
     --border: 213 22% 22%;
     --input: 213 22% 22%;
     --ring: 0 0% 98%;
+    --surface-canvas: 210 34% 9%;
+    --surface-base: 211 32% 13%;
+    --surface-raised: 211 28% 18%;
+    --surface-muted: 213 22% 22%;
+    --surface-hover: 213 20% 26%;
     --workspace-sidebar-bg: rgba(15, 23, 42, 0.88);
     --workspace-sidebar-border: rgba(51, 65, 85, 0.8);
     --workspace-item-hover: rgba(30, 41, 59, 0.92);
@@ -89,6 +99,38 @@
 
   .dark p, .dark li, .dark dd { color: rgb(209 213 219); }
   .dark h1, .dark h2, .dark h3, .dark h4 { color: rgb(243 244 246); }
+}
+
+@layer utilities {
+  html:not(.dark) .app-main-region [class~="bg-white"],
+  html:not(.dark) .app-main-region [class~="bg-[#fbfcfe]"] {
+    background-color: hsl(var(--surface-raised)) !important;
+  }
+
+  html:not(.dark) .app-main-region [class~="bg-white/90"],
+  html:not(.dark) .app-main-region [class~="bg-white/80"],
+  html:not(.dark) .app-main-region [class~="bg-white/70"],
+  html:not(.dark) .app-main-region [class~="bg-white/60"],
+  html:not(.dark) .app-main-region [class~="bg-white/50"],
+  html:not(.dark) .app-main-region [class~="bg-white/40"] {
+    background-color: hsla(var(--surface-raised) / 0.9) !important;
+  }
+
+  html:not(.dark) .app-main-region [class~="hover:bg-white"]:hover,
+  html:not(.dark) .app-main-region [class~="focus:bg-white"]:focus,
+  html:not(.dark) .app-main-region [class~="focus-within:bg-white"]:focus-within {
+    background-color: hsl(var(--surface-hover)) !important;
+  }
+
+  html:not(.dark) .app-main-region [class~="text-slate-500"],
+  html:not(.dark) .app-main-region [class~="text-slate-400"] {
+    color: #59697c;
+  }
+
+  html:not(.dark) .app-main-region [class~="placeholder:text-slate-400"]::placeholder,
+  html:not(.dark) .app-main-region [class~="placeholder:text-slate-500"]::placeholder {
+    color: #59697c;
+  }
 }
 
 ::view-transition-old(root),
@@ -224,7 +266,7 @@ html[data-magicui-theme-vt="active"]::view-transition-group(root) {
   .app-animated-bg {
     position: relative;
     overflow-x: hidden;
-    background: linear-gradient(180deg, #eef3f8 0%, #e8eef5 100%);
+    background: linear-gradient(180deg, hsl(var(--surface-base)) 0%, hsl(var(--surface-canvas)) 100%);
   }
 
   .app-animated-bg::before {
@@ -273,7 +315,7 @@ html[data-magicui-theme-vt="active"]::view-transition-group(root) {
 
   .workspace-hero {
     background:
-      linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(239, 246, 255, 0.86) 48%, rgba(236, 253, 245, 0.74)),
+      linear-gradient(135deg, hsl(var(--surface-raised)), rgba(226, 235, 240, 0.9) 48%, rgba(225, 239, 233, 0.82)),
       linear-gradient(90deg, rgba(59, 130, 246, 0.07) 1px, transparent 1px),
       linear-gradient(rgba(59, 130, 246, 0.06) 1px, transparent 1px);
     background-size: auto, 36px 36px, 36px 36px;
@@ -311,8 +353,8 @@ html[data-magicui-theme-vt="active"]::view-transition-group(root) {
   .dashboard-hero-card {
     position: absolute; left: 24px; width: 150px; height: 82px;
     border-radius: 18px;
-    border: 1px solid rgba(255, 255, 255, 0.7);
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.42));
+    border: 1px solid rgba(148, 163, 184, 0.42);
+    background: linear-gradient(135deg, hsla(var(--surface-raised) / 0.96), hsla(var(--surface-base) / 0.66));
     box-shadow: 0 24px 70px rgba(15, 23, 42, 0.16);
     backdrop-filter: blur(18px);
     will-change: transform;

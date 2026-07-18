@@ -48,14 +48,14 @@ export default function MeetingAIReviewPanel({
 
   return (
     <div className="space-y-4">
-      <section className="relative overflow-hidden border border-white/10 bg-[#0b1017] px-5 py-5 shadow-[0_16px_40px_rgba(0,0,0,0.24)] sm:px-6">
+      <section className="relative overflow-hidden border border-slate-300/80 bg-[#edf1f4] px-5 py-5 shadow-[0_16px_40px_rgba(71,85,105,0.10)] dark:border-white/10 dark:bg-[#0b1017] dark:shadow-[0_16px_40px_rgba(0,0,0,0.24)] sm:px-6">
         <span className="absolute left-0 top-0 h-px w-24 bg-[#ff6b35]" />
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <span className={`inline-flex border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${statusStyles[meeting.status] || statusStyles.UPLOADED}`}>
               {statusLabels[meeting.status] || meeting.status}
             </span>
-            <h2 className="mt-3 max-w-4xl text-xl font-black text-white sm:text-2xl">{meeting.title}</h2>
+            <h2 className="mt-3 max-w-4xl text-xl font-black text-slate-900 dark:text-white sm:text-2xl">{meeting.title}</h2>
             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs font-bold text-slate-500">
               <span className="flex items-center gap-1"><FiBriefcase />{team?.name || 'Workspace-wide'}</span>
               <span className="flex items-center gap-1"><FiUsers />{meeting.participantIds?.length || meeting.participants?.length || 0} participants</span>
@@ -73,14 +73,16 @@ export default function MeetingAIReviewPanel({
             </button>
           )}
         </div>
-        <div className="mt-5 flex gap-5 overflow-x-auto border-t border-white/10 pt-1">
+        <div className="mt-5 flex gap-5 overflow-x-auto border-t border-slate-300/80 pt-1 dark:border-white/10">
           {['overview', 'timeline', 'transcript', 'summary', 'suggested'].map((section) => (
             <button
               key={section}
               type="button"
               onClick={() => onSectionChange(section)}
               className={`shrink-0 border-b-2 py-3 text-xs font-black capitalize transition ${
-                activeSection === section ? 'border-[#ff5824] text-[#ffb38e]' : 'border-transparent text-slate-500 hover:border-white/30 hover:text-slate-200'
+                activeSection === section
+                  ? 'border-[#ff5824] text-orange-700 dark:text-[#ffb38e]'
+                  : 'border-transparent text-slate-500 hover:border-slate-400 hover:text-slate-800 dark:hover:border-white/30 dark:hover:text-slate-200'
               }`}
             >
               {section === 'suggested' ? 'Suggested Tasks' : section}
@@ -100,12 +102,12 @@ export default function MeetingAIReviewPanel({
 
       {activeSection === 'transcript' && (
         <Panel title="Transcript" icon={FiFileText}>
-          <pre className="max-h-[520px] overflow-y-auto whitespace-pre-wrap break-words border border-white/10 bg-[#07090d] p-4 font-mono text-sm leading-7 text-slate-300">{visibleTranscript || 'No transcript available.'}</pre>
+          <pre className="max-h-[520px] overflow-y-auto whitespace-pre-wrap break-words border border-slate-300 bg-[#e3e9ed] p-4 font-mono text-sm leading-7 text-slate-700 dark:border-white/10 dark:bg-[#07090d] dark:text-slate-300">{visibleTranscript || 'No transcript available.'}</pre>
           {!showFullTranscript && transcript.length > visibleTranscript.length && (
             <button
               type="button"
               onClick={() => setShowFullTranscript(true)}
-              className="mt-3 border border-white/15 px-3 py-2 text-xs font-black uppercase tracking-wide text-slate-300 transition hover:border-[#ff6b35]/60 hover:bg-[#181313]"
+              className="mt-3 border border-slate-300 px-3 py-2 text-xs font-black uppercase tracking-wide text-slate-600 transition hover:border-[#ff6b35]/60 hover:bg-orange-50 dark:border-white/15 dark:text-slate-300 dark:hover:bg-[#181313]"
             >
               Load full transcript
             </button>
@@ -146,11 +148,11 @@ export default function MeetingAIReviewPanel({
 
       {activeSection === 'suggested' && (
         <section>
-          <div className="flex flex-col gap-4 border-b border-white/10 pb-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-4 border-b border-slate-300/80 pb-4 dark:border-white/10 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#ff6b35]">Review queue</p>
-              <h3 className="mt-1 text-lg font-black text-white">Suggested tasks</h3>
-              <p className="mt-1 text-sm text-slate-400">Review only the work AI found in this meeting before creating tasks.</p>
+              <h3 className="mt-1 text-lg font-black text-slate-900 dark:text-white">Suggested tasks</h3>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Review only the work AI found in this meeting before creating tasks.</p>
             </div>
             <div className="flex gap-5 text-sm">
               <Metric label="Suggestions" value={suggestedTasks.length} />
@@ -159,7 +161,7 @@ export default function MeetingAIReviewPanel({
             </div>
           </div>
           {suggestedTasks.length === 0 ? (
-            <p className="mt-5 border border-dashed border-white/15 bg-white/[0.02] px-5 py-8 text-center text-sm font-medium text-slate-500">
+            <p className="mt-5 border border-dashed border-slate-300 bg-[#e3e9ed] px-5 py-8 text-center text-sm font-medium text-slate-500 dark:border-white/15 dark:bg-white/[0.02]">
               No actionable task suggestions were found in this meeting.
             </p>
           ) : (
@@ -210,30 +212,30 @@ function MeetingTimeline({ meeting, tasks, canJump, onJump }) {
     <div className="space-y-4">
       {items.map((item, index) => (
         <div key={`${item.timestamp}-${index}`} className="group relative pl-8">
-            <span className="absolute left-2 top-2 h-full w-px bg-white/10 group-last:hidden" />
-            <span className="absolute left-0 top-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#0b1017] bg-[#ff5824] shadow-sm shadow-[#ff5824]/30" />
-          <div className="border border-white/10 bg-[#0b1017] p-4 transition hover:border-[#ff6b35]/45 hover:bg-[#10161f]">
+            <span className="absolute left-2 top-2 h-full w-px bg-slate-300 group-last:hidden dark:bg-white/10" />
+            <span className="absolute left-0 top-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#edf1f4] bg-[#ff5824] shadow-sm shadow-[#ff5824]/30 dark:border-[#0b1017]" />
+          <div className="border border-slate-300/80 bg-[#edf1f4] p-4 transition hover:border-[#ff6b35]/45 hover:bg-[#e6ebef] dark:border-white/10 dark:bg-[#0b1017] dark:hover:bg-[#10161f]">
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 disabled={!canJump}
                 onClick={() => onJump(item.timestamp)}
-                className="border border-[#ff6b35]/35 bg-[#181313] px-2.5 py-1 text-xs font-black text-[#ffb38e] disabled:cursor-default disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-slate-600"
+                className="border border-[#ff6b35]/35 bg-orange-50 px-2.5 py-1 text-xs font-black text-orange-700 disabled:cursor-default disabled:border-slate-300 disabled:bg-[#e3e9ed] disabled:text-slate-500 dark:bg-[#181313] dark:text-[#ffb38e] dark:disabled:border-white/10 dark:disabled:bg-white/[0.03] dark:disabled:text-slate-600"
                 title={canJump ? 'Jump audio to this timestamp' : 'Audio jump unavailable'}
               >
                 {item.timestamp}
               </button>
               {item.estimated ? (
-                <span className="border border-amber-500/30 bg-amber-950/20 px-2.5 py-1 text-[10px] font-black text-amber-300">Estimated timestamp</span>
+                <span className="border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-700 dark:border-amber-500/30 dark:bg-amber-950/20 dark:text-amber-300">Estimated timestamp</span>
               ) : null}
               {item.speaker ? <span className="text-xs font-bold text-slate-400 dark:text-slate-500">{item.speaker}</span> : null}
             </div>
-            <h4 className="mt-2 text-sm font-black text-white">{item.title}</h4>
-            <p className="mt-1 text-sm leading-6 text-slate-400">{item.summary}</p>
+            <h4 className="mt-2 text-sm font-black text-slate-900 dark:text-white">{item.title}</h4>
+            <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">{item.summary}</p>
             {item.relatedTasks?.length ? (
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {item.relatedTasks.map((task) => (
-                  <span key={task.id} className="border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-black text-slate-300">
+                  <span key={task.id} className="border border-slate-300 bg-[#e3e9ed] px-2 py-1 text-[10px] font-black text-slate-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300">
                     {task.title}
                   </span>
                 ))}
@@ -248,10 +250,10 @@ function MeetingTimeline({ meeting, tasks, canJump, onJump }) {
 
 function Panel({ title, icon: Icon, children }) {
   return (
-    <section className="border border-white/10 bg-[#0b1017] p-5 shadow-[0_12px_28px_rgba(0,0,0,0.18)]">
+    <section className="border border-slate-300/80 bg-[#edf1f4] p-5 shadow-[0_12px_28px_rgba(71,85,105,0.09)] dark:border-white/10 dark:bg-[#0b1017] dark:shadow-[0_12px_28px_rgba(0,0,0,0.18)]">
       <div className="mb-4 flex items-center gap-2">
         <Icon className="h-4 w-4 text-[#ff6b35]" />
-        <h3 className="text-sm font-black uppercase tracking-wide text-white">{title}</h3>
+        <h3 className="text-sm font-black uppercase tracking-wide text-slate-800 dark:text-white">{title}</h3>
       </div>
       {children}
     </section>
@@ -260,12 +262,12 @@ function Panel({ title, icon: Icon, children }) {
 
 function Metric({ label, value, tone = 'slate' }) {
   const valueClass = tone === 'blue'
-    ? 'text-[#ffb38e]'
+    ? 'text-orange-700 dark:text-[#ffb38e]'
     : tone === 'amber'
       ? 'text-amber-700 dark:text-amber-400'
-      : 'text-white';
+      : 'text-slate-900 dark:text-white';
   return (
-    <div className="border-l border-white/10 pl-3 first:border-l-0 first:pl-0">
+    <div className="border-l border-slate-300 pl-3 first:border-l-0 first:pl-0 dark:border-white/10">
       <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">{label}</p>
       <p className={`mt-1 text-lg font-black ${valueClass}`}>{value}</p>
     </div>
@@ -279,7 +281,7 @@ function ListPanel({ title, items = [], tone = 'blue' }) {
       {items?.length ? (
         <ul className="space-y-2">
           {items.map((item, index) => (
-            <li key={index} className="flex gap-2 text-sm leading-6 text-slate-400">
+            <li key={index} className="flex gap-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
               <span className={`mt-2 h-2 w-2 shrink-0 rounded-full ${dot}`} />
               {item}
             </li>
@@ -299,8 +301,8 @@ function ParticipantsPanel({ participantIds = [], members }) {
         {participantIds.map((userId) => {
           const member = members.find((item) => item.userId === userId);
           return (
-            <div key={userId} className="flex items-center gap-2 border border-white/10 bg-white/[0.03] px-3 py-2">
-              <span className="text-sm font-bold text-slate-300">{member?.name || member?.nickname || userId}</span>
+            <div key={userId} className="flex items-center gap-2 border border-slate-300 bg-[#e3e9ed] px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+              <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{member?.name || member?.nickname || userId}</span>
             </div>
           );
         })}

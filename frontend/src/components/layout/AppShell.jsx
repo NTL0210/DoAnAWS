@@ -322,7 +322,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
       </aside>
 
       {/* ========== MAIN AREA ========== */}
-      <div className="lg:pl-[76px]">
+      <div className="app-main-region lg:pl-[76px]">
         {/* ========== TOPBAR ========== */}
         <header className="topbar-glass app-tactical-topbar sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 dark:bg-slate-950/90 dark:border-slate-800/80">
           <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
