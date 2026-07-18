@@ -95,7 +95,6 @@ export default function WorkspaceChannelView() {
     activeVoiceChannelId,
     activeVoiceRecordings,
     canAccessVoice,
-    switchVoiceChannel,
     showCreateChannel,
     setShowCreateChannel,
     showCreateTeam,
@@ -104,7 +103,7 @@ export default function WorkspaceChannelView() {
     setShowInviteMember,
     showToast,
   } = useWorkspace();
-  const { voiceLeaveChannel, onlineUsers: voiceOnlineUsers } = useVoiceConnection();
+  const { onlineUsers: voiceOnlineUsers } = useVoiceConnection();
 
   const currentUserPresenceName = currentUser?.name || currentUser?.email || 'You';
 
@@ -275,30 +274,13 @@ export default function WorkspaceChannelView() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const openWorkspaceChannel = useCallback(async (channelId) => {
-    const target = allChannels.find((channel) => channel.id === channelId);
-    if (target?.type === 'voice') {
-      let result = await switchVoiceChannel(channelId);
-      if (result?.needsStopConfirm) {
-        const confirmed = window.confirm('You are currently recording in another voice channel. Switching will stop the recording and save it. Continue?');
-        if (!confirmed) return;
-        result = await switchVoiceChannel(channelId, { confirmedStopRecording: true });
-      }
-      if (result?.needsConsent) {
-        const confirmed = window.confirm('This voice channel is currently being recorded. By joining, your voice may be included in the recording. Do you want to join?');
-        if (!confirmed) return;
-        result = await switchVoiceChannel(channelId, { confirmedTargetRecording: true, confirmedStopRecording: true });
-      }
-      // Nếu join voice thất bại vẫn cho xem UI (có nút Join để click thủ công)
-      if (result?.ok && !result?.unchanged) {
-        voiceLeaveChannel();
-      }
-    }
+  const openWorkspaceChannel = useCallback((channelId) => {
+    // Opening a voice channel only reveals its UI. Join and leave stay explicit actions.
     selectChannel(channelId);
     // Clear URL query when selecting a channel
     lastSyncedView.current = 'home';
     router.replace('/workspace', undefined, { shallow: true });
-  }, [allChannels, router, selectChannel, switchVoiceChannel, voiceLeaveChannel]);
+  }, [router, selectChannel]);
 
   const openTeamChat = useCallback((teamId) => {
     selectTeamChat(teamId);

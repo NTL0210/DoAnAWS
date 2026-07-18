@@ -15,7 +15,7 @@ import {
 } from 'react-icons/fi';
 
 const statusConfig = {
-  TODO: { label: 'Todo', color: 'bg-slate-400', accent: 'text-slate-500' },
+  PENDING: { label: 'Todo', color: 'bg-slate-400', accent: 'text-slate-500' },
   IN_PROGRESS: { label: 'In Progress', color: 'bg-orange-500', accent: 'text-orange-600' },
   REVIEW: { label: 'Review', color: 'bg-amber-400', accent: 'text-amber-600' },
   COMPLETED: { label: 'Completed', color: 'bg-emerald-500', accent: 'text-emerald-600' },
@@ -44,8 +44,8 @@ export default function WorkspaceAnalytics() {
 
     const totalTasks = tasks.length;
     const completedTasks = counts.COMPLETED || 0;
-    const overdueTasks = tasks.filter((task) => task.status !== 'COMPLETED' && task.deadline && new Date(task.deadline) < new Date()).length + (counts.OVERDUE || 0);
-    const activeTasks = (counts.TODO || 0) + (counts.IN_PROGRESS || 0) + (counts.REVIEW || 0);
+    const overdueTasks = tasks.filter((task) => task.status === 'OVERDUE' || (!['COMPLETED', 'REVIEW'].includes(task.status) && task.deadline && new Date(task.deadline) < new Date())).length;
+    const activeTasks = (counts.PENDING || 0) + (counts.IN_PROGRESS || 0) + (counts.REVIEW || 0);
     const completionRate = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
     const members = workspaceMembers || [];

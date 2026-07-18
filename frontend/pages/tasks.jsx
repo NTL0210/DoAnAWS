@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
@@ -25,6 +25,7 @@ export default function UnifiedTasks() {
     currentUser, loading, workspaces,
     activeWorkspace, activeWorkspaceId, selectWorkspace,
     workspaceRole, workspaceTasks, workspaceMembers,
+    refreshWorkspaceExecutionData,
   } = useWorkspace();
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
@@ -49,8 +50,11 @@ export default function UnifiedTasks() {
   }, [workspaces, currentUser]);
 
   const effectiveRole = workspaceRole || currentUser?.role;
-  const isOwner = effectiveRole === 'OWNER';
   const isManagerOrAbove = ['OWNER', 'VICE_ADMIN', 'MANAGER'].includes(effectiveRole);
+
+  useEffect(() => {
+    refreshWorkspaceExecutionData?.({ silent: true });
+  }, [refreshWorkspaceExecutionData]);
 
   const scopedTasks = useMemo(
     () => (workspaceTasks || []).filter((t) => t.workspaceId === activeWorkspace?.id || t.departmentId === activeWorkspace?.id),
@@ -88,8 +92,9 @@ export default function UnifiedTasks() {
       total: source.length,
       pending: source.filter((t) => t.status === 'PENDING').length,
       inProgress: source.filter((t) => t.status === 'IN_PROGRESS').length,
+      review: source.filter((t) => t.status === 'REVIEW').length,
       completed: source.filter((t) => t.status === 'COMPLETED').length,
-      overdue: source.filter((t) => t.deadline && new Date(t.deadline) < new Date() && t.status !== 'COMPLETED').length,
+      overdue: source.filter((t) => t.status === 'OVERDUE' || (t.deadline && new Date(t.deadline) < new Date() && !['COMPLETED', 'REVIEW'].includes(t.status))).length,
     };
   }, [scopedTasks, myTasks, effectiveRole]);
 
@@ -158,6 +163,8 @@ export default function UnifiedTasks() {
     { key: 'all', label: 'All', count: counts.total },
     { key: 'PENDING', label: 'Pending', count: counts.pending },
     { key: 'IN_PROGRESS', label: 'In Progress', count: counts.inProgress },
+    { key: 'REVIEW', label: 'Review', count: counts.review },
+    { key: 'OVERDUE', label: 'Overdue', count: counts.overdue },
     { key: 'COMPLETED', label: 'Completed', count: counts.completed },
   ];
 
@@ -222,7 +229,7 @@ export default function UnifiedTasks() {
         ) : (
           <div className="space-y-2">
             {enhanced.map((task, idx) => {
-              const overdue = task.deadline && new Date(task.deadline) < new Date() && task.status !== 'COMPLETED';
+              const overdue = task.status === 'OVERDUE' || (task.deadline && new Date(task.deadline) < new Date() && !['COMPLETED', 'REVIEW'].includes(task.status));
               const isCompact = effectiveRole === 'OWNER' || effectiveRole === 'VICE_ADMIN';
               if (isCompact) {
                 return (
@@ -301,6 +308,7 @@ function priorityRank(p) {
 function statusTone(s) {
   if (s === 'COMPLETED') return 'green';
   if (s === 'IN_PROGRESS') return 'blue';
+  if (s === 'REVIEW') return 'amber';
   if (s === 'PENDING') return 'amber';
   if (s === 'OVERDUE') return 'red';
   return 'slate';

@@ -10,7 +10,7 @@ export function createTask(data) {
     title: data.title,
     description: data.description || '',
     assigneeId: data.assigneeId || null,
-    status: data.status || 'TODO',
+    status: data.status || 'PENDING',
     assignmentStatus: data.assigneeId ? 'ASSIGNED' : 'NEED_ASSIGNMENT',
     priority: data.priority || 'MEDIUM',
     startDate: data.startDate || null,

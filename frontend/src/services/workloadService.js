@@ -1,7 +1,7 @@
 export const DEFAULT_WORKLOAD_THRESHOLD = 5;
 
 export function getMemberWorkload(tasks = [], members = [], threshold = DEFAULT_WORKLOAD_THRESHOLD) {
-  const activeStatuses = new Set(['TODO', 'IN_PROGRESS', 'REVIEW']);
+  const activeStatuses = new Set(['PENDING', 'IN_PROGRESS', 'REVIEW']);
   return members.map((member) => {
     const activeTasks = tasks.filter((task) =>
       !task.deletedAt

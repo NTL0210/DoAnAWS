@@ -244,7 +244,7 @@ export default function SuggestedTaskCard({
 }
 
 function getActiveCount(tasks, userId) {
-  return tasks.filter((task) => task.assigneeId === userId && ['TODO', 'IN_PROGRESS', 'REVIEW'].includes(task.status) && !task.deletedAt).length;
+  return tasks.filter((task) => task.assigneeId === userId && ['PENDING', 'IN_PROGRESS', 'REVIEW'].includes(task.status) && !task.deletedAt).length;
 }
 
 function FieldLabel({ label, children }) {

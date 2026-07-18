@@ -190,7 +190,7 @@ function applyDateFilter(items, dateFrom, dateTo, dateField) {
 function computeAnalytics(tasks, meetings) {
   const statusCounts = {};
   tasks.forEach((task) => {
-    const s = task.status || 'TODO';
+    const s = task.status || 'PENDING';
     statusCounts[s] = (statusCounts[s] || 0) + 1;
   });
 

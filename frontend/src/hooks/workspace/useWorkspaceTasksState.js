@@ -7,20 +7,21 @@ import { getTasksByMeeting as filterTasksByMeeting } from '@/services/taskServic
 import { isCloudMode } from '@/services/apiClient';
 
 const EMPTY_TRASH = { tasks: [], meetings: [], teams: [] };
-const UI_TO_API_STATUS = {
-  TODO: 'PENDING',
-  REVIEW: 'IN_PROGRESS',
-};
-const API_TO_UI_STATUS = {
-  PENDING: 'TODO',
-};
-
 function normalizeTaskForUi(task) {
+  const status = isIncompleteAfterDeadline(task) ? 'OVERDUE' : task.status || 'PENDING';
   return {
     ...task,
-    status: API_TO_UI_STATUS[task.status] || task.status || 'TODO',
+    status,
+    progress: status === 'OVERDUE' ? Math.min(task.progress || 0, 99) : task.progress,
     departmentId: task.departmentId || task.workspaceId,
   };
+}
+
+function isIncompleteAfterDeadline(task) {
+  if (!task?.deadline || ['COMPLETED', 'REVIEW', 'CANCELLED'].includes(task.status)) return false;
+  const deadlineDate = new Date(task.deadline);
+  if (Number.isNaN(deadlineDate.getTime())) return false;
+  return deadlineDate < new Date();
 }
 
 function normalizeMeetingForUi(meeting, activeWorkspaceId, currentUserId) {
@@ -30,10 +31,6 @@ function normalizeMeetingForUi(meeting, activeWorkspaceId, currentUserId) {
     uploadedBy: meeting.uploadedBy || meeting.createdBy || currentUserId,
     suggestions: meeting.suggestions || meeting.suggestedTasks || [],
   };
-}
-
-function normalizeTaskStatusForApi(status) {
-  return UI_TO_API_STATUS[status] || status;
 }
 
 function getMeetingSuggestions(meeting) {
@@ -107,47 +104,67 @@ export default function useWorkspaceTasksState({
     suggestionSaveTimersRef.current.forEach((timer) => clearTimeout(timer));
   }, []);
 
-  useEffect(() => {
+  const refreshWorkspaceExecutionData = useCallback(async ({ silent = false } = {}) => {
     if (!isCloudMode() || !activeWorkspaceId || !currentUser?.id) {
       setWorkspaceTasks([]);
       setWorkspaceMeetings([]);
       return;
     }
 
+    try {
+      const { meetingsApi, tasksApi } = await import('@/services/cloudClient');
+      const [meetingsResult, tasksResult] = await Promise.all([
+        meetingsApi.list({ workspaceId: activeWorkspaceId, limit: 100 }),
+        tasksApi.list({ workspaceId: activeWorkspaceId, limit: 100 }),
+      ]);
+
+      const meetings = Array.isArray(meetingsResult)
+        ? meetingsResult
+        : meetingsResult?.items || meetingsResult?.meetings || [];
+      const tasks = Array.isArray(tasksResult)
+        ? tasksResult
+        : tasksResult?.items || tasksResult?.tasks || [];
+
+      setWorkspaceMeetings(
+        meetings.map((meeting) => normalizeMeetingForUi(meeting, activeWorkspaceId, currentUser.id))
+      );
+      setWorkspaceTasks(tasks.map(normalizeTaskForUi));
+    } catch (err) {
+      if (!silent) {
+        showToast('error', err?.message || 'Failed to load workspace data.');
+        setWorkspaceMeetings([]);
+        setWorkspaceTasks([]);
+      }
+    }
+  }, [activeWorkspaceId, currentUser?.id, showToast]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function loadWorkspaceExecutionData() {
-      try {
-        const { meetingsApi, tasksApi } = await import('@/services/cloudClient');
-        const [meetingsResult, tasksResult] = await Promise.all([
-          meetingsApi.list({ workspaceId: activeWorkspaceId, limit: 100 }),
-          tasksApi.list({ workspaceId: activeWorkspaceId, limit: 100 }),
-        ]);
-        if (cancelled) return;
-
-        const meetings = Array.isArray(meetingsResult)
-          ? meetingsResult
-          : meetingsResult?.items || [];
-        const tasks = Array.isArray(tasksResult)
-          ? tasksResult
-          : tasksResult?.items || [];
-
-        setWorkspaceMeetings(
-          meetings.map((meeting) => normalizeMeetingForUi(meeting, activeWorkspaceId, currentUser.id))
-        );
-        setWorkspaceTasks(tasks.map(normalizeTaskForUi));
-      } catch (err) {
-        if (!cancelled) {
-          showToast('error', err?.message || 'Failed to load workspace data.');
-          setWorkspaceMeetings([]);
-          setWorkspaceTasks([]);
-        }
-      }
+      if (cancelled) return;
+      await refreshWorkspaceExecutionData();
     }
 
     loadWorkspaceExecutionData();
     return () => { cancelled = true; };
-  }, [activeWorkspaceId, currentUser?.id, showToast]);
+  }, [refreshWorkspaceExecutionData]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const refreshSilently = () => refreshWorkspaceExecutionData({ silent: true });
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refreshSilently();
+    };
+    window.addEventListener('focus', refreshSilently);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    window.addEventListener('workspace:tasks-refresh', refreshSilently);
+    return () => {
+      window.removeEventListener('focus', refreshSilently);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.removeEventListener('workspace:tasks-refresh', refreshSilently);
+    };
+  }, [refreshWorkspaceExecutionData]);
 
   // â”€â”€â”€ Task Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const addWorkspaceTasks = useCallback(async (newTasks) => {
@@ -195,7 +212,7 @@ export default function useWorkspaceTasksState({
       const { tasksApi } = await import('@/services/cloudClient');
       const saved = await tasksApi.update(taskId, {
         workspaceId: current.workspaceId || activeWorkspaceId,
-        status: normalizeTaskStatusForApi(newStatus),
+        status: newStatus,
         expectedVersion: current.version || 1,
       });
       setWorkspaceTasks((prev) =>
@@ -548,6 +565,7 @@ export default function useWorkspaceTasksState({
     addWorkspaceTasks,
     moveWorkspaceTask,
     deleteWorkspaceTask,
+    refreshWorkspaceExecutionData,
     createMeeting,
     deleteMeeting,
     uploadMeetingFile,
