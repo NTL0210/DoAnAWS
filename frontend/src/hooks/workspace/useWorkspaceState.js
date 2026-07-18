@@ -58,7 +58,16 @@ export default function useWorkspaceState({
 
   // ─── Derived ───────────────────────────────────────────
   const activeWorkspace = useMemo(() => {
-    return workspaces.find((w) => w.id === activeWorkspaceId) || null;
+    const workspace = workspaces.find((w) => w.id === activeWorkspaceId) || null;
+    if (!workspace) return null;
+
+    const validMemberIds = new Set((workspace.members || []).map((member) => member.userId));
+    const teams = (workspace.teams || []).map((team) => ({
+      ...team,
+      memberIds: Array.from(new Set(team.memberIds || []))
+        .filter((userId) => validMemberIds.has(userId)),
+    }));
+    return { ...workspace, teams };
   }, [workspaces, activeWorkspaceId]);
 
   const activeChannel = useMemo(() => {

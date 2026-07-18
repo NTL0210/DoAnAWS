@@ -7,6 +7,7 @@ import type {
   CreateWorkspaceInput,
   UpdateWorkspaceInput,
   WorkspaceMember,
+  WorkspaceTeam,
 } from "./workspace.types.js";
 import { createWorkspaceAttachmentUploadUrl } from "./workspace.upload.js";
 
@@ -85,6 +86,7 @@ export class WorkspaceService {
 
   async update(id: string, patch: UpdateWorkspaceInput): Promise<Workspace> {
     const current = await this.get(id);
+    const members = patch.members ?? current.members;
 
     const updated: Workspace = {
       ...current,
@@ -93,8 +95,8 @@ export class WorkspaceService {
       iconColor: patch.iconColor ?? current.iconColor,
       visibility: patch.visibility ?? current.visibility,
       channels: patch.channels ?? current.channels,
-      teams: patch.teams ?? current.teams,
-      members: patch.members ?? current.members,
+      teams: normalizeWorkspaceTeams(patch.teams ?? current.teams, members),
+      members,
       messages: patch.messages ?? current.messages,
       voiceRecords: patch.voiceRecords ?? current.voiceRecords,
       version: current.version + 1,
@@ -224,6 +226,14 @@ export class WorkspaceService {
       return { name: null, email: null, avatar: null };
     }
   }
+}
+
+function normalizeWorkspaceTeams(teams: WorkspaceTeam[], members: WorkspaceMember[]): WorkspaceTeam[] {
+  const validMemberIds = new Set(members.map((member) => member.userId));
+  return teams.map((team) => ({
+    ...team,
+    memberIds: Array.from(new Set(team.memberIds)).filter((userId) => validMemberIds.has(userId)),
+  }));
 }
 
 function defaultWorkspaceChannels(workspaceId: string, now: string): Workspace["channels"] {

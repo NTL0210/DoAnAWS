@@ -409,13 +409,13 @@ function InsightStat({ value, label, tone }) {
 
 function SignalCard({ label, value, state, color }) {
   const colors = {
-    blue: 'bg-orange-50 text-orange-700 border-orange-100',
-    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-    rose: 'bg-rose-50 text-rose-700 border-rose-100',
+    blue: 'border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-200',
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200',
+    rose: 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200',
   };
 
   return (
-    <div className={`rounded-2xl border p-4 ${colors[color] || colors.blue}`}>
+    <div className={`workspace-cut-corner border p-4 shadow-sm ${colors[color] || colors.blue}`}>
       <p className="text-xs font-bold uppercase tracking-wide opacity-75">{label}</p>
       <p className="mt-3 text-2xl font-extrabold">{value}</p>
       <p className="mt-1 text-xs font-bold opacity-80">{state}</p>

@@ -7,7 +7,7 @@ export function isOverdue(date) {
   return target.getTime() < startOfDay(new Date()).getTime();
 }
 
-export function isDueSoon(date, withinDays = 2) {
+export function isDueSoon(date, withinDays = 3) {
   if (!date || isOverdue(date)) return false;
   const target = startOfDay(date);
   if (!target) return false;
@@ -28,10 +28,38 @@ export function getDeadlineLabel(date) {
   return target.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+export function getDeadlineDateLabel(date) {
+  if (!date) return 'No deadline';
+  const target = startOfDay(date);
+  if (!target) return 'No deadline';
+  return target.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+export function getDeadlineRemainingDays(date) {
+  if (!date) return null;
+  const target = startOfDay(date);
+  if (!target) return null;
+  return Math.round((target.getTime() - startOfDay(new Date()).getTime()) / DAY_MS);
+}
+
+export function getDeadlineCountdown(date) {
+  const days = getDeadlineRemainingDays(date);
+  if (days === null) return 'Deadline not set';
+  if (days < 0) return `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue`;
+  if (days === 0) return 'Due today';
+  if (days === 1) return '1 day remaining';
+  return `${days} days remaining`;
+}
+
 export function getDeadlineWarning(date) {
   if (!date) return { key: 'missing', label: 'No deadline detected', tone: 'amber' };
-  if (isOverdue(date)) return { key: 'overdue', label: 'Deadline is already overdue', tone: 'red' };
-  if (isDueSoon(date)) return { key: 'soon', label: 'Deadline is very soon', tone: 'amber' };
+  const countdown = getDeadlineCountdown(date);
+  if (isOverdue(date)) return { key: 'overdue', label: countdown, tone: 'red' };
+  if (isDueSoon(date, 3)) return { key: 'soon', label: countdown, tone: 'amber' };
   return null;
 }
 
@@ -56,7 +84,12 @@ export function getQuickDeadline(option) {
 }
 
 function startOfDay(value) {
-  const date = value instanceof Date ? new Date(value) : new Date(value);
+  const dateOnly = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? value.split('-').map(Number)
+    : null;
+  const date = dateOnly
+    ? new Date(dateOnly[0], dateOnly[1] - 1, dateOnly[2])
+    : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   date.setHours(0, 0, 0, 0);
   return date;

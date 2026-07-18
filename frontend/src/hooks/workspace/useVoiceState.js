@@ -17,6 +17,7 @@ import {
   getVoiceRecordsByChannel as serviceGetVoiceRecordsByChannel,
   sendVoiceRecordToAI as serviceSendVoiceRecordToAI,
 } from '@/services/voiceRecordingService';
+import { resolveSuggestedTaskAssignees } from '@/utils/assigneeUtils';
 
 function getUserDisplayName(user) {
   if (!user) return 'Member';
@@ -36,6 +37,7 @@ function getUserDisplayName(user) {
  * @param {Array} params.voiceChannels
  * @param {string|null} params.workspaceRole
  * @param {string|null} params.activeWorkspaceId
+ * @param {Array} params.workspaceMembers
  * @param {boolean} params.canManageAIReview
  * @param {Function} params.canAccessVoice
  * @param {Function} params.canRecordVoice
@@ -77,6 +79,7 @@ export default function useVoiceState({
   voiceChannels,
   workspaceRole,
   activeWorkspaceId,
+  workspaceMembers,
   canManageAIReview,
   canAccessVoice,
   canRecordVoice,
@@ -700,9 +703,15 @@ export default function useVoiceState({
       if (!result?.ok || !result.meeting) {
         throw new Error(result?.error || 'AI processing request failed.');
       }
+      const suggestedTasks = resolveSuggestedTaskAssignees(
+        result.meeting.suggestedTasks || [],
+        workspaceMembers,
+        currentUser?.id
+      );
       const newMeeting = {
         ...result.meeting,
-        suggestions: result.meeting.suggestedTasks || [],
+        suggestions: suggestedTasks,
+        suggestedTasks,
         audioUrl: record.url || record.objectUrl || null,
       };
       setWorkspaceMeetings((prev) => [newMeeting, ...prev.filter((meeting) => meeting.id !== newMeeting.id)]);
@@ -732,7 +741,7 @@ export default function useVoiceState({
     } finally {
       aiRequestsInFlightRef.current.delete(recordId);
     }
-  }, [voiceChannels, canManageAIReview, canAccessVoice, setWorkspaceMeetings, addActivity, showToast]);
+  }, [voiceChannels, canManageAIReview, canAccessVoice, workspaceMembers, currentUser?.id, setWorkspaceMeetings, addActivity, showToast]);
 
   // ─── Voice cleanup on unmount ─────────────────────────
   useEffect(() => {

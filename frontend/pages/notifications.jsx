@@ -12,10 +12,15 @@ import {
 import AppShell, { Panel, LoadingState, EmptyState } from '../src/components/layout/AppShell';
 import { useWorkspace } from '../src/context/WorkspaceContext';
 import { isCloudMode } from '../src/services/apiClient';
+import { isImportantNotification, sanitizeNotificationText } from '../src/utils/notificationUtils';
 
 const typeConfig = {
   task_assigned: { icon: FiUserPlus, color: 'bg-blue-50 text-blue-600' },
+  TASK_ASSIGNED: { icon: FiUserPlus, color: 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-300' },
   deadline_approaching: { icon: FiClock, color: 'bg-amber-50 text-amber-600' },
+  DEADLINE_APPROACHING: { icon: FiClock, color: 'bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-300' },
+  TASK_OVERDUE: { icon: FiClock, color: 'bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-300' },
+  TASK_REVIEW_REQUIRED: { icon: FiCheckCircle, color: 'bg-orange-50 text-orange-600 dark:bg-orange-950/30 dark:text-orange-300' },
   meeting_processed: { icon: FiFileText, color: 'bg-primary-50 text-primary-600' },
   task_completed: { icon: FiCheckCircle, color: 'bg-emerald-50 text-emerald-600' },
   comment: { icon: FiBell, color: 'bg-slate-50 text-slate-600' },
@@ -108,7 +113,7 @@ export default function EmployeeNotifications() {
   );
   const notificationItems = useMemo(
     () => notifications
-      .filter((notification) => !pendingInvitationIds.has(notification.id))
+      .filter((notification) => !pendingInvitationIds.has(notification.id) && isImportantNotification(notification))
       .map((notification) => ({ kind: 'notification', id: notification.id, notification })),
     [notifications, pendingInvitationIds]
   );
@@ -152,7 +157,7 @@ export default function EmployeeNotifications() {
         )
       }
     >
-      <Panel title={`Notifications (${filtered.length})`} description="Stay updated on tasks, meetings, and activity">
+      <Panel title={`Notifications (${filtered.length})`} description="Task, deadline, meeting, review, and invitation alerts">
         <div className="mb-5 flex flex-wrap gap-2">
           {[
             { key: 'all', label: 'All', count: allItems.length },
@@ -249,13 +254,13 @@ export default function EmployeeNotifications() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                        {n.title || n.message || 'Notification'}
+                        {sanitizeNotificationText(n.title || n.message, 'Workspace alert')}
                       </h3>
                       {!n.isRead && (
                         <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-orange-500" />
                       )}
                     </div>
-                    {n.message && <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{n.message}</p>}
+                    {n.message && <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{sanitizeNotificationText(n.message)}</p>}
                     <p className="mt-1.5 text-xs text-slate-400">
                       {n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}
                     </p>

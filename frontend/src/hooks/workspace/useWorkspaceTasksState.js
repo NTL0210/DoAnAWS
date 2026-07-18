@@ -5,6 +5,8 @@ import { generateId } from '@/lib/workspaceData';
 import { analyzeMeeting as serviceAnalyzeMeeting, createMeeting as serviceCreateMeeting, deleteMeeting as serviceDeleteMeeting, updateMeeting as serviceUpdateMeeting, uploadMeetingFile as serviceUploadMeetingFile } from '@/services/meetingService';
 import { getTasksByMeeting as filterTasksByMeeting } from '@/services/taskService';
 import { isCloudMode } from '@/services/apiClient';
+import { resolveSuggestedTaskAssignees } from '@/utils/assigneeUtils';
+import { getDeadlineCountdown, getDeadlineDateLabel, getDeadlineRemainingDays } from '@/utils/deadlineUtils';
 
 const EMPTY_TRASH = { tasks: [], meetings: [], teams: [] };
 function normalizeTaskForUi(task) {
@@ -24,12 +26,18 @@ function isIncompleteAfterDeadline(task) {
   return deadlineDate < new Date();
 }
 
-function normalizeMeetingForUi(meeting, activeWorkspaceId, currentUserId) {
+function normalizeMeetingForUi(meeting, activeWorkspaceId, currentUserId, workspaceMembers = []) {
+  const suggestions = resolveSuggestedTaskAssignees(
+    meeting.suggestions || meeting.suggestedTasks || [],
+    workspaceMembers,
+    currentUserId
+  );
   return {
     ...meeting,
     departmentId: meeting.departmentId || meeting.workspaceId || activeWorkspaceId,
     uploadedBy: meeting.uploadedBy || meeting.createdBy || currentUserId,
-    suggestions: meeting.suggestions || meeting.suggestedTasks || [],
+    suggestions,
+    suggestedTasks: suggestions,
   };
 }
 
@@ -53,6 +61,7 @@ function withMeetingSuggestions(meeting, suggestedTasks) {
  * @param {string|null} params.activeWorkspaceId
  * @param {Function} params.setWorkspaces
  * @param {Function} params.addActivity
+ * @param {Function} params.addNotification
  * @param {Function} params.showToast
  * @param {Function} params.completeOnboardingStep
  * @returns {{
@@ -91,6 +100,7 @@ export default function useWorkspaceTasksState({
   activeWorkspaceId,
   setWorkspaces,
   addActivity,
+  addNotification,
   showToast,
   completeOnboardingStep,
 }) {
@@ -99,6 +109,7 @@ export default function useWorkspaceTasksState({
   const [trashItems, setTrashItems] = useState(EMPTY_TRASH);
   const suggestionSaveTimersRef = useRef(new Map());
   const suggestionDraftsRef = useRef(new Map());
+  const emittedTaskNotificationsRef = useRef(new Set());
 
   useEffect(() => () => {
     suggestionSaveTimersRef.current.forEach((timer) => clearTimeout(timer));
@@ -126,9 +137,49 @@ export default function useWorkspaceTasksState({
         : tasksResult?.items || tasksResult?.tasks || [];
 
       setWorkspaceMeetings(
-        meetings.map((meeting) => normalizeMeetingForUi(meeting, activeWorkspaceId, currentUser.id))
+        meetings.map((meeting) => normalizeMeetingForUi(meeting, activeWorkspaceId, currentUser.id, workspaceMembers))
       );
-      setWorkspaceTasks(tasks.map(normalizeTaskForUi));
+      const normalizedTasks = tasks.map(normalizeTaskForUi);
+      setWorkspaceTasks(normalizedTasks);
+
+      normalizedTasks.forEach((task) => {
+        const teamName = getTaskTeamName(task, activeWorkspace);
+        const reviewKey = `review:${task.id}`;
+        if (canManageAIReview && task.status === 'REVIEW' && !emittedTaskNotificationsRef.current.has(reviewKey)) {
+          emittedTaskNotificationsRef.current.add(reviewKey);
+          addNotification?.(
+            'TASK_REVIEW_REQUIRED',
+            'Task ready for review',
+            `${task.title} · ${teamName}`,
+            { taskId: task.id, teamId: task.teamId, workspaceId: activeWorkspaceId },
+          );
+        }
+
+        if (task.assigneeId !== currentUser.id || ['COMPLETED', 'CANCELLED'].includes(task.status)) return;
+        const createdRecently = task.createdAt && Date.now() - new Date(task.createdAt).getTime() <= 24 * 60 * 60 * 1000;
+        const assignmentKey = `assigned:${task.id}`;
+        if (task.status === 'PENDING' && createdRecently && !emittedTaskNotificationsRef.current.has(assignmentKey)) {
+          emittedTaskNotificationsRef.current.add(assignmentKey);
+          addNotification?.(
+            'TASK_ASSIGNED',
+            'New task assigned',
+            `${task.title} · ${teamName}`,
+            { taskId: task.id, teamId: task.teamId, workspaceId: activeWorkspaceId },
+          );
+        }
+
+        const remainingDays = getDeadlineRemainingDays(task.deadline);
+        if (remainingDays === null || remainingDays > 3) return;
+        const deadlineKey = `deadline:${task.id}:${remainingDays < 0 ? 'overdue' : remainingDays}`;
+        if (emittedTaskNotificationsRef.current.has(deadlineKey)) return;
+        emittedTaskNotificationsRef.current.add(deadlineKey);
+        addNotification?.(
+          remainingDays < 0 ? 'TASK_OVERDUE' : 'DEADLINE_APPROACHING',
+          remainingDays < 0 ? 'Task overdue' : 'Task deadline approaching',
+          `${task.title} · ${teamName} · ${getDeadlineDateLabel(task.deadline)} · ${getDeadlineCountdown(task.deadline)}`,
+          { taskId: task.id, teamId: task.teamId, workspaceId: activeWorkspaceId },
+        );
+      });
     } catch (err) {
       if (!silent) {
         showToast('error', err?.message || 'Failed to load workspace data.');
@@ -136,7 +187,7 @@ export default function useWorkspaceTasksState({
         setWorkspaceTasks([]);
       }
     }
-  }, [activeWorkspaceId, currentUser?.id, showToast]);
+  }, [activeWorkspace, activeWorkspaceId, addNotification, canManageAIReview, currentUser?.id, showToast, workspaceMembers]);
 
   useEffect(() => {
     let cancelled = false;
@@ -264,7 +315,7 @@ export default function useWorkspaceTasksState({
 
     try {
       const saved = await serviceCreateMeeting(meetingPayload);
-      const newMeeting = normalizeMeetingForUi(saved, activeWorkspaceId, currentUser.id);
+      const newMeeting = normalizeMeetingForUi(saved, activeWorkspaceId, currentUser.id, workspaceMembers);
       setWorkspaceMeetings((prev) => [newMeeting, ...prev]);
       addActivity('meeting_created', 'Meeting "' + newMeeting.title + '" uploaded');
       showToast('success', 'Meeting created successfully.');
@@ -274,7 +325,7 @@ export default function useWorkspaceTasksState({
       showToast('error', err.message || 'Failed to create meeting.');
       return null;
     }
-  }, [activeWorkspace, currentUser, canManageAIReview, workspaceRole, activeWorkspaceId, addActivity, showToast, completeOnboardingStep]);
+  }, [activeWorkspace, currentUser, canManageAIReview, workspaceRole, activeWorkspaceId, workspaceMembers, addActivity, showToast, completeOnboardingStep]);
 
   const uploadMeetingFile = useCallback(async (meetingId, file) => {
     const meeting = workspaceMeetings.find((m) => m.id === meetingId);
@@ -337,7 +388,7 @@ export default function useWorkspaceTasksState({
         throw new Error(result.summary || 'AI processing failed.');
       }
 
-      const suggestions = (result?.suggestedTasks || result?.tasks || []).map((task, idx) => ({
+      const suggestions = resolveSuggestedTaskAssignees((result?.suggestedTasks || result?.tasks || []).map((task, idx) => ({
         id: task.id || 'sug-' + generateId(),
         meetingId,
         title: task.title || 'Untitled Task',
@@ -351,7 +402,7 @@ export default function useWorkspaceTasksState({
         reason: task.reason || null,
         approved: false,
         order: idx,
-      }));
+      })), workspaceMembers, currentUser?.id);
 
       setWorkspaceMeetings((prev) =>
         prev.map((m) =>
@@ -582,4 +633,9 @@ export default function useWorkspaceTasksState({
     restoreTrashItem,
     permanentlyDeleteTrashItem,
   };
+}
+
+function getTaskTeamName(task, workspace) {
+  const team = (workspace?.teams || []).find((item) => item.id === task.teamId);
+  return team?.name || workspace?.name || 'Workspace';
 }

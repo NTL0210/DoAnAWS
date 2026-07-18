@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
+import { logger } from "../../infrastructure/observability/logger.js";
 import { ConflictError, ForbiddenError, NotFoundError } from "../../shared/errors/app-error.js";
 import { hasSufficientRole } from "../auth/auth.types.js";
 import type { WorkspaceRole } from "../auth/auth.types.js";
 import type { WorkspaceRepository } from "../auth/workspace.repository.js";
 import type { MeetingService } from "../meetings/meeting.service.js";
 import type { Meeting } from "../meetings/meeting.types.js";
-import { analyzeVoiceRecording, createVoiceDownloadUrl, createVoiceUploadUrl } from "./voice-recording.ai.js";
+import { analyzeVoiceRecording, createVoiceDownloadUrl, createVoiceUploadUrl, deleteStoredVoiceRecording } from "./voice-recording.ai.js";
 import type { VoiceRecordingRepository } from "./voice-recording.repository.js";
 import type { CreateVoiceRecordingInput, VoiceRecording } from "./voice-recording.types.js";
 
@@ -109,6 +110,7 @@ export class VoiceRecordingService {
     const record = await this.getOwned(input.id, input.userId);
     await this.assertWorkspaceMember(record.workspaceId, input.userId, "MANAGER");
     if (!record.storageKey) throw new Error("Voice recording has not been uploaded");
+    const storageKey = record.storageKey;
     if (record.aiStatus === "COMPLETED" && record.meetingId) {
       const meeting = await this.meetingService.get({ workspaceId: record.workspaceId, meetingId: record.meetingId });
       return { recording: record, meeting };
@@ -139,7 +141,6 @@ export class VoiceRecordingService {
         workspaceId: processing.workspaceId,
         title: processing.title,
         transcriptText: analysis.transcript,
-        storageRef: processing.storageKey || undefined,
         createdBy: processing.createdBy,
       });
       const suggestedTasks = analysis.tasks.slice(0, 10).map((task, index) => ({
@@ -147,7 +148,7 @@ export class VoiceRecordingService {
         title: task.title || `Task ${index + 1}`,
         description: task.description || task.title || "",
         assignee: task.assignee || "",
-        assigneeId: null,
+        assigneeId: isSelfAssignee(task.assignee) ? processing.createdBy : null,
         startDate: task.startDate || null,
         priority: normalizePriority(task.priority),
         deadline: task.deadline || null,
@@ -177,7 +178,25 @@ export class VoiceRecordingService {
         updatedAt: new Date().toISOString(),
       };
       await this.repository.update(completed);
-      return { recording: completed, meeting: reviewed };
+      let resultRecording = completed;
+      try {
+        await deleteStoredVoiceRecording(storageKey);
+        const cleanedRecording: VoiceRecording = {
+          ...completed,
+          storageKey: null,
+          sizeBytes: 0,
+          updatedAt: new Date().toISOString(),
+        };
+        await this.repository.update(cleanedRecording);
+        resultRecording = cleanedRecording;
+      } catch (cleanupError) {
+        logger.warn({
+          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+          recordingId: processing.id,
+          storageKey,
+        }, "[VoiceRecordingService.sendToAi] S3 cleanup failed after successful AI processing");
+      }
+      return { recording: resultRecording, meeting: reviewed };
     } catch (error) {
       await this.repository.update({
         ...processing,
@@ -216,4 +235,8 @@ function normalizePriority(value?: string): "LOW" | "MEDIUM" | "HIGH" {
   if (priority === "HIGH") return "HIGH";
   if (priority === "LOW") return "LOW";
   return "MEDIUM";
+}
+
+function isSelfAssignee(value?: string): boolean {
+  return /^(self|speaker|toi|tôi|minh|mình|em)$/i.test(String(value || "").trim());
 }

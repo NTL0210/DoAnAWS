@@ -1,7 +1,11 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useWorkspace } from '@/context/WorkspaceContext';
-import { FiAlertTriangle, FiInfo, FiPlus, FiUser, FiCalendar, FiTrash2 } from 'react-icons/fi';
-import { getDeadlineLabel, getDeadlineWarning } from '@/utils/deadlineUtils';
+import { FiAlertTriangle, FiCheckSquare, FiInfo, FiPlus, FiUser, FiCalendar, FiTrash2 } from 'react-icons/fi';
+import {
+  getDeadlineCountdown,
+  getDeadlineDateLabel,
+  getDeadlineWarning,
+} from '@/utils/deadlineUtils';
 import { getMemberWorkload } from '@/services/workloadService';
 import { formatSourceEvidence } from '@/utils/sourceEvidenceUtils';
 
@@ -98,10 +102,10 @@ export default function KanbanBoard() {
 
   const getPriorityBg = (priority) => {
     const colors = {
-      URGENT: 'bg-red-500/10 border-red-500/30',
-      HIGH: 'bg-orange-500/10 border-orange-500/30',
-      MEDIUM: 'bg-yellow-500/10 border-yellow-500/30',
-      LOW: 'bg-slate-500/10 border-slate-500/30',
+      URGENT: 'border-l-2 border-l-red-500',
+      HIGH: 'border-l-2 border-l-orange-500',
+      MEDIUM: 'border-l-2 border-l-amber-400',
+      LOW: 'border-l-2 border-l-slate-400',
     };
     return colors[priority] || colors.MEDIUM;
   };
@@ -137,30 +141,33 @@ export default function KanbanBoard() {
   };
 
   return (
-    <div className="flex h-full flex-col bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#edf1f4] text-slate-900 dark:bg-[#080c12] dark:text-slate-100">
       {/* ─── Board Header ─── */}
-      <div className="flex items-center justify-between border-b border-slate-200/80 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-900/80">
-        <div>
-          <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-            📋 Task Board
-          </h1>
-          <div className="text-xs text-slate-500 mt-1 dark:text-slate-400">
-            {completedTasks}/{totalTasks} tasks completed
-            {totalTasks > 0 && (
-              <span className="ml-2">
-                — {Math.round((completedTasks / totalTasks) * 100)}% done
-              </span>
-            )}
+      <div className="dashboard-command-hero workspace-cut-corner relative mx-5 mt-5 overflow-hidden px-5 py-4 text-white">
+        <div className="dashboard-command-grid" aria-hidden="true" />
+        <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center bg-orange-500 text-white shadow-lg shadow-orange-950/30 [clip-path:polygon(0_0,calc(100%_-_10px)_0,100%_10px,100%_100%,10px_100%,0_calc(100%_-_10px))]">
+              <FiCheckSquare className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-black uppercase text-orange-300">Execution board</p>
+              <h1 className="mt-0.5 text-xl font-black text-white">My Tasks</h1>
+              <p className="mt-1 text-xs font-semibold text-slate-400">
+                {completedTasks}/{totalTasks} completed
+                {totalTasks > 0 ? ` · ${Math.round((completedTasks / totalTasks) * 100)}% delivery rate` : ''}
+              </p>
+            </div>
           </div>
+          {canCreateTask && (
+            <button
+              onClick={() => setShowCreateTask(true)}
+              className="workspace-command-button is-primary shrink-0"
+            >
+              <FiPlus className="h-4 w-4" /> New Task
+            </button>
+          )}
         </div>
-        {canCreateTask && (
-          <button
-            onClick={() => setShowCreateTask(true)}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-600/25 hover:bg-primary-700 transition"
-          >
-            <FiPlus className="h-4 w-4" /> New Task
-          </button>
-        )}
       </div>
 
       {/* ─── Create Task Modal ─── */}
@@ -170,7 +177,7 @@ export default function KanbanBoard() {
           onClick={() => setShowCreateTask(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-[#fbfcfe] p-6 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+            className="workspace-tactical-panel workspace-cut-corner w-full max-w-md p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-bold text-slate-900 mb-4 dark:text-slate-100">Create Task</h2>
@@ -273,7 +280,7 @@ export default function KanbanBoard() {
                 <button
                   type="submit"
                   disabled={!newTask.title.trim()}
-                  className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-600/25 hover:bg-primary-700 disabled:opacity-50 transition"
+                  className="workspace-command-button is-primary px-5 disabled:opacity-50"
                 >
                   Create Task
                 </button>
@@ -284,12 +291,12 @@ export default function KanbanBoard() {
       )}
 
       {/* ─── Kanban Columns ─── */}
-      <div className="flex-1 overflow-x-auto bg-slate-50 p-6 dark:bg-slate-900">
-        <div className="flex gap-5 h-full min-h-[400px]">
+      <div className="flex-1 overflow-x-auto p-5">
+        <div className="flex h-full min-h-[400px] gap-4">
           {columns.map((col) => (
-            <div key={col.id} className="min-w-[280px] max-w-[320px] flex-1 flex flex-col">
+            <section key={col.id} className="dashboard-panel workspace-cut-corner flex min-w-[280px] max-w-[320px] flex-1 flex-col p-3.5">
               {/* Column Header */}
-              <div className="flex items-center gap-2 px-1 pb-3">
+              <div className="flex min-h-9 items-center gap-2 border-b border-slate-200/80 px-1 pb-3 dark:border-slate-700/70">
                 <span
                   className="h-3 w-3 rounded-full"
                   style={{ backgroundColor: col.color }}
@@ -309,11 +316,13 @@ export default function KanbanBoard() {
                     ...task,
                     sourceMeetingTitle: task.sourceMeetingTitle || getMeetingTitle(task.sourceMeetingId),
                   });
+                  const deadlineWarning = getDeadlineWarning(task.deadline);
+                  const deadlineCountdown = getDeadlineCountdown(task.deadline);
 
                   return (
-                    <div
+                    <article
                       key={task.id}
-                      className={`rounded-xl border bg-white p-4 transition hover:shadow-md dark:bg-slate-900/80 ${getPriorityBg(task.priority)}`}
+                      className={`workspace-tactical-panel workspace-cut-corner p-4 transition hover:-translate-y-0.5 hover:border-orange-500/30 ${getPriorityBg(task.priority)}`}
                     >
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className={`text-[10px] font-bold uppercase tracking-wider ${getPriorityColor(task.priority)}`}>
@@ -322,10 +331,10 @@ export default function KanbanBoard() {
                       {task.generatedFromAI ? (
                         <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">AI Generated</span>
                       ) : null}
-                      {getDeadlineWarning(task.deadline) ? (
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black ${getDeadlineWarning(task.deadline).tone === 'red' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`}>
+                      {deadlineWarning ? (
+                        <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-black ${deadlineWarning.tone === 'red' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`}>
                           <FiAlertTriangle className="h-3 w-3" />
-                          {getDeadlineWarning(task.deadline).label}
+                          {deadlineWarning.label}
                         </span>
                       ) : null}
                       {canDeleteTask ? (
@@ -364,15 +373,20 @@ export default function KanbanBoard() {
                         <p className="mt-1"><span className="font-bold">Evidence:</span> {evidence.sourceQuote}</p>
                       </details>
                     ) : null}
-                    <div className="flex items-center justify-between text-xs text-slate-400">
-                      <div className="flex items-center gap-3">
+                    <div className="border-t border-slate-200/80 pt-3 text-xs text-slate-400 dark:border-slate-700/70">
+                      <div className="flex items-start justify-between gap-3">
                         <span className="flex items-center gap-1">
                           <FiUser className="h-3 w-3" />
                           {getUserName(task.assigneeId)}
                         </span>
-                        <span className="flex items-center gap-1">
-                          <FiCalendar className="h-3 w-3" />
-                          {getDeadlineLabel(task.deadline)}
+                        <span className="flex min-w-0 flex-col items-end gap-0.5 text-right">
+                          <span className="flex items-center gap-1 font-bold text-slate-600 dark:text-slate-300">
+                            <FiCalendar className="h-3 w-3" />
+                            {getDeadlineDateLabel(task.deadline)}
+                          </span>
+                          <span className={deadlineWarning?.tone === 'red' ? 'font-bold text-red-500' : deadlineWarning?.key === 'soon' ? 'font-bold text-amber-500' : ''}>
+                            {deadlineCountdown}
+                          </span>
                         </span>
                       </div>
                     </div>
@@ -385,13 +399,13 @@ export default function KanbanBoard() {
                             const action = getTaskAction(task);
                             if (action) moveWorkspaceTask(task.id, action.nextStatus);
                           }}
-                          className="flex-1 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-700 transition"
+                          className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 px-3 py-2 text-xs font-black uppercase text-white transition hover:brightness-110 [clip-path:polygon(0_0,calc(100%_-_9px)_0,100%_9px,100%_100%,9px_100%,0_calc(100%_-_9px))]"
                         >
                           {getTaskAction(task)?.label}
                         </button>
                       </div>
                     )}
-                    </div>
+                    </article>
                   );
                 })}
                 {col.tasks.length > (visibleByColumn[col.id] || 50) && (
@@ -404,12 +418,12 @@ export default function KanbanBoard() {
                   </button>
                 )}
                 {col.tasks.length === 0 && (
-                  <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-white py-10 text-xs font-semibold italic text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
+                  <div className="workspace-cut-corner flex items-center justify-center border border-dashed border-slate-300 bg-slate-100/70 py-10 text-xs font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-950/30 dark:text-slate-400">
                     {col.id === 'PENDING' ? 'Drop new tasks here' : 'No tasks'}
                   </div>
                 )}
               </div>
-            </div>
+            </section>
           ))}
         </div>
       </div>

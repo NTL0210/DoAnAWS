@@ -8,7 +8,7 @@ import type {
   Meeting,
   UpdateMeetingInput
 } from "./meeting.types.js";
-import { createMeetingUploadUrl, mimeTypeForStorageKey } from "./meeting.upload.js";
+import { createMeetingUploadUrl, deleteMeetingUpload, mimeTypeForStorageKey } from "./meeting.upload.js";
 import { analyzeStoredAudio, analyzeTranscriptText, isActionableTaskCandidate } from "../voice-recordings/voice-recording.ai.js";
 
 export class MeetingService {
@@ -159,7 +159,28 @@ export class MeetingService {
       updatedAt: new Date().toISOString()
     };
     await this.repository.update(updated, current.version);
-    return updated;
+    if (!current.storageRef || !mimeTypeForStorageKey(current.storageRef).startsWith("audio/")) {
+      return updated;
+    }
+
+    try {
+      await deleteMeetingUpload(current.storageRef);
+      const cleaned: Meeting = {
+        ...updated,
+        storageRef: null,
+        version: updated.version + 1,
+        updatedAt: new Date().toISOString(),
+      };
+      await this.repository.update(cleaned, updated.version);
+      return cleaned;
+    } catch (cleanupError) {
+      logger.warn({
+        error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        meetingId: current.id,
+        storageKey: current.storageRef,
+      }, "[MeetingService.process] S3 cleanup failed after successful AI processing");
+      return updated;
+    }
   }
 }
 

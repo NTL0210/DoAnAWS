@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import CreateWorkspaceModal from '@/components/workspace/CreateWorkspaceModal';
 import { AnimatedThemeToggler } from '@/components/ui/animated-theme-toggler';
+import { isImportantNotification, sanitizeNotificationText } from '@/utils/notificationUtils';
 import {
   FiActivity,
   FiBarChart2,
@@ -138,7 +139,9 @@ export default function AppShell({ user, children, eyebrow, title, description, 
     [pendingInvitations]
   );
   const visibleNotifications = useMemo(
-    () => notifications.filter((item) => !pendingInvitationIds.has(item.id)),
+    () => notifications.filter((item) =>
+      !pendingInvitationIds.has(item.id) && isImportantNotification(item)
+    ),
     [notifications, pendingInvitationIds]
   );
 
@@ -481,14 +484,14 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                 <button
                   type="button"
                   onClick={toggleNotif}
-                  className={`relative flex h-10 w-10 items-center justify-center rounded-lg border text-slate-500 transition hover:bg-white hover:shadow-sm active:scale-95 dark:text-slate-400 dark:hover:bg-slate-800 ${
+                  className={`relative flex h-11 w-11 items-center justify-center rounded-lg border text-slate-500 transition hover:bg-white hover:shadow-sm active:scale-95 dark:text-slate-400 dark:hover:bg-slate-800 ${
                     notifOpen
                       ? 'border-orange-200 bg-orange-50 text-orange-600 dark:border-orange-900 dark:bg-orange-950/20 dark:text-orange-300'
                       : 'border-slate-200 bg-[#fbfcfe] dark:border-slate-700 dark:bg-slate-900'
                   }`}
                   title="Notifications"
                 >
-                  <FiBell className="h-4 w-4" />
+                  <FiBell className="h-5 w-5" />
                   {notifCount > 0 && (
                     <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-lg">
                       {notifCount}
@@ -504,7 +507,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: -8, scale: 0.96 }}
                       transition={{ duration: 0.18, ease: 'easeOut' }}
-                      className="dashboard-panel workspace-cut-corner absolute right-0 top-12 z-40 w-80 overflow-hidden p-0"
+                      className="dashboard-panel workspace-cut-corner absolute right-0 top-14 z-40 w-[380px] max-w-[calc(100vw-2rem)] overflow-hidden p-0"
                     >
                       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
                         <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
@@ -522,7 +525,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                       </div>
                       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5 dark:border-slate-800">
                         <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                          {activeWorkspace?.name || 'Workspace'} chat alerts
+                          Important alerts · {activeWorkspace?.name || 'Workspace'}
                         </span>
                         <button
                           type="button"
@@ -542,7 +545,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                           <div className="px-4 py-8 text-center">
                             <FiBell className="mx-auto h-7 w-7 text-slate-300 dark:text-slate-600" />
                             <p className="mt-2 text-sm font-bold text-slate-600 dark:text-slate-300">No notifications yet</p>
-                            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Workspace chat alerts will appear here.</p>
+                            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Task, deadline, meeting, review, and invitation alerts will appear here.</p>
                           </div>
                         ) : (
                           <>
@@ -603,8 +606,8 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                                   <FiBell className="h-3.5 w-3.5" />
                                 </div>
                                 <div className="min-w-0">
-                                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{n.title}</p>
-                                  <p className="truncate text-xs text-slate-500 dark:text-slate-400">{n.message}</p>
+                                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{sanitizeNotificationText(n.title, 'Workspace alert')}</p>
+                                  <p className="line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-400">{sanitizeNotificationText(n.message)}</p>
                                   <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">{n.time || formatNotificationTime(n.createdAt)}</p>
                                 </div>
                                 {(n.unread || n.isRead === false) && <span className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-orange-500" />}
