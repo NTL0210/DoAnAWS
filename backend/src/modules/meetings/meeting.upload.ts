@@ -1,9 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "../../config/env.js";
 
 const s3 = new S3Client({ region: env.AWS_REGION });
+
+function getMeetingUploadBucket(): string {
+  const bucket = env.VOICE_RECORDINGS_BUCKET || env.AUDIO_BUCKET;
+  if (!bucket) throw new Error("VOICE_RECORDINGS_BUCKET or AUDIO_BUCKET is required");
+  return bucket;
+}
 
 export interface MeetingUploadInput {
   workspaceId: string;
@@ -17,8 +23,7 @@ export async function createMeetingUploadUrl(input: MeetingUploadInput): Promise
   storageKey: string;
   bucket: string;
 }> {
-  const bucket = env.VOICE_RECORDINGS_BUCKET || env.AUDIO_BUCKET;
-  if (!bucket) throw new Error("VOICE_RECORDINGS_BUCKET or AUDIO_BUCKET is required");
+  const bucket = getMeetingUploadBucket();
 
   const storageKey = [
     "meetings",
@@ -34,6 +39,16 @@ export async function createMeetingUploadUrl(input: MeetingUploadInput): Promise
   });
   const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 900 });
   return { uploadUrl, storageKey, bucket };
+}
+
+export async function deleteMeetingUpload(storageKey: string): Promise<void> {
+  if (!storageKey.startsWith("meetings/")) {
+    throw new Error("Refusing to delete an unexpected meeting storage key");
+  }
+  await s3.send(new DeleteObjectCommand({
+    Bucket: getMeetingUploadBucket(),
+    Key: storageKey,
+  }));
 }
 
 export function mimeTypeForStorageKey(storageKey: string): string {

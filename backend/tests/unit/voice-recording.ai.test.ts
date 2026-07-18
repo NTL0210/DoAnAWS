@@ -3,8 +3,10 @@ import {
   calculateTaskConfidence,
   decodeTranscriptBuffer,
   detectTranscriptLanguage,
+  extractExplicitResponsibilityTasks,
   filterActionableTaskCandidates,
   isActionableTaskCandidate,
+  isUsefulSummary,
   normalizeStartDate,
   normalizeTranscriptText,
 } from "../../src/modules/voice-recordings/voice-recording.ai.js";
@@ -41,6 +43,86 @@ describe("voice task candidate filtering", () => {
   });
 });
 
+describe("coordinated Vietnamese responsibility assignments", () => {
+  it("creates a separate high-priority task for self backend and named frontend ownership", () => {
+    const assignmentTranscript = "Em s\u1ebd th\u1eed t\u00ednh n\u0103ng AI n\u00e0y. Em s\u1ebd ph\u00e2n c\u00f4ng c\u00f4ng vi\u1ec7c cho em l\u00e0 backend, c\u00f2n b\u1ea1n \u0110\u1ee9c s\u1ebd l\u00e0 frontend v\u1edbi m\u1ee9c \u0111\u1ed9 \u01b0u ti\u00ean l\u00e0 high.";
+    const tasks = extractExplicitResponsibilityTasks(assignmentTranscript);
+
+    expect(tasks).toHaveLength(2);
+    expect(tasks.map((task) => task.assignee)).toEqual(["SELF", "\u0110\u1ee9c"]);
+    expect(tasks.map((task) => task.title)).toEqual(["Ph\u1ee5 tr\u00e1ch backend", "Ph\u1ee5 tr\u00e1ch frontend"]);
+    expect(tasks.every((task) => task.priority === "HIGH")).toBe(true);
+    expect(isActionableTaskCandidate({
+      title: "Phu trach frontend",
+      assignee: "Duc",
+      sourceQuote: "ban Duc se la frontend",
+    }, assignmentTranscript)).toBe(true);
+  });
+
+  it("keeps only the newest assignee after an explicit correction", () => {
+    const transcript = "Lúc nãy nói Đức làm frontend nhưng thôi để Lan làm luôn.";
+    const tasks = extractExplicitResponsibilityTasks(transcript);
+
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toMatchObject({
+      assignee: "Lan",
+      title: "Phụ trách frontend",
+      reason: "Giữ phân công mới nhất sau khi người nói sửa lại",
+    });
+  });
+
+  it("applies a later reassignment across separate sentences", () => {
+    const transcript = "Đức làm frontend. Thôi, đổi lại để chị Lan làm frontend.";
+    const tasks = extractExplicitResponsibilityTasks(transcript);
+
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]?.assignee).toBe("Lan");
+  });
+});
+
+describe("supplemental extraction rules", () => {
+  it("accepts team ownership and process tasks", () => {
+    const transcript = "Cả team backend sẽ review lại API. Lan nhớ note lại vào docs và tạo ticket Jira.";
+
+    expect(isActionableTaskCandidate({
+      title: "Review API",
+      assignee: "team backend",
+      sourceQuote: "Cả team backend sẽ review lại API.",
+    }, transcript)).toBe(true);
+    expect(isActionableTaskCandidate({
+      title: "Update docs",
+      assignee: "Lan",
+      sourceQuote: "Lan nhớ note lại vào docs và tạo ticket Jira.",
+    }, transcript)).toBe(true);
+  });
+
+  it("ignores statements with an explicit joke cue", () => {
+    const transcript = "Lan làm frontend nhé [cười].";
+    expect(isActionableTaskCandidate({
+      title: "Phụ trách frontend",
+      assignee: "Lan",
+      sourceQuote: transcript,
+    }, transcript)).toBe(false);
+  });
+
+  it("caps confidence when STT marks evidence as unclear", () => {
+    const transcript = "Lan handle authentication [unclear].";
+    const confidence = calculateTaskConfidence({
+      title: "Handle authentication",
+      description: "Lan handle authentication.",
+      assignee: "Lan",
+      priority: "MEDIUM",
+      startDate: "",
+      deadline: "",
+      confidence: 0,
+      sourceQuote: transcript,
+      reason: "STT may be unclear",
+    }, transcript);
+
+    expect(confidence).toBeLessThanOrEqual(0.55);
+  });
+});
+
 describe("transcript encoding and language", () => {
   it("preserves UTF-8 Vietnamese text and repairs common mojibake", () => {
     expect(decodeTranscriptBuffer(Buffer.from("Cu\u1ed9c h\u1ecdp", "utf8"))).toBe("Cu\u1ed9c h\u1ecdp");
@@ -50,6 +132,21 @@ describe("transcript encoding and language", () => {
   it("selects the output language from the transcript language", () => {
     expect(detectTranscriptLanguage("H\u00e3y giao Minh fix dang nhap truoc thu Sau.")).toBe("Vietnamese");
     expect(detectTranscriptLanguage("Please assign Minh to fix login before Friday.")).toBe("English");
+  });
+});
+
+describe("meeting summary quality", () => {
+  it("keeps a concise synthesized summary for a short Vietnamese transcript", () => {
+    const shortTranscript = "Minh phu trach backend. Duc phu trach frontend. Ca hai uu tien cao.";
+    expect(isUsefulSummary(
+      "Cuoc hop phan cong Minh phu trach backend va Duc phu trach frontend, ca hai deu co muc uu tien cao.",
+      shortTranscript,
+    )).toBe(true);
+  });
+
+  it("rejects a verbatim transcript presented as its own summary", () => {
+    const shortTranscript = "Minh phu trach backend. Duc phu trach frontend.";
+    expect(isUsefulSummary(shortTranscript, shortTranscript)).toBe(false);
   });
 });
 

@@ -1,4 +1,4 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "../../config/env.js";
 import type { VoiceRecording } from "./voice-recording.types.js";
@@ -69,6 +69,7 @@ interface AnalysisOptions {
 type TaskCandidate = {
   title?: string | undefined;
   description?: string | undefined;
+  assignee?: string | undefined;
   sourceQuote?: string | undefined;
 };
 
@@ -76,6 +77,16 @@ export function getVoiceRecordingBucket(): string {
   const bucket = env.VOICE_RECORDINGS_BUCKET || env.AUDIO_BUCKET;
   if (!bucket) throw new Error("VOICE_RECORDINGS_BUCKET or AUDIO_BUCKET is required");
   return bucket;
+}
+
+export async function deleteStoredVoiceRecording(storageKey: string): Promise<void> {
+  if (!storageKey.startsWith("voice-recordings/")) {
+    throw new Error("Refusing to delete an unexpected voice recording storage key");
+  }
+  await s3.send(new DeleteObjectCommand({
+    Bucket: getVoiceRecordingBucket(),
+    Key: storageKey,
+  }));
 }
 
 export async function createVoiceUploadUrl(recording: VoiceRecording): Promise<{
@@ -370,13 +381,30 @@ function executionPromptHeader(referenceDate?: string, sourceText?: string): str
     referenceDate ? `Reference date for relative deadlines: ${referenceDate}.` : "No reliable reference date is available for relative deadlines.",
     "Do not copy the transcript as the summary. The summary must be 3-6 synthesized sentences.",
     "Extract concrete work only. Ignore small talk unless it creates a risk or task.",
-    "Create a task only for an explicit delegation or commitment with a concrete work verb and an assignee, a due date, or a direct request. Do not create tasks for questions, discussion topics, decisions, status updates, acknowledgements, or deferred work.",
-    "Before adding a task, verify that its sourceQuote is a short, exact quote from the transcript and that the quote itself proves the requested work. If it does not, omit the task.",
-    "Combine duplicate mentions into one task and do not target a fixed number of tasks. An empty task list is correct when the meeting has no explicit work.",
-    "If the content has no work, decision, risk, deadline, or assignment, keep tasks, actionItems, keyDecisions, and risks as empty arrays.",
-    "For each task, infer assignee from explicit assignment, speaker context, or responsibility phrase. Leave empty only if unclear.",
-    "Use priority HIGH for blockers, customer escalations, login/auth failures, budget/credit risk, deadlines, production issues, or VIP customers.",
-    "Use startDate as YYYY-MM-DD only when the content explicitly states when work starts. Use deadline as YYYY-MM-DD only when the content contains an explicit deadline or a relative deadline that can be resolved from the reference date; otherwise use an empty string.",
+    "Create a task only for an explicit delegation or commitment with concrete work. Do not create tasks for questions, discussion topics, decisions, status updates, or acknowledgements.",
+    "Treat explicit responsibility assignments such as 'A phu trach backend', 'B se la frontend', or 'phan cong cho A lam backend' as concrete work even when the sentence does not repeat another action verb.",
+    "When one sentence assigns different responsibilities to multiple people, create one separate task per assignee. Never collapse backend and frontend ownership into one task.",
+    "Read the entire transcript before deciding the final task list. Later corrections, confirmations, dependencies, and cancellations override earlier mentions.",
+    "For a mid-sentence correction or a later reassignment, keep only the final corrected work and newest assignee. Never retain the superseded assignment as a second task.",
+    "If several people share the exact same work item, create one task and put their names in assignee separated by commas. Do not duplicate the task.",
+    "When work is assigned to a named team or group, keep that team name as assignee. Do not invent individual members. Preserve qualifiers that distinguish people with the same name, such as Duc backend versus Duc design.",
+    "Group several closely related subtasks for one assignee into one task unless they have different priorities or deadlines.",
+    "Deduplicate repeated confirmations of the same work for the same assignee and keep the most complete evidence.",
+    "Do not create tasks from progress questions, status questions, general decisions without an owner, or personal trial intentions such as 'de em thu tinh nang nay'.",
+    "If a later statement cancels or removes assigned work, omit that task from the final result.",
+    "Conditional work that is not fully committed may remain a task, but state the condition in description and reason so confidence can be reduced.",
+    "For dependencies and recurring work, preserve the dependency, cadence, and frequency verbatim in description and reason.",
+    "Treat documentation, note-taking, ticket creation, and checking an external spec or link as valid tasks. State that external content is unavailable instead of inventing it.",
+    "Keep indefinitely deferred work as a task with an empty deadline and mark the deferral clearly in description and reason.",
+    "Only treat a statement as a joke when the transcript contains an explicit cue such as [cuoi] or [laughs]. If humor or STT interpretation is uncertain, preserve the uncertainty in reason and use cautious confidence.",
+    "Handle Vietnamese-English code-switching normally and preserve technical English terms verbatim. If STT makes a name, number, date, or time implausible, do not guess; record the ambiguity in description and reason.",
+    "For first-person Vietnamese references such as toi, minh, or em where the speaker assigns work to themselves, use the exact assignee value SELF.",
+    "Keep partial names and nicknames exactly as spoken. If no assignee is supported by the transcript, use unassigned and never infer one from job role.",
+    "Priority is HIGH only when the transcript says gap, khan, uu tien cao, quan trong nhat, urgent, or equivalent; LOW for khong gap or khi nao ranh; otherwise MEDIUM.",
+    "Only output an ISO deadline when the transcript contains an explicit calendar date. Keep relative wording such as truoc thu Sau or trong tuan nay in sourceQuote and description without inventing a date.",
+    "Before returning JSON, recount explicit assignments, apply final corrections, remove cancelled work, and verify there are no duplicate task plus assignee pairs.",
+    "Every sourceQuote must be short exact evidence from the transcript. If there is no supported task in the entire transcript, return an empty tasks array without inventing work.",
+    "Use startDate and deadline as YYYY-MM-DD only when the transcript states an explicit calendar date; otherwise keep them empty and preserve relative wording in description and sourceQuote.",
     "Never invent years or calendar dates that are not supported by the transcript and reference date.",
     "Return valid JSON only. No Markdown, no commentary.",
     "",
@@ -419,7 +447,7 @@ function ensureActionableAnalysis(analysis: VoiceAnalysisResult, fallbackTranscr
   }
   const local = buildLocalActionableAnalysis(transcript);
   const summary = isUsefulSummary(analysis.summary, transcript) ? analysis.summary.trim() : local.summary;
-  const tasks = filterActionableTaskCandidates(analysis.tasks
+  const normalizedAiTasks = analysis.tasks
     .filter((task) => (task.title || task.description || "").trim())
     .map((task, index) => ({
       title: task.title || local.tasks[index]?.title || `Task ${index + 1}`,
@@ -430,7 +458,12 @@ function ensureActionableAnalysis(analysis: VoiceAnalysisResult, fallbackTranscr
       deadline: normalizeDeadline(task.deadline || local.tasks[index]?.deadline || "", task.sourceQuote || task.description || task.title || "", transcript, referenceDate),
       sourceQuote: task.sourceQuote || local.tasks[index]?.sourceQuote || task.description || task.title || "",
       reason: task.reason || local.tasks[index]?.reason || "Extracted from meeting content",
-    })), transcript).map((task) => ({
+    }));
+  const explicitResponsibilityTasks = extractExplicitResponsibilityTasks(transcript);
+  const tasks = filterActionableTaskCandidates([
+    ...explicitResponsibilityTasks,
+    ...normalizedAiTasks,
+  ], transcript).map((task) => ({
     ...task,
     confidence: calculateTaskConfidence(task, transcript),
   }));
@@ -452,14 +485,16 @@ function ensureActionableAnalysis(analysis: VoiceAnalysisResult, fallbackTranscr
   };
 }
 
-function isUsefulSummary(summary: string, transcript: string): boolean {
+export function isUsefulSummary(summary: string, transcript: string): boolean {
   const cleanSummary = summary.trim();
-  if (cleanSummary.length < 40) return false;
+  if (cleanSummary.length < 20) return false;
   if (!transcript.trim()) return true;
   const normalizedSummary = normalizeText(cleanSummary);
   const normalizedTranscript = normalizeText(transcript);
-  if (normalizedTranscript.startsWith(normalizedSummary.slice(0, 160))) return false;
-  return cleanSummary.length < transcript.length * 0.55;
+  if (normalizedSummary === normalizedTranscript) return false;
+  if (normalizedSummary.length >= normalizedTranscript.length * 0.85 && normalizedTranscript.includes(normalizedSummary)) return false;
+  const maximumUsefulLength = Math.max(240, transcript.length * 0.75);
+  return cleanSummary.length <= maximumUsefulLength;
 }
 
 function noWorkSummary(transcript: string): string {
@@ -514,6 +549,80 @@ function buildLocalActionableAnalysis(transcript: string): VoiceAnalysisResult {
   };
 }
 
+export function extractExplicitResponsibilityTasks(transcript: string): VoiceAnalysisTask[] {
+  const language = detectTranscriptLanguage(transcript);
+  const tasks: VoiceAnalysisTask[] = [];
+  const assignmentPattern = /(?:^|[\s,;:()-])(?:(em|tôi|toi|mình|minh)\s+|(?:anh|chị|chi|bạn|ban)\s+([\p{L}]+)\s+|([\p{L}]+)\s+)(?:sẽ|se)?\s*(?:là|la|làm|lam|phụ trách|phu trach|đảm nhiệm|dam nhiem)\s+(backend|front[\s-]?end)\b/giu;
+  const correctionCuePattern = /(?:à\s+không|a\s+khong|nhưng\s+thôi|nhung\s+thoi|thôi\s+để|thoi\s+de|đổi\s+lại|doi\s+lai)/giu;
+
+  for (const line of transcript.split(/\n+|(?<=[.!?])\s+/).map((value) => value.trim()).filter(Boolean)) {
+    for (const match of line.matchAll(assignmentPattern)) {
+      const selfReference = Boolean(match[1]);
+      const assignee = selfReference ? "SELF" : (match[2] || match[3] || "").trim();
+      const role = normalizeText(match[4] || "").replace(/[\s-]+/g, "") === "frontend" ? "frontend" : "backend";
+      if (!assignee) continue;
+      tasks.push(buildResponsibilityTask(assignee, role, line, language));
+    }
+
+    for (const correction of line.matchAll(correctionCuePattern)) {
+      const correctionEnd = (correction.index || 0) + correction[0].length;
+      const suffix = line.slice(correctionEnd);
+      const correctedAssignment = suffix.match(/^\s*[,;:-]?\s*(?:(?:để|de)\s+)?(?:(?:anh|chị|chi|bạn|ban)\s+)?([\p{L}][\p{L}\d_-]*)(?:\s+\(([^)]+)\))?\s+(?:sẽ|se)?\s*(?:là|la|làm|lam|phụ trách|phu trach|đảm nhiệm|dam nhiem)\b/iu);
+      if (!correctedAssignment) continue;
+
+      const prefixRoles = [...line.slice(0, correction.index || 0).matchAll(/\b(backend|front[\s-]?end)\b/giu)];
+      const suffixRoles = [...suffix.matchAll(/\b(backend|front[\s-]?end)\b/giu)];
+      const explicitRole = suffixRoles[0]?.[1];
+      const priorRole = prefixRoles.at(-1)?.[1];
+      const roleText = explicitRole || priorRole || "";
+      if (!roleText) continue;
+
+      const role = normalizeText(roleText).replace(/[\s-]+/g, "") === "frontend" ? "frontend" : "backend";
+      const qualifier = correctedAssignment[2]?.trim();
+      const assignee = qualifier
+        ? `${correctedAssignment[1]} (${qualifier})`
+        : correctedAssignment[1] || "";
+      if (!assignee) continue;
+
+      for (let index = tasks.length - 1; index >= 0; index -= 1) {
+        if (responsibilityKey(tasks[index] || {}).endsWith(`:${role}`)) tasks.splice(index, 1);
+      }
+      tasks.push(buildResponsibilityTask(assignee, role, line, language, true));
+    }
+  }
+
+  return filterActionableTaskCandidates(tasks, transcript);
+}
+
+function buildResponsibilityTask(
+  assignee: string,
+  role: "backend" | "frontend",
+  sourceQuote: string,
+  language: "Vietnamese" | "English" | "Mixed",
+  corrected = false,
+): VoiceAnalysisTask {
+  const useVietnamese = language !== "English";
+  return {
+    title: useVietnamese ? `Phụ trách ${role}` : `Own ${role} work`,
+    description: useVietnamese
+      ? `${assignee === "SELF" ? "Người nói" : assignee} được phân công phụ trách ${role}.`
+      : `${assignee === "SELF" ? "The speaker" : assignee} is assigned ${role} responsibility.`,
+    assignee,
+    priority: inferLocalPriority(sourceQuote),
+    startDate: "",
+    deadline: "",
+    confidence: 0,
+    sourceQuote: sourceQuote.slice(0, 280),
+    reason: useVietnamese
+      ? corrected
+        ? "Giữ phân công mới nhất sau khi người nói sửa lại"
+        : "Phát hiện phân công trách nhiệm rõ ràng trong transcript"
+      : corrected
+        ? "Kept the latest assignment after an explicit correction"
+        : "Detected an explicit responsibility assignment in the transcript",
+  };
+}
+
 function hasExecutionSignal(transcript: string): boolean {
   return transcript
     .split(/\n+|(?<=[.!?])\s+/)
@@ -525,6 +634,7 @@ function normalizeText(value: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
+    .replace(/đ/g, "d")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -532,7 +642,9 @@ function normalizeText(value: string): string {
 function hasActionSignal(line: string): boolean {
   if (isNoWorkStatement(line)) return false;
   const text = normalizeText(line);
-  return /\b(can|phai|deadline|truoc|fix|review|chuan bi|thong bao|check|goi|follow up|demo|cap|set|doi|viet|tao|update|chot|ping|bao|xu ly|lam|gui)\b/.test(text)
+  return /\b(can|phai|deadline|truoc|fix|review|chuan bi|thong bao|check|goi|follow up|demo|cap|set|doi|viet|tao|update|chot|ping|bao|xu ly|lam|gui|phan cong|giao viec|phu trach|dam nhiem|nhan viec|handle|note|ghi chu|tao ticket|jira|docs)\b/.test(text)
+    || /(?:^|\s)(?:anh|chi|em|ban|toi|minh|[\p{L}]+)\s+(?:se\s+)?(?:la|lam|phu trach|dam nhiem)\s+(?:backend|front[\s-]?end)\b/u.test(text)
+    || /\b(?:ca\s+)?(?:team|nhom)\s+[\p{L}0-9_-]+\s+(?:se\s+)?(?:fix|review|check|handle|lam|viet|tao|update|xu ly|ghi|note)\b/u.test(text)
     || /\bhoi\s+(gia|y kien|vendor|sep|s3|quyen|khach|doi tac)\b/.test(text)
     || /\b(need|needs|must|should|todo|task|prepare|send|create|update|review|finish|call|ask|notify|follow up|fix|demo)\b/.test(text);
 }
@@ -540,8 +652,17 @@ function hasActionSignal(line: string): boolean {
 /** Keeps task cards limited to explicit, evidenced work from the meeting. */
 export function filterActionableTaskCandidates<T extends TaskCandidate>(tasks: T[], transcript: string): T[] {
   const seen = new Set<string>();
+  const seenResponsibilityRoles = new Set<string>();
   return tasks.filter((task) => {
     if (!isActionableTaskCandidate(task, transcript)) return false;
+    const responsibility = responsibilityKey(task);
+    if (responsibility) {
+      const [assignee, role] = responsibility.split(":");
+      if (seen.has(responsibility) || (!assignee && seenResponsibilityRoles.has(role || ""))) return false;
+      seen.add(responsibility);
+      seenResponsibilityRoles.add(role || "");
+      return true;
+    }
     const key = normalizeText(task.title || task.description || task.sourceQuote || "").replace(/\b(task|viec|cong viec)\b/g, "");
     if (!key || seen.has(key)) return false;
     seen.add(key);
@@ -555,18 +676,39 @@ export function isActionableTaskCandidate(task: TaskCandidate, transcript: strin
 
   const text = normalizeText(evidence);
   if (isNoWorkStatement(evidence) || isStatusUpdate(text)) return false;
+  if (/\[(?:cuoi|laughs?|joking)\]/.test(text)) return false;
 
-  const actionPattern = "fix|review|chuan bi|thong bao|check|goi|follow up|demo|cap|set|doi|viet|tao|update|ping|xu ly|lam|gui|nghien cuu|phan quyen|ghi|day|upload";
-  const hasWorkVerb = new RegExp(`\\b(?:${actionPattern})\\b`).test(text);
+  const actionPattern = "fix|review|chuan bi|thong bao|check|goi|follow up|demo|cap|set|doi|viet|tao|update|ping|xu ly|lam|gui|nghien cuu|phan quyen|ghi|day|upload|phan cong|giao viec|phu trach|dam nhiem|nhan viec|handle|note|ghi chu|tao ticket";
+  const responsibilityAssignment = /(?:^|\s)(?:anh|chi|em|ban|toi|minh|[\p{L}]+)\s+(?:se\s+)?(?:la|lam|phu trach|dam nhiem)\s+(?:backend|front[\s-]?end)\b/u.test(text);
+  const teamAssignment = /\b(?:ca\s+)?(?:team|nhom)\s+[\p{L}0-9_-]+\s+(?:se\s+)?(?:fix|review|check|handle|lam|viet|tao|update|xu ly|ghi|note)\b/u.test(text);
+  const hasWorkVerb = new RegExp(`\\b(?:${actionPattern})\\b`).test(text) || responsibilityAssignment || teamAssignment;
   if (!hasWorkVerb) return false;
 
   const assignedAction = new RegExp(`(?:^|[\\s\\]])(?:anh|chi|em|ban)?\\s*[a-z]{2,20}\\s+(?:${actionPattern})\\b`).test(text);
-  const taskCue = /\b(hay|nho|giup|nha|truoc|hom nay|tuan|deadline|xong|ping|demo|gui|cap quyen|tao|set)\b/.test(text);
+  const taskCue = /\b(hay|nho|giup|nha|truoc|hom nay|tuan|deadline|xong|ping|demo|gui|cap quyen|tao|set|note|ticket|jira|docs)\b/.test(text);
   const questionOnly = /\?|\b(cho .* hoi|co .* khong|hay .* khong|sao anh)\b/.test(text) && !assignedAction && !taskCue;
   if (questionOnly) return false;
 
   const decisionOnly = /\b(giu|quyet dinh|uu tien|tam dung|de .* sprint sau|tap trung)\b/.test(text) && !assignedAction && !taskCue;
-  return !decisionOnly && (assignedAction || taskCue);
+  return !decisionOnly && (assignedAction || taskCue || responsibilityAssignment || teamAssignment);
+}
+
+function responsibilityKey(task: TaskCandidate): string {
+  const primaryText = normalizeText(`${task.title || ""} ${task.description || ""}`);
+  const evidenceText = normalizeText(task.sourceQuote || "");
+  const roleText = /\b(?:backend|front[\s-]?end)\b/.test(primaryText) ? primaryText : evidenceText;
+  const role = /\bbackend\b/.test(roleText)
+    ? "backend"
+    : /\bfront[\s-]?end\b/.test(roleText)
+      ? "frontend"
+      : "";
+  if (!role) return "";
+  const normalizedAssignee = normalizeText(task.assignee || "")
+    .replace(/\b(anh|chi|ban)\b/g, "")
+    .replace(/\s+/g, "")
+    .trim();
+  const assignee = /^(self|speaker|toi|minh|em)$/.test(normalizedAssignee) ? "self" : normalizedAssignee;
+  return `${assignee}:${role}`;
 }
 
 function hasTranscriptEvidence(evidence: string, transcript: string): boolean {
@@ -637,13 +779,16 @@ function stripSpeaker(line: string): string {
 
 function inferAssigneeName(line: string): string {
   const speaker = line.match(/^\[([^\]]+)\]/)?.[1]?.trim();
+  const selfAssignment = line.match(/\b(em|tôi|toi|mình|minh)\s+(?:sẽ|se)?\s*(?:là|la|làm|lam|phụ trách|phu trach|đảm nhiệm|dam nhiem)\s+(?:backend|front[\s-]?end)\b/iu);
+  if (selfAssignment) return "SELF";
+  const roleAssignment = line.match(/\b(?:anh|chị|chi|bạn|ban)\s+([\p{L}]+)\s+(?:sẽ|se)?\s*(?:là|la|làm|lam|phụ trách|phu trach|đảm nhiệm|dam nhiem)\s+(?:backend|front[\s-]?end)\b/iu)?.[1];
   const direct = line.match(/\b(?:anh|chi|chị|em|ban|bạn)?\s*([A-ZÀ-Ỹ][\p{L}]{1,20})\s+(?:fix|review|chuan|chuẩn|cap|cấp|set|doi|đổi|viet|viết|nghien|nghiên|lam|làm|bao|báo|hoi|hỏi|goi|gọi|ping|gui|gửi)/u)?.[1];
-  return direct || speaker || "";
+  return roleAssignment || direct || speaker || "";
 }
 
 function inferLocalPriority(line: string): "LOW" | "MEDIUM" | "HIGH" {
   const text = normalizeText(line);
-  if (/\b(vip|phan nan|tre|loi|bug|token|credit|chay|deadline|truoc thu|cao|het|bao tri|urgent|critical|blocked|asap)\b/.test(text)) {
+  if (/\b(vip|phan nan|tre|loi|bug|token|credit|chay|deadline|truoc thu|cao|high|het|bao tri|urgent|critical|blocked|asap)\b/.test(text)) {
     return "HIGH";
   }
   if (/\b(de sprint sau|sau|optional|later)\b/.test(text)) return "LOW";
@@ -670,6 +815,12 @@ export function calculateTaskConfidence(
   if (task.deadline.trim() || hasRelativeDeadlineEvidence(evidence)) score += 0.12;
   if (task.startDate.trim() || hasStartDateEvidence(evidence)) score += 0.05;
   if (hasDirectRequestCue(text)) score += 0.06;
+  if (/\b(neu co thoi gian|neu ranh|khi nao ranh|if time permits|if possible)\b/.test(text)) {
+    score = Math.min(score, 0.55);
+  }
+  if (/\[(?:unclear|khong ro)\]|\b(?:nghe khong ro|stt co the sai|khong chac ten|khong chac so)\b/.test(text)) {
+    score = Math.min(score, 0.55);
+  }
   return Math.round(Math.min(score, 0.97) * 100) / 100;
 }
 
@@ -707,12 +858,8 @@ export function normalizeStartDate(value: string, source: string, transcript: st
   return diffDays >= 0 && diffDays <= 45 ? startDate : "";
 }
 
-function normalizeDeadline(value: string, source: string, transcript: string, referenceDate?: string): string {
+function normalizeDeadline(value: string, source: string, transcript: string, _referenceDate?: string): string {
   const evidence = `${source}\n${transcript}`;
-  const reference = parseIsoDate(referenceDate || "");
-  const inferred = reference ? inferRelativeDeadline(evidence, reference) : "";
-  if (inferred) return inferred;
-
   const deadline = value.trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(deadline)) return "";
 
@@ -720,11 +867,7 @@ function normalizeDeadline(value: string, source: string, transcript: string, re
   if (!generated) return "";
 
   if (hasAbsoluteDeadlineEvidence(evidence)) return isFutureOrToday(deadline) ? deadline : "";
-  if (!hasRelativeDeadlineEvidence(evidence)) return "";
-
-  if (!reference) return "";
-  const diffDays = Math.round((generated.getTime() - reference.getTime()) / 86400000);
-  return diffDays >= 0 && diffDays <= 45 && isFutureOrToday(deadline) ? deadline : "";
+  return "";
 }
 
 function isFutureOrToday(value: string): boolean {
@@ -762,61 +905,6 @@ function hasAbsoluteDeadlineEvidence(text: string): boolean {
 function hasRelativeDeadlineEvidence(text: string): boolean {
   const normalized = normalizeText(text);
   return /\b(deadline|han chot|truoc|xong truoc|hom nay|ngay mai|tuan nay|tuan sau|thu hai|thu ba|thu tu|thu nam|thu sau|thu bay|chu nhat|cuoi tuan|next week|this week|today|tomorrow|by friday|before friday)\b/.test(normalized);
-}
-
-function inferRelativeDeadline(text: string, reference: Date): string {
-  const normalized = normalizeText(text);
-  if (!hasRelativeDeadlineEvidence(normalized)) return "";
-  if (/\bhom nay\b/.test(normalized)) return toIsoFromDate(addDays(reference, 0));
-  if (/\bngay mai\b/.test(normalized)) return toIsoFromDate(addDays(reference, 1));
-  if (/\bngay kia\b/.test(normalized)) return toIsoFromDate(addDays(reference, 2));
-
-  const weekday = normalized.match(/\b(thu hai|thu ba|thu tu|thu nam|thu sau|thu bay|chu nhat)\b/);
-  if (!weekday) return "";
-
-  const weekdayText = weekday[1];
-  if (!weekdayText) return "";
-  const target = weekdayNumber(weekdayText);
-  if (target === null) return "";
-
-  if (/\btuan sau\b/.test(normalized)) {
-    return toIsoFromDate(dateInNextIsoWeek(reference, target));
-  }
-
-  const current = reference.getUTCDay();
-  const diff = (target - current + 7) % 7;
-  return diff === 0 ? "" : toIsoFromDate(addDays(reference, diff));
-}
-
-function weekdayNumber(value: string): number | null {
-  const weekdays: Record<string, number> = {
-    "chu nhat": 0,
-    "thu hai": 1,
-    "thu ba": 2,
-    "thu tu": 3,
-    "thu nam": 4,
-    "thu sau": 5,
-    "thu bay": 6,
-  };
-  return weekdays[value] ?? null;
-}
-
-function dateInNextIsoWeek(reference: Date, targetWeekday: number): Date {
-  const current = reference.getUTCDay();
-  const daysUntilNextMonday = ((1 - current + 7) % 7) || 7;
-  const monday = addDays(reference, daysUntilNextMonday);
-  const offset = targetWeekday === 0 ? 6 : targetWeekday - 1;
-  return addDays(monday, offset);
-}
-
-function addDays(date: Date, days: number): Date {
-  const next = new Date(date.getTime());
-  next.setUTCDate(next.getUTCDate() + days);
-  return next;
-}
-
-function toIsoFromDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
 }
 
 function parseIsoDate(value: string): Date | null {
@@ -861,7 +949,9 @@ function transcriptionPrompt(): string {
     "You are a precise multilingual meeting transcription engine.",
     "Listen to the entire audio before responding. Return a faithful, complete transcription only.",
     "Keep the language actually spoken. Do not translate Vietnamese to English or English to Vietnamese.",
-    "Preserve Vietnamese diacritics, names, numbers, and technical terms such as Cognito, LiveKit, DynamoDB, S3, WebSocket, and VNPay.",
+    "Preserve Vietnamese diacritics, names, numbers, and technical terms such as AI, backend, frontend, Cognito, LiveKit, DynamoDB, S3, WebSocket, and VNPay.",
+    "Use sentence context to distinguish common Vietnamese work phrases such as 'thử tính năng AI', 'phân công công việc', 'phụ trách backend', and 'phụ trách frontend'; do not swap their word order or omit a coordinated assignment.",
+    "When several people or responsibilities are mentioned in one sentence, transcribe every clause completely and preserve each person's name.",
     "Use speaker labels only when the speaker is clear. Do not summarize, omit sentences, or invent words; write [unclear] for unintelligible speech.",
     "Return valid JSON only: {\"transcript\": \"full verbatim transcript in the spoken language\"}",
   ].join("\n");

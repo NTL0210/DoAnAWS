@@ -99,7 +99,6 @@ export function WorkspaceProvider({ children }) {
     activeTeamId: workspaceHook.activeTeamId,
     setWorkspaces: workspaceHook.setWorkspaces,
     addActivity: activityHook.addActivity,
-    addNotification: activityHook.addNotification,
   });
 
   const tasksHook = useWorkspaceTasksState({
@@ -111,6 +110,7 @@ export function WorkspaceProvider({ children }) {
     activeWorkspaceId: workspaceHook.activeWorkspaceId,
     setWorkspaces: workspaceHook.setWorkspaces,
     addActivity: activityHook.addActivity,
+    addNotification: activityHook.addNotification,
     showToast: toastHook.showToast,
     completeOnboardingStep: onboardingHook.completeOnboardingStep,
   });
@@ -179,6 +179,7 @@ export function WorkspaceProvider({ children }) {
     voiceChannels: workspaceHook.voiceChannels,
     workspaceRole: workspaceHook.workspaceRole,
     activeWorkspaceId: workspaceHook.activeWorkspaceId,
+    workspaceMembers: workspaceHook.workspaceMembers,
     canManageAIReview: workspaceHook.canManageAIReview,
     canAccessVoice: rolesPermissionsHook.canAccessVoice,
     canRecordVoice: rolesPermissionsHook.canRecordVoice,

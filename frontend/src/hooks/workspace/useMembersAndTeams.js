@@ -60,14 +60,17 @@ export default function useMembersAndTeams({
   const removeMember = useCallback(async (workspaceId, userId) => {
     const workspace = workspaces.find((w) => w.id === workspaceId);
     if (!workspace) return;
-    const members = (workspace.members || []).filter((m) => m.userId !== userId);
+    const remainingMembers = (workspace.members || []).filter((member) => member.userId !== userId);
     const teams = (workspace.teams || []).map((team) => ({
       ...team,
-      memberIds: (team.memberIds || []).filter((id) => id !== userId),
+      memberIds: normalizeTeamMemberIds(
+        (team.memberIds || []).filter((id) => id !== userId),
+        remainingMembers,
+      ),
     }));
     try {
       const saved = await workspacesApi.update(workspaceId, {
-        members,
+        members: remainingMembers,
         teams,
         expectedVersion: workspace.version || 1,
       });
@@ -109,7 +112,11 @@ export default function useMembersAndTeams({
       name: teamData.name || 'New Team',
       description: teamData.description || '',
       managerId: teamData.managerId || currentUser.id,
-      memberIds: [currentUser.id, ...(teamData.memberIds || [])],
+      memberIds: normalizeTeamMemberIds([
+        currentUser.id,
+        ...(teamData.memberIds || []),
+        teamData.managerId,
+      ], workspace.members || []),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -133,9 +140,13 @@ export default function useMembersAndTeams({
   const updateTeam = useCallback(async (workspaceId, teamId, teamData) => {
     const workspace = workspaces.find((w) => w.id === workspaceId);
     if (!workspace) return;
-    const teams = (workspace.teams || []).map((t) =>
-      t.id === teamId ? { ...t, ...teamData, updatedAt: new Date().toISOString() } : t
-    );
+    const teams = (workspace.teams || []).map((t) => {
+      const team = t.id === teamId ? { ...t, ...teamData, updatedAt: new Date().toISOString() } : t;
+      return {
+        ...team,
+        memberIds: normalizeTeamMemberIds(team.memberIds || [], workspace.members || []),
+      };
+    });
     try {
       const saved = await workspacesApi.update(workspaceId, {
         teams,
@@ -169,8 +180,10 @@ export default function useMembersAndTeams({
     if (!workspace) return;
     const teams = (workspace.teams || []).map((t) => {
       if (t.id !== teamId) return t;
-      const members = t.memberIds || [];
-      return members.includes(userId) ? t : { ...t, memberIds: [...members, userId] };
+      return {
+        ...t,
+        memberIds: normalizeTeamMemberIds([...(t.memberIds || []), userId], workspace.members || []),
+      };
     });
     try {
       const saved = await workspacesApi.update(workspaceId, {
@@ -188,7 +201,15 @@ export default function useMembersAndTeams({
     const workspace = workspaces.find((w) => w.id === workspaceId);
     if (!workspace) return;
     const teams = (workspace.teams || []).map((t) =>
-      t.id === teamId ? { ...t, memberIds: (t.memberIds || []).filter((id) => id !== userId) } : t
+      t.id === teamId
+        ? {
+            ...t,
+            memberIds: normalizeTeamMemberIds(
+              (t.memberIds || []).filter((id) => id !== userId),
+              workspace.members || [],
+            ),
+          }
+        : t
     );
     try {
       const saved = await workspacesApi.update(workspaceId, {
@@ -207,11 +228,10 @@ export default function useMembersAndTeams({
     if (!workspace) return;
     const teams = (workspace.teams || []).map((t) => {
       if (t.id !== teamId) return t;
-      const members = t.memberIds || [];
       return {
         ...t,
         managerId,
-        memberIds: members.includes(managerId) ? members : [...members, managerId],
+        memberIds: normalizeTeamMemberIds([...(t.memberIds || []), managerId], workspace.members || []),
       };
     });
     try {
@@ -236,4 +256,10 @@ export default function useMembersAndTeams({
     removeMemberFromTeam,
     assignTeamManager,
   };
+}
+
+function normalizeTeamMemberIds(memberIds, workspaceMembers) {
+  const validMemberIds = new Set((workspaceMembers || []).map((member) => member.userId));
+  return Array.from(new Set((memberIds || []).filter(Boolean)))
+    .filter((userId) => validMemberIds.size === 0 || validMemberIds.has(userId));
 }

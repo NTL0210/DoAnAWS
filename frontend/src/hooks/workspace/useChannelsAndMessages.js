@@ -89,7 +89,6 @@ async function uploadChatAttachments(workspaceId, files = []) {
  * @param {string|null} params.activeTeamId
  * @param {Function} params.setWorkspaces
  * @param {Function} params.addActivity
- * @param {Function} params.addNotification
  * @returns {{
  *   messages: Object,
  *   setMessages: Function,
@@ -111,7 +110,6 @@ export default function useChannelsAndMessages({
   activeTeamId,
   setWorkspaces,
   addActivity,
-  addNotification,
 }) {
   const [messages, setMessages] = useState({});
   const [typingUsers, setTypingUsers] = useState({});
@@ -289,13 +287,7 @@ export default function useChannelsAndMessages({
         // Message remains visible locally until the next cloud refresh.
       }
     }
-    addNotification('CHAT_MESSAGE', `New message in #${channel?.name || 'workspace chat'}`, `${currentUser.name}: ${content.trim()}`, {
-      channelId,
-      messageId: newMsg.id,
-      senderId: currentUser.id,
-      workspaceId: activeWorkspaceId,
-    });
-  }, [currentUser, activeWorkspaceId, activeWorkspace, setWorkspaces, addNotification, persistAppendedMessage]);
+  }, [currentUser, activeWorkspaceId, activeWorkspace, setWorkspaces, persistAppendedMessage]);
 
   const sendTeamMessage = useCallback(async (teamId, content, attachments) => {
     if (!currentUser || !teamId || !content?.trim()) return;
@@ -332,13 +324,7 @@ export default function useChannelsAndMessages({
       }
     }
     addActivity('team_message_created', 'Team message created', { teamId });
-    addNotification('TEAM_MESSAGE', 'New team message', `${currentUser.name}: ${content.trim()}`, {
-      teamId,
-      messageId: newMsg.id,
-      senderId: currentUser.id,
-      workspaceId: activeWorkspaceId,
-    });
-  }, [currentUser, activeWorkspaceId, activeWorkspace, setWorkspaces, addActivity, addNotification, persistAppendedMessage]);
+  }, [currentUser, activeWorkspaceId, activeWorkspace, setWorkspaces, addActivity, persistAppendedMessage]);
 
   const sendTyping = useCallback((targetId, channelType = 'channel') => {
     if (!targetId || !currentUser?.id || !activeWorkspaceId) return;
