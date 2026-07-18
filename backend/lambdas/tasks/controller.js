@@ -13,7 +13,8 @@
 
 import * as db from '../../src/dynamodb/client.js';
 import { ENTITY, pk, sk } from '../../src/dynamodb/entityTypes.js';
-import { success, created, noContent, notFound, badRequest } from '../shared/router.js';
+import { findById as findWorkspaceById, getMembers } from '../../src/dynamodb/repositories/workspaceRepository.js';
+import { success, created, noContent, notFound, badRequest, error } from '../shared/router.js';
 
 // ─── Helpers ──────────────────────────────────────────
 
@@ -32,7 +33,7 @@ function taskToRecord(task) {
     description: task.description || '',
     assigneeId: task.assigneeId || null,
     createdBy: task.createdBy || null,
-    status: task.status || 'TODO',
+    status: task.status || 'PENDING',
     priority: task.priority || 'MEDIUM',
     progress: task.progress || 0,
     startDate: task.startDate || null,
@@ -54,11 +55,40 @@ function taskToRecord(task) {
 function recordToTask(record) {
   if (!record) return null;
   const { PK, SK, GSI1PK, GSI1SK, GSI2PK, GSI2SK, ...task } = record;
+  if (isIncompleteAfterDeadline(task)) {
+    return { ...task, status: 'OVERDUE', progress: Math.min(task.progress || 0, 99) };
+  }
   return task;
 }
 
 function hasInvalidDateRange(startDate, deadline) {
   return Boolean(startDate && deadline && startDate > deadline);
+}
+
+function isIncompleteAfterDeadline(task, now = new Date()) {
+  if (!task?.deadline) return false;
+  if (['COMPLETED', 'REVIEW', 'CANCELLED'].includes(task.status)) return false;
+  const deadlineDate = new Date(task.deadline);
+  if (Number.isNaN(deadlineDate.getTime())) return false;
+  return deadlineDate < now;
+}
+
+async function getWorkspaceRole(workspaceId, authUser) {
+  if (authUser?.role === 'ADMIN') return 'ADMIN';
+  const [workspace, members] = await Promise.all([
+    findWorkspaceById(workspaceId),
+    getMembers(workspaceId),
+  ]);
+  if (workspace?.ownerId === authUser?.userId) return 'OWNER';
+  return members.find((member) => member.userId === authUser?.userId)?.role || null;
+}
+
+function isPrivilegedReviewer(workspaceRole) {
+  return ['ADMIN', 'OWNER', 'VICE_ADMIN'].includes(workspaceRole);
+}
+
+function forbidden(message) {
+  return error(403, 'FORBIDDEN', message);
 }
 
 // ─── Handlers ─────────────────────────────────────────
@@ -76,11 +106,18 @@ export async function list(event) {
   const meetingId = q.meetingId;
   const limit = Math.min(parseInt(q.limit || '50'), 100);
   const nextToken = q.nextToken ? JSON.parse(q.nextToken) : undefined;
+  const workspaceRole = workspaceId
+    ? await getWorkspaceRole(workspaceId, authUser)
+    : authUser.role;
+  const canViewWorkspaceTasks = ['ADMIN', 'OWNER', 'VICE_ADMIN', 'MANAGER'].includes(workspaceRole);
 
   let items;
 
   // Role-based data access
-  if (authUser.role === 'EMPLOYEE' && !assigneeId) {
+  if (!canViewWorkspaceTasks) {
+    if (assigneeId && assigneeId !== authUser.userId) {
+      return forbidden('You can only view your own tasks.');
+    }
     // Employees only see their own tasks
     const result = await db.queryItems({
       IndexName: 'GSI2',
@@ -161,7 +198,7 @@ export async function create(event) {
     description: parsedBody.description || '',
     assigneeId: parsedBody.assigneeId || null,
     createdBy: authUser.userId,
-    status: parsedBody.status || 'TODO',
+    status: parsedBody.status || 'PENDING',
     priority: parsedBody.priority || 'MEDIUM',
     progress: parsedBody.progress || 0,
     startDate: parsedBody.startDate || null,
@@ -215,6 +252,7 @@ export async function update(event) {
     SK: sk('META', resourceId),
   });
   const current = recordToTask(record);
+  const taskIsPastDeadline = isIncompleteAfterDeadline(record);
 
   if (!current) {
     return notFound('Task not found');
@@ -223,27 +261,61 @@ export async function update(event) {
     return badRequest('Start date cannot be after the deadline');
   }
 
-  // Determine allowed fields based on role
-  let allowedFields;
+  const workspaceRole = await getWorkspaceRole(current.workspaceId, authUser);
+  const isAssignee = current.assigneeId && current.assigneeId === authUser.userId;
+  const isReviewer = isPrivilegedReviewer(workspaceRole);
+  const canManageTask = isReviewer || workspaceRole === 'MANAGER';
 
-  if (authUser.role === 'EMPLOYEE') {
-    allowedFields = ['status', 'progress', 'description'];
-    // Employee can only update their own tasks
-    if (current.assigneeId !== authUser.userId) {
-      return badRequest('You can only update your own tasks', 'FORBIDDEN');
+  if (!isAssignee && !canManageTask) {
+    return forbidden('Only the assigned user can update this task.');
+  }
+
+  const requestedStatus = parsedBody.status;
+  if (requestedStatus !== undefined) {
+    const allowedStatuses = ['PENDING', 'IN_PROGRESS', 'REVIEW', 'COMPLETED', 'CANCELLED', 'OVERDUE'];
+    if (!allowedStatuses.includes(requestedStatus)) {
+      return badRequest('Invalid task status');
     }
-  } else {
-    allowedFields = [
+    if (isAssignee) {
+      const isStarting = current.status === 'PENDING' && requestedStatus === 'IN_PROGRESS';
+      const isSubmitting = ['IN_PROGRESS', 'OVERDUE'].includes(current.status) && requestedStatus === 'REVIEW';
+      if (!isStarting && !isSubmitting) {
+        return forbidden('Assigned users can only start a pending task or send active work to review.');
+      }
+    } else if (isReviewer) {
+      if (!(current.status === 'REVIEW' && requestedStatus === 'COMPLETED')) {
+        return forbidden('Owner and vice admin can only complete tasks that are ready for review.');
+      }
+    } else {
+      return forbidden('Managers cannot receive or complete tasks for the assignee.');
+    }
+  }
+
+  const allowedFields = canManageTask && !isAssignee
+    ? [
       'title', 'description', 'status', 'priority', 'progress',
       'assigneeId', 'startDate', 'deadline', 'generatedFromAI', 'aiConfidence',
-    ];
-  }
+    ]
+    : ['status', 'progress', 'description'];
 
   const updates = {};
   for (const field of allowedFields) {
     if (parsedBody[field] !== undefined) {
       updates[field] = parsedBody[field];
     }
+  }
+
+  if (taskIsPastDeadline && updates.status !== 'REVIEW') {
+    updates.status = 'OVERDUE';
+    updates.progress = Math.min(updates.progress ?? current.progress ?? 0, 99);
+  }
+
+  if (updates.status === 'IN_PROGRESS' && current.status !== 'IN_PROGRESS') {
+    updates.progress = Math.max(current.progress || 0, 1);
+  }
+
+  if (updates.status === 'REVIEW') {
+    updates.progress = 100;
   }
 
   // Auto-set progress for terminal statuses

@@ -13,7 +13,7 @@
 import { getItem, putItem, updateItem, deleteItem, queryItems } from '../client.js';
 import { ENTITY, pk, sk } from '../entityTypes.js';
 
-const TASK_STATUSES = ['TODO', 'IN_PROGRESS', 'COMPLETED', 'OVERDUE', 'CANCELLED'];
+const TASK_STATUSES = ['PENDING', 'IN_PROGRESS', 'REVIEW', 'COMPLETED', 'OVERDUE', 'CANCELLED'];
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 
 function isValidStatus(s) { return TASK_STATUSES.includes(s); }
@@ -40,7 +40,7 @@ function toRecord(task) {
     description: task.description || '',
     assigneeId: task.assigneeId || null,
     createdBy: task.createdBy || null,
-    status: task.status || 'TODO',
+    status: task.status || 'PENDING',
     priority: task.priority || 'MEDIUM',
     progress: task.progress || 0,
     startDate: task.startDate || null,

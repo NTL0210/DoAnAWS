@@ -83,7 +83,7 @@ export default function TaskList({ filters = {}, compact = false }) {
       <div className={compact ? 'space-y-3' : 'divide-y divide-slate-200/80 dark:divide-slate-800'}>
         {renderedTasks.map((task, index) => {
           const assignee = userById[task.assigneeId];
-          const overdue = task.deadline && new Date(task.deadline) < new Date() && task.status !== 'COMPLETED';
+          const overdue = task.status === 'OVERDUE' || (task.deadline && new Date(task.deadline) < new Date() && !['COMPLETED', 'REVIEW'].includes(task.status));
 
           return (
             <motion.article
@@ -204,6 +204,7 @@ function Controls({ localStatus, setLocalStatus, sortBy, setSortBy, hideStatus =
 function getStatusTone(status) {
   if (status === 'COMPLETED') return 'green';
   if (status === 'IN_PROGRESS') return 'blue';
+  if (status === 'REVIEW') return 'amber';
   if (status === 'PENDING') return 'amber';
   if (status === 'OVERDUE') return 'red';
   return 'slate';

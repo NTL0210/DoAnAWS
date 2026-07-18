@@ -33,9 +33,10 @@ export default function KanbanBoard() {
     deadline: '',
   });
   const [visibleByColumn, setVisibleByColumn] = useState({
-    TODO: 50,
+    PENDING: 50,
     IN_PROGRESS: 50,
     REVIEW: 50,
+    OVERDUE: 50,
     COMPLETED: 50,
   });
 
@@ -49,9 +50,10 @@ export default function KanbanBoard() {
 
   const columns = useMemo(() => {
     const baseColumns = [
-      { id: 'TODO', title: 'Todo', tasks: [], color: '#949ba4' },
+      { id: 'PENDING', title: 'Todo', tasks: [], color: '#949ba4' },
       { id: 'IN_PROGRESS', title: 'In Progress', tasks: [], color: '#5865F2' },
       { id: 'REVIEW', title: 'Review', tasks: [], color: '#fea55a' },
+      { id: 'OVERDUE', title: 'Overdue', tasks: [], color: '#ef4444' },
       { id: 'COMPLETED', title: 'Done', tasks: [], color: '#3ba55d' },
     ];
     const grouped = tasks.reduce((acc, task) => {
@@ -63,8 +65,8 @@ export default function KanbanBoard() {
 
   const canCreateTask = can('tasks.create') || workspaceRole === 'OWNER' || workspaceRole === 'MANAGER' || workspaceRole === 'VICE_ADMIN';
   const canAssign = can('tasks.assign') || workspaceRole === 'OWNER' || workspaceRole === 'MANAGER' || workspaceRole === 'VICE_ADMIN';
-  const canUpdateStatus = can('tasks.update_status') || workspaceRole === 'OWNER' || workspaceRole === 'EMPLOYEE';
   const canDeleteTask = can('tasks.delete') || workspaceRole === 'OWNER' || workspaceRole === 'MANAGER' || workspaceRole === 'VICE_ADMIN';
+  const isReviewer = workspaceRole === 'OWNER' || workspaceRole === 'VICE_ADMIN';
 
   const handleCreateTask = (e) => {
     e.preventDefault();
@@ -120,18 +122,18 @@ export default function KanbanBoard() {
   const completedTasks = useMemo(() => tasks.filter((t) => t.status === 'COMPLETED').length, [tasks]);
   const workload = useMemo(() => getMemberWorkload(tasks, workspaceMembers), [tasks, workspaceMembers]);
 
-  const canMoveNext = (colId, task) => {
-    if (colId === 'TODO') return true;
-    if (colId === 'IN_PROGRESS') return true;
-    if (colId === 'REVIEW') return true;
-    return false;
-  };
-
-  const canMovePrev = (colId) => {
-    if (colId === 'IN_PROGRESS') return true;
-    if (colId === 'REVIEW') return true;
-    if (colId === 'COMPLETED') return true;
-    return false;
+  const getTaskAction = (task) => {
+    const isAssignee = task.assigneeId && task.assigneeId === currentUser?.id;
+    if (isAssignee && task.status === 'PENDING') {
+      return { label: 'Start', nextStatus: 'IN_PROGRESS' };
+    }
+    if (isAssignee && ['IN_PROGRESS', 'OVERDUE'].includes(task.status)) {
+      return { label: 'Complete', nextStatus: 'REVIEW' };
+    }
+    if (isReviewer && task.status === 'REVIEW') {
+      return { label: 'Approve', nextStatus: 'COMPLETED' };
+    }
+    return null;
   };
 
   return (
@@ -376,24 +378,17 @@ export default function KanbanBoard() {
                     </div>
 
                     {/* Move Buttons */}
-                    {canUpdateStatus && (
+                    {getTaskAction(task) && (
                       <div className="mt-3 flex gap-2">
-                        {canMovePrev(col.id) && (
-                          <button
-                            onClick={() => moveWorkspaceTask(task.id, getPrevStatus(col.id))}
-                            className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                          >
-                            ← {getPrevStatusLabel(col.id)}
-                          </button>
-                        )}
-                        {canMoveNext(col.id) && (
-                          <button
-                            onClick={() => moveWorkspaceTask(task.id, getNextStatus(col.id))}
-                            className="flex-1 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-700 transition"
-                          >
-                            {getNextStatusLabel(col.id)} →
-                          </button>
-                        )}
+                        <button
+                          onClick={() => {
+                            const action = getTaskAction(task);
+                            if (action) moveWorkspaceTask(task.id, action.nextStatus);
+                          }}
+                          className="flex-1 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-700 transition"
+                        >
+                          {getTaskAction(task)?.label}
+                        </button>
                       </div>
                     )}
                     </div>
@@ -410,7 +405,7 @@ export default function KanbanBoard() {
                 )}
                 {col.tasks.length === 0 && (
                   <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-white py-10 text-xs font-semibold italic text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
-                    {col.id === 'TODO' ? 'Drop new tasks here' : 'No tasks'}
+                    {col.id === 'PENDING' ? 'Drop new tasks here' : 'No tasks'}
                   </div>
                 )}
               </div>
@@ -420,26 +415,4 @@ export default function KanbanBoard() {
       </div>
     </div>
   );
-}
-
-function getNextStatus(status) {
-  const order = ['TODO', 'IN_PROGRESS', 'REVIEW', 'COMPLETED'];
-  const idx = order.indexOf(status);
-  return idx < order.length - 1 ? order[idx + 1] : status;
-}
-
-function getPrevStatus(status) {
-  const order = ['TODO', 'IN_PROGRESS', 'REVIEW', 'COMPLETED'];
-  const idx = order.indexOf(status);
-  return idx > 0 ? order[idx - 1] : status;
-}
-
-function getNextStatusLabel(status) {
-  const labels = { TODO: 'Start', IN_PROGRESS: 'Review', REVIEW: 'Done' };
-  return labels[status] || 'Move';
-}
-
-function getPrevStatusLabel(status) {
-  const labels = { IN_PROGRESS: 'Todo', REVIEW: 'In Progress', COMPLETED: 'Review' };
-  return labels[status] || 'Back';
 }

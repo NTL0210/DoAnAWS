@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect } from 'react';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import KanbanBoard from '@/components/tasks/KanbanBoard';
 
@@ -10,7 +10,12 @@ export default function WorkspaceTasksView() {
   const {
     workspaceRole,
     can,
+    refreshWorkspaceExecutionData,
   } = useWorkspace();
+
+  useEffect(() => {
+    refreshWorkspaceExecutionData?.({ silent: true });
+  }, [refreshWorkspaceExecutionData]);
 
   // Permission check: can view tasks?
   const canViewTasks = can('tasks.view') ||

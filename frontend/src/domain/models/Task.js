@@ -10,7 +10,7 @@
  * @property {string} title
  * @property {string} [description]
  * @property {string} [assigneeId]
- * @property {'TODO'|'IN_PROGRESS'|'REVIEW'|'COMPLETED'|'CANCELLED'|'OVERDUE'} status
+ * @property {'PENDING'|'IN_PROGRESS'|'REVIEW'|'COMPLETED'|'CANCELLED'|'OVERDUE'} status
  * @property {'LOW'|'MEDIUM'|'HIGH'|'URGENT'} [priority]
  * @property {string} [startDate]
  * @property {string} [deadline]
@@ -23,7 +23,7 @@
  */
 
 export const TASK_STATUSES = {
-  TODO: 'TODO',
+  PENDING: 'PENDING',
   IN_PROGRESS: 'IN_PROGRESS',
   REVIEW: 'REVIEW',
   COMPLETED: 'COMPLETED',
@@ -54,7 +54,7 @@ export function createTask(data) {
     title: data.title || '',
     description: data.description || '',
     assigneeId: data.assigneeId || null,
-    status: data.status || TASK_STATUSES.TODO,
+    status: data.status || TASK_STATUSES.PENDING,
     priority: data.priority || TASK_PRIORITIES.MEDIUM,
     startDate: data.startDate || null,
     deadline: data.deadline || null,

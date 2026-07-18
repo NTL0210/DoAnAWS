@@ -401,6 +401,7 @@ export function WorkspaceProvider({ children }) {
       addWorkspaceTasks: tasksHook.addWorkspaceTasks,
       moveWorkspaceTask: tasksHook.moveWorkspaceTask,
       deleteWorkspaceTask: tasksHook.deleteWorkspaceTask,
+      refreshWorkspaceExecutionData: tasksHook.refreshWorkspaceExecutionData,
       trashItems: tasksHook.trashItems,
       restoreTrashItem: tasksHook.restoreTrashItem,
       permanentlyDeleteTrashItem: tasksHook.permanentlyDeleteTrashItem,
@@ -515,6 +516,7 @@ export function WorkspaceProvider({ children }) {
       // Tasks
       tasksHook.workspaceTasks, tasksHook.addWorkspaceTasks, tasksHook.moveWorkspaceTask,
       tasksHook.deleteWorkspaceTask,
+      tasksHook.refreshWorkspaceExecutionData,
       tasksHook.trashItems, tasksHook.restoreTrashItem, tasksHook.permanentlyDeleteTrashItem,
       tasksHook.workspaceMeetings, tasksHook.setWorkspaceMeetings,
       tasksHook.createMeeting, tasksHook.deleteMeeting, tasksHook.uploadMeetingFile,
