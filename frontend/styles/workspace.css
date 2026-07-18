@@ -2,7 +2,7 @@
   background:
     radial-gradient(circle at 14% 0%, rgba(255, 107, 53, 0.1), transparent 30%),
     radial-gradient(circle at 88% 6%, rgba(15, 23, 42, 0.08), transparent 24%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 245, 249, 0.98));
+    linear-gradient(180deg, hsl(var(--surface-base)), hsl(var(--surface-canvas)));
 }
 
 .dark .workspace-frame {
@@ -19,8 +19,8 @@
 .workspace-sidebar-surface {
   border-color: var(--workspace-sidebar-border);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 247, 237, 0.5), rgba(241, 245, 249, 0.8));
-  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.74);
+    linear-gradient(180deg, hsla(var(--surface-raised) / 0.94), rgba(239, 231, 223, 0.72), hsla(var(--surface-base) / 0.9));
+  box-shadow: inset -1px 0 0 rgba(148, 163, 184, 0.32);
   backdrop-filter: blur(18px);
 }
 
@@ -32,7 +32,7 @@
 
 .workspace-main-surface {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.78));
+    linear-gradient(180deg, hsl(var(--surface-base)), hsla(var(--surface-canvas) / 0.88));
 }
 
 .dark .workspace-main-surface {
@@ -162,7 +162,7 @@
 .workspace-icon-action:hover,
 .workspace-icon-action:focus-visible {
   color: #e83b12;
-  background: rgba(255, 255, 255, 0.72);
+  background: hsla(var(--surface-raised) / 0.88);
   transform: translateY(-1px);
   outline: none;
 }
@@ -179,7 +179,7 @@
 .workspace-add-team {
   color: rgb(148 163 184);
   border: 1px dashed rgba(148, 163, 184, 0.42);
-  background: rgba(255, 255, 255, 0.38);
+  background: hsla(var(--surface-muted) / 0.56);
 }
 
 .dark .workspace-add-team {
@@ -254,7 +254,7 @@
 
 .workspace-member-row:hover,
 .workspace-member-row:focus-within {
-  background: rgba(255, 255, 255, 0.76);
+  background: hsla(var(--surface-raised) / 0.9);
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
   transform: translateX(2px);
 }
@@ -372,8 +372,8 @@
 .workspace-settings-page .max-w-5xl > div:not(.workspace-settings-hero) {
   border-color: rgba(203, 213, 225, 0.7) !important;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.78)) !important;
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.78);
+    linear-gradient(135deg, hsl(var(--surface-raised)), hsla(var(--surface-base) / 0.88)) !important;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(148, 163, 184, 0.24);
   backdrop-filter: blur(18px);
 }
 
@@ -430,9 +430,9 @@
 .workspace-tactical-panel {
   border: 1px solid rgba(203, 213, 225, 0.72);
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.82)),
+    linear-gradient(135deg, hsl(var(--surface-raised)), hsla(var(--surface-base) / 0.9)),
     linear-gradient(90deg, rgba(255, 107, 53, 0.08) 0 1px, transparent 1px);
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(148, 163, 184, 0.22);
   backdrop-filter: blur(18px);
 }
 
@@ -490,9 +490,9 @@
   flex-direction: column;
   border: 1px solid rgba(203, 213, 225, 0.76);
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.82));
+    linear-gradient(135deg, hsl(var(--surface-raised)), hsla(var(--surface-base) / 0.9));
   padding: 1.25rem;
-  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.74);
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(148, 163, 184, 0.22);
   transition:
     transform var(--workspace-transition-normal),
     border-color var(--workspace-transition-normal),
@@ -515,7 +515,7 @@
 .workspace-plan-card.is-active {
   border-color: rgba(255, 107, 53, 0.46);
   background:
-    linear-gradient(135deg, rgba(255, 247, 237, 0.98), rgba(255, 255, 255, 0.9));
+    linear-gradient(135deg, rgba(243, 230, 217, 0.98), hsl(var(--surface-raised)));
 }
 
 .dark .workspace-plan-card.is-active {
