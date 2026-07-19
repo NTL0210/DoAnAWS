@@ -10,14 +10,14 @@ export function buildWorkspaceRouter(
 
   router.get("/", controller.list);
   router.post("/", controller.create);
-  router.get("/:id", guard("MEMBER", "ADMIN", "OWNER"), controller.get);
+  router.get("/:id", guard("permission:workspace.view"), controller.get);
   router.patch("/:id", guard("MEMBER", "ADMIN", "OWNER"), controller.update);
-  router.delete("/:id", guard("OWNER"), controller.delete_);
+  router.delete("/:id", guard("permission:workspace.delete"), controller.delete_);
 
-  router.get("/:id/members", guard("MEMBER", "ADMIN", "OWNER"), controller.getMembers);
-  router.post("/:id/members", guard("ADMIN", "OWNER"), controller.addMember);
-  router.delete("/:id/members/:userId", guard("ADMIN", "OWNER"), controller.removeMember);
-  router.post("/:id/attachments/upload-url", guard("MEMBER", "ADMIN", "OWNER"), controller.createAttachmentUploadUrl);
+  router.get("/:id/members", guard("permission:members.view"), controller.getMembers);
+  router.post("/:id/members", guard("permission:members.invite"), controller.addMember);
+  router.delete("/:id/members/:userId", guard("permission:members.remove"), controller.removeMember);
+  router.post("/:id/attachments/upload-url", guard("permission:chat.upload"), controller.createAttachmentUploadUrl);
 
   return router;
 }

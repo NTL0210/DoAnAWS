@@ -32,7 +32,7 @@ const statusStyles = {
 export default function WorkspaceMeetingsView() {
   const {
     activeWorkspace,
-    workspaceRole,
+    can,
     workspaceTeams,
     workspaceMembers,
     workspaceTasks,
@@ -77,7 +77,7 @@ export default function WorkspaceMeetingsView() {
     [workspaceMeetings, selectedMeetingId]
   );
 
-  const canManageMeetings = ['OWNER', 'VICE_ADMIN', 'MANAGER'].includes(workspaceRole);
+  const canManageMeetings = can('meetings.manage') || can('meetings.create') || can('meetings.record');
   const billingPlan = getWorkspacePlan(activeWorkspace);
   const billingUsage = getWorkspaceUsageSnapshot({
     workspace: activeWorkspace,

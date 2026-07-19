@@ -67,6 +67,7 @@ export default function VoiceChannelView({ channel: propChannel }) {
     currentUser,
     workspaceRole,
     workspaceRoleLabels,
+    can,
     voiceParticipants,
     activeVoiceRecordings,
     voiceRecords,
@@ -136,7 +137,7 @@ export default function VoiceChannelView({ channel: propChannel }) {
   const canAccess = channel ? canAccessVoice(channel) : false;
   const canRecord = channel ? canRecordVoice(channel) : false;
   const joined = participants.some((participant) => participant.userId === currentUser?.id);
-  const canManagePermissions = ['OWNER', 'VICE_ADMIN', 'MANAGER'].includes(workspaceRole);
+  const canManagePermissions = can('voice.manage') || can('channels.manage');
   const recorder = activeRecording
     ? workspaceMembers.find((member) => member.userId === activeRecording.startedBy)
     : null;

@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { motion } from 'framer-motion';
-import { FiUserPlus, FiShield, FiX, FiCheck, FiMail, FiUser } from 'react-icons/fi';
+import { FiUserPlus, FiShield, FiX, FiMail, FiUser } from 'react-icons/fi';
+import WorkspaceRoleManager from './WorkspaceRoleManager';
+import { DEFAULT_ROLES } from '@/data/defaults/roles';
 
-const ROLE_OPTIONS = ['OWNER', 'VICE_ADMIN', 'MANAGER', 'EMPLOYEE'];
+const SYSTEM_ASSIGNABLE_ROLES = ['VICE_ADMIN', 'MANAGER', 'EMPLOYEE'];
 
 /**
  * WorkspaceMembersView — View and manage workspace members
@@ -24,16 +26,34 @@ export default function WorkspaceMembersView() {
     showToast,
     workspaceRoleLabels,
     workspaceRoleColors,
+    getAllPermissions,
   } = useWorkspace();
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('EMPLOYEE');
   const [selectedTeamIds, setSelectedTeamIds] = useState([]);
   const [sendingInvite, setSendingInvite] = useState(false);
+  const [showRoleManager, setShowRoleManager] = useState(false);
 
   const canInvite = can('members.invite') || workspaceRole === 'OWNER' || workspaceRole === 'VICE_ADMIN';
   const canManageRoles = can('roles.manage') || workspaceRole === 'OWNER';
   const canRemove = can('members.remove') || workspaceRole === 'OWNER';
+  const actorPermissions = getAllPermissions();
+  const canAssignRole = (role) => actorPermissions === 'all' ||
+    (role.permissions || []).every((permission) => actorPermissions.includes(permission));
+  const roleOptions = [
+    ...SYSTEM_ASSIGNABLE_ROLES.map((id) => ({ id, name: workspaceRoleLabels[id] || id })),
+    ...(activeWorkspace?.customRoles || []).map((role) => ({ id: role.id, name: role.name, color: role.color })),
+  ].filter((role) => canAssignRole(DEFAULT_ROLES[role.id] || activeWorkspace?.customRoles?.find((item) => item.id === role.id) || role));
+
+  const getRoleDefinition = (roleId) => {
+    const customRole = activeWorkspace?.customRoles?.find((role) => role.id === roleId);
+    return customRole || {
+      id: roleId,
+      name: workspaceRoleLabels[roleId] || roleId,
+      color: null,
+    };
+  };
 
   const getInitials = (name) => {
     if (!name) return '?';
@@ -57,7 +77,8 @@ export default function WorkspaceMembersView() {
   };
 
   const handleRoleChange = (userId, newRole) => {
-    if (confirm(`Change role to ${newRole}?`)) {
+    const roleName = roleOptions.find((role) => role.id === newRole)?.name || newRole;
+    if (confirm(`Change role to ${roleName}?`)) {
       updateMemberRole(activeWorkspace?.id, userId, newRole);
     }
   };
@@ -76,21 +97,32 @@ export default function WorkspaceMembersView() {
 
   return (
     <div className="h-full overflow-y-auto p-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Members</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             {workspaceMembers.length} {workspaceMembers.length === 1 ? 'member' : 'members'} in this workspace
           </p>
         </div>
-        {canInvite && (
-          <button
-            onClick={() => setShowInviteMember(true)}
-            className="flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary-600/25 hover:bg-primary-700 transition"
-          >
-            <FiUserPlus className="h-4 w-4" /> Invite Member
-          </button>
-        )}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {canManageRoles && (
+            <button
+              type="button"
+              onClick={() => setShowRoleManager(true)}
+              className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              <FiShield className="h-4 w-4" /> Manage Roles
+            </button>
+          )}
+          {canInvite && (
+            <button
+              onClick={() => setShowInviteMember(true)}
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary-600/25 hover:bg-primary-700 transition"
+            >
+              <FiUserPlus className="h-4 w-4" /> Invite Member
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ─── Invite Form ─── */}
@@ -127,8 +159,8 @@ export default function WorkspaceMembersView() {
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value)}
               >
-                {ROLE_OPTIONS.map((r) => (
-                  <option key={r} value={r}>{workspaceRoleLabels[r] || r}</option>
+                {roleOptions.map((role) => (
+                  <option key={role.id} value={role.id}>{role.name}</option>
                 ))}
               </select>
               <button
@@ -176,6 +208,10 @@ export default function WorkspaceMembersView() {
         <div className="divide-y divide-slate-100 dark:divide-slate-800">
           {workspaceMembers.map((m, index) => {
             const isCurrent = m.userId === currentUser?.id;
+            const roleDefinition = getRoleDefinition(m.role);
+            const memberRoleOptions = roleOptions.some((role) => role.id === m.role)
+              ? roleOptions
+              : [{ id: m.role, name: roleDefinition.name, disabled: true }, ...roleOptions];
             return (
               <motion.div
                 key={m.userId}
@@ -202,25 +238,28 @@ export default function WorkspaceMembersView() {
                 </div>
 
                 {/* Role Badge / Select */}
-                {canManageRoles && !isCurrent ? (
+                {canManageRoles && !isCurrent && m.userId !== activeWorkspace?.ownerId ? (
                   <select
                     className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 outline-none focus:border-primary-500"
                     value={m.role}
                     onChange={(e) => handleRoleChange(m.userId, e.target.value)}
                   >
-                    {ROLE_OPTIONS.map((r) => (
-                      <option key={r} value={r}>{workspaceRoleLabels[r] || r}</option>
+                    {memberRoleOptions.map((role) => (
+                      <option key={role.id} value={role.id} disabled={role.disabled}>{role.name}</option>
                     ))}
                   </select>
                 ) : (
-                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${workspaceRoleColors[m.role] || 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-bold ${workspaceRoleColors[m.role] || 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}
+                    style={roleDefinition.color ? { color: roleDefinition.color, border: `1px solid ${roleDefinition.color}55` } : undefined}
+                  >
                     <FiShield className="inline h-3 w-3 mr-1" />
-                    {workspaceRoleLabels[m.role] || m.role}
+                    {roleDefinition.name}
                   </span>
                 )}
 
                 {/* Remove button */}
-                {canRemove && !isCurrent && (
+                {canRemove && !isCurrent && m.userId !== activeWorkspace?.ownerId && (
                   <button
                     onClick={() => handleRemove(m.userId)}
                     className="rounded-lg p-2 text-slate-300 dark:text-slate-600 opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 dark:hover:text-red-400 transition-all"
@@ -241,6 +280,7 @@ export default function WorkspaceMembersView() {
           )}
         </div>
       </div>
+      {showRoleManager && <WorkspaceRoleManager onClose={() => setShowRoleManager(false)} />}
     </div>
   );
 }

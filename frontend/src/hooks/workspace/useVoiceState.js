@@ -42,6 +42,7 @@ function getUserDisplayName(user) {
  * @param {string|null} params.activeWorkspaceId
  * @param {Array} params.workspaceMembers
  * @param {boolean} params.canManageAIReview
+ * @param {boolean} params.canManageVoice
  * @param {Function} params.canAccessVoice
  * @param {Function} params.canRecordVoice
  * @param {Function} params.setWorkspaces
@@ -85,6 +86,7 @@ export default function useVoiceState({
   activeWorkspaceId,
   workspaceMembers,
   canManageAIReview,
+  canManageVoice,
   canAccessVoice,
   canRecordVoice,
   setWorkspaces,
@@ -569,7 +571,7 @@ export default function useVoiceState({
   }, [activeVoiceRecordings]);
 
   const updateVoiceChannelPermissions = useCallback(async (channelId, updates) => {
-    if (!['OWNER', 'VICE_ADMIN'].includes(workspaceRole)) {
+    if (!canManageVoice) {
       showToast('error', 'Only workspace owners can change voice channel permissions.');
       return null;
     }
@@ -599,7 +601,7 @@ export default function useVoiceState({
       showToast('error', error?.message || 'Failed to update voice channel permissions.');
       return null;
     }
-  }, [workspaceRole, activeWorkspace, setWorkspaces, showToast]);
+  }, [canManageVoice, activeWorkspace, setWorkspaces, showToast]);
 
   const addTeamToVoiceChannel = useCallback((channelId, teamId) => {
     const channel = voiceChannels.find((item) => item.id === channelId);

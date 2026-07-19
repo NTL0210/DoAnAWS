@@ -72,9 +72,7 @@ export class MeetingController {
           await this.workspaces.addMember(
             workspaceId,
             req.user.userId,
-            role === "OWNER" || role === "VICE_ADMIN" || role === "MANAGER" || role === "EMPLOYEE"
-              ? role
-              : "EMPLOYEE",
+            role,
             profile,
           );
         }

@@ -16,7 +16,7 @@ import {
 } from "../../infrastructure/aws/dynamodb-utils.js";
 import { ConflictError } from "../../shared/errors/app-error.js";
 import type { WorkspaceRepository } from "./workspace.repository.js";
-import type { Workspace, WorkspaceMember, WorkspaceChannel, WorkspaceTeam } from "./workspace.types.js";
+import type { Workspace, WorkspaceMember, WorkspaceChannel, WorkspaceCustomRole, WorkspaceTeam } from "./workspace.types.js";
 
 const entityType = "WORKSPACE";
 
@@ -97,7 +97,7 @@ function fromItem(item: Record<string, unknown>): Workspace {
     notifications: (item.notifications as string[]) ?? [],
     invitations: (item.invitations as string[]) ?? [],
     voiceRecords: (item.voiceRecords as string[]) ?? [],
-    customRoles: (item.customRoles as unknown[]) ?? [],
+    customRoles: (item.customRoles as WorkspaceCustomRole[]) ?? [],
     features: (item.features as unknown[]) ?? [],
     version: num(item.version, 1),
     createdAt: text(item.createdAt),

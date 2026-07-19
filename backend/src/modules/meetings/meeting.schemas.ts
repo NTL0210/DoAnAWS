@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { workspaceMemberRoleSchema } from "../workspaces/workspace.schemas.js";
 
 export const meetingStatusSchema = z.enum([
   "UPLOADED",
@@ -66,7 +67,7 @@ export const sendInvitationSchema = z.object({
   workspaceId: z.string().min(1),
   workspaceName: z.string().min(1).max(200).optional(),
   inviteeEmail: z.string().email().max(255),
-  role: z.enum(["OWNER", "VICE_ADMIN", "MANAGER", "EMPLOYEE"]).optional().default("EMPLOYEE"),
+  role: workspaceMemberRoleSchema.optional().default("EMPLOYEE"),
   teamIds: z.array(z.string().min(1)).optional().default([]),
 });
 

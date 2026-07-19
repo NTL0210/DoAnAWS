@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { NotFoundError } from "../../shared/errors/app-error.js";
+import { AppError, NotFoundError } from "../../shared/errors/app-error.js";
 import type { UserService } from "../users/user.service.js";
 import type { WorkspaceRepository } from "./workspace.repository.js";
 import type {
@@ -99,9 +99,12 @@ export class WorkspaceService {
       members,
       messages: patch.messages ?? current.messages,
       voiceRecords: patch.voiceRecords ?? current.voiceRecords,
+      customRoles: patch.customRoles ?? current.customRoles,
       version: current.version + 1,
       updatedAt: new Date().toISOString(),
     };
+
+    validateWorkspaceRoles(updated);
 
     await this.repository.update(updated, patch.expectedVersion);
     return updated;
@@ -161,6 +164,7 @@ export class WorkspaceService {
       updatedAt: now,
     };
 
+    validateWorkspaceRoles(updated);
     await this.repository.update(updated, ws.version);
     return member;
   }
@@ -176,6 +180,7 @@ export class WorkspaceService {
       updatedAt: new Date().toISOString(),
     };
 
+    validateWorkspaceRoles(updated);
     await this.repository.update(updated, ws.version);
   }
 
@@ -224,6 +229,31 @@ export class WorkspaceService {
     } catch {
       return { name: null, email: null, avatar: null };
     }
+  }
+}
+
+function validateWorkspaceRoles(workspace: Workspace): void {
+  const roleIds = new Set(workspace.customRoles.map((role) => role.id));
+  if (roleIds.size !== workspace.customRoles.length) {
+    throw new AppError({ code: "VALIDATION_ERROR", message: "Custom role IDs must be unique", statusCode: 400 });
+  }
+  const normalizedNames = workspace.customRoles.map((role) => role.name.trim().toLowerCase());
+  if (new Set(normalizedNames).size !== normalizedNames.length) {
+    throw new AppError({ code: "VALIDATION_ERROR", message: "Custom role names must be unique", statusCode: 400 });
+  }
+  const owner = workspace.members.find((member) => member.userId === workspace.ownerId);
+  if (!owner || owner.role !== "OWNER") {
+    throw new AppError({ code: "VALIDATION_ERROR", message: "Workspace owner must keep the Owner role", statusCode: 400 });
+  }
+  if (workspace.members.some((member) => member.userId !== workspace.ownerId && member.role === "OWNER")) {
+    throw new AppError({ code: "VALIDATION_ERROR", message: "Only the workspace owner can have the Owner role", statusCode: 400 });
+  }
+  const builtInRoles = new Set(["OWNER", "VICE_ADMIN", "MANAGER", "EMPLOYEE"]);
+  const invalidMember = workspace.members.find((member) =>
+    !builtInRoles.has(member.role) && !roleIds.has(member.role),
+  );
+  if (invalidMember) {
+    throw new AppError({ code: "VALIDATION_ERROR", message: "Member references an unknown custom role", statusCode: 400 });
   }
 }
 

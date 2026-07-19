@@ -220,13 +220,22 @@ export class VoiceRecordingService {
     workspaceId: string,
     userId: string,
     requiredRole: WorkspaceRole = "MEMBER",
-  ): Promise<WorkspaceRole> {
+  ): Promise<void> {
+    if (this.workspaceRepository.getMemberAuthorization) {
+      const authorization = await this.workspaceRepository.getMemberAuthorization(workspaceId, userId);
+      if (!authorization) throw new ForbiddenError("You are not a member of this workspace");
+      const canManageRecording = authorization.permissions.includes("voice.record") ||
+        authorization.permissions.includes("voice.manage");
+      if (requiredRole === "MANAGER" && !canManageRecording) {
+        throw new ForbiddenError("Voice recording permission is required");
+      }
+      return;
+    }
     const role = await this.workspaceRepository.getMemberRole(workspaceId, userId);
     if (!role) throw new ForbiddenError("You are not a member of this workspace");
-    if (!hasSufficientRole(role, requiredRole)) {
+    if (!hasSufficientRole(role as WorkspaceRole, requiredRole)) {
       throw new ForbiddenError(`Insufficient permissions. Required: ${requiredRole}`);
     }
-    return role;
   }
 }
 

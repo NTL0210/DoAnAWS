@@ -10,15 +10,15 @@ export function buildMeetingRouter(
 
   router.get("/notifications", controller.listNotifications);
   router.patch("/notifications/:id", controller.updateNotification);
-  router.post("/invite", guard("ADMIN", "OWNER", "MANAGER"), controller.sendInvitation);
+  router.post("/invite", guard("permission:members.invite"), controller.sendInvitation);
 
-  router.get("/", guard("MEMBER", "ADMIN", "OWNER"), controller.list);
-  router.post("/", guard("ADMIN", "OWNER", "MANAGER"), controller.create);
-  router.get("/:id", guard("MEMBER", "ADMIN", "OWNER"), controller.get);
-  router.patch("/:id", guard("ADMIN", "OWNER", "MANAGER"), controller.update);
-  router.delete("/:id", guard("ADMIN", "OWNER", "MANAGER"), controller.delete);
-  router.post("/:id/upload-url", guard("ADMIN", "OWNER", "MANAGER"), controller.createUploadUrl);
-  router.post("/:id/process", guard("ADMIN", "OWNER", "MANAGER"), controller.process);
+  router.get("/", guard("permission:meetings.join", "permission:meetings.manage"), controller.list);
+  router.post("/", guard("permission:meetings.create"), controller.create);
+  router.get("/:id", guard("permission:meetings.join", "permission:meetings.manage"), controller.get);
+  router.patch("/:id", guard("permission:meetings.manage"), controller.update);
+  router.delete("/:id", guard("permission:meetings.manage"), controller.delete);
+  router.post("/:id/upload-url", guard("permission:meetings.record"), controller.createUploadUrl);
+  router.post("/:id/process", guard("permission:meetings.manage"), controller.process);
 
   return router;
 }

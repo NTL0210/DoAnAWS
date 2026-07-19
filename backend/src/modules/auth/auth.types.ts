@@ -35,7 +35,7 @@ export interface AuthUser {
 export interface WorkspaceMembership {
   workspaceId: string;
   userId: string;
-  role: WorkspaceRole;
+  role: string;
   joinedAt: string;
 }
 

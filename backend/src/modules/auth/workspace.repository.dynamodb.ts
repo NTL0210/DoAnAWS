@@ -1,8 +1,10 @@
 import { GetCommand, PutCommand, QueryCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
 import { env } from "../../config/env.js";
 import { ddb } from "../../infrastructure/aws/dynamodb-client.js";
+import { getBuiltInRolePermissions } from "./auth.permissions.js";
+import { WORKSPACE_ROLES } from "./auth.types.js";
 import type { WorkspaceMembership, WorkspaceRole } from "./auth.types.js";
-import type { WorkspaceRepository } from "./workspace.repository.js";
+import type { WorkspaceAuthorization, WorkspaceRepository } from "./workspace.repository.js";
 
 const entityType = "WS_MEMBER";
 
@@ -20,7 +22,7 @@ interface MemberItem {
   entityType: string;
   workspaceId: string;
   userId: string;
-  role: WorkspaceRole;
+  role: string;
   joinedAt: string;
 }
 
@@ -40,39 +42,76 @@ function fromItem(item: Record<string, unknown>): WorkspaceMembership {
   return {
     workspaceId: typeof item.workspaceId === "string" ? item.workspaceId : "",
     userId: typeof item.userId === "string" ? item.userId : "",
-    role: item.role as WorkspaceRole,
+    role: typeof item.role === "string" ? item.role : "EMPLOYEE",
     joinedAt: typeof item.joinedAt === "string" ? item.joinedAt : "",
   };
 }
 
 export class DynamoWorkspaceRepository implements WorkspaceRepository {
-  async getMemberRole(workspaceId: string, userId: string): Promise<WorkspaceRole | null> {
-    const result = await ddb.send(
+  async getMemberRole(workspaceId: string, userId: string): Promise<string | null> {
+    const authorization = await this.getMemberAuthorization(workspaceId, userId);
+    return authorization?.roleId ?? null;
+  }
+
+  async getMemberAuthorization(workspaceId: string, userId: string): Promise<WorkspaceAuthorization | null> {
+    const [memberResult, workspaceResult] = await Promise.all([
+      ddb.send(
       new GetCommand({
         TableName: env.DYNAMODB_TABLE_MAIN,
         Key: { PK: pk(workspaceId), SK: sk(userId) },
       }),
-    );
-
-    if (result.Item) return result.Item.role as WorkspaceRole;
-
-    const workspaceResult = await ddb.send(
-      new GetCommand({
+      ),
+      ddb.send(new GetCommand({
         TableName: env.DYNAMODB_TABLE_MAIN,
         Key: { PK: `WORKSPACE#${workspaceId}`, SK: "METADATA" },
-      }),
-    );
+      })),
+    ]);
     const workspace = workspaceResult.Item;
     if (!workspace) return null;
-    if (workspace.ownerId === userId) return "OWNER";
+    if (workspace.ownerId === userId) {
+      return {
+        roleId: "OWNER",
+        effectiveRole: "OWNER",
+        permissions: getBuiltInRolePermissions("OWNER"),
+      };
+    }
+
     const members = Array.isArray(workspace.members) ? workspace.members : [];
     const member = members.find((item) =>
       typeof item === "object" &&
       item !== null &&
       "userId" in item &&
       (item as { userId?: unknown }).userId === userId,
-    ) as { role?: WorkspaceRole } | undefined;
-    return member?.role ?? null;
+    ) as { role?: string } | undefined;
+    const roleId = typeof memberResult.Item?.role === "string"
+      ? memberResult.Item.role
+      : member?.role;
+    if (!roleId) return null;
+
+    if (WORKSPACE_ROLES.includes(roleId as WorkspaceRole)) {
+      const effectiveRole = roleId as WorkspaceRole;
+      return {
+        roleId,
+        effectiveRole,
+        permissions: getBuiltInRolePermissions(effectiveRole),
+      };
+    }
+
+    const customRoles: unknown[] = Array.isArray(workspace.customRoles) ? workspace.customRoles : [];
+    const customRole = customRoles.find((item): item is { id: string; permissions?: unknown } =>
+      typeof item === "object" && item !== null && "id" in item &&
+      typeof (item as { id?: unknown }).id === "string" &&
+      (item as { id: string }).id === roleId,
+    );
+    if (!customRole) return null;
+    const permissions = Array.isArray(customRole.permissions)
+      ? customRole.permissions.filter((permission): permission is string => typeof permission === "string")
+      : [];
+    return {
+      roleId,
+      effectiveRole: "MEMBER",
+      permissions: permissions as WorkspaceAuthorization["permissions"],
+    };
   }
 
   async getMembers(workspaceId: string): Promise<WorkspaceMembership[]> {
@@ -90,7 +129,7 @@ export class DynamoWorkspaceRepository implements WorkspaceRepository {
     return (result.Items ?? []).map(fromItem);
   }
 
-  async setMemberRole(workspaceId: string, userId: string, role: WorkspaceRole): Promise<void> {
+  async setMemberRole(workspaceId: string, userId: string, role: string): Promise<void> {
     const item = toItem({ workspaceId, userId, role, joinedAt: new Date().toISOString() });
     await ddb.send(
       new PutCommand({

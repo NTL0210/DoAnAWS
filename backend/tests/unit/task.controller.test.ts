@@ -4,10 +4,10 @@ import { TaskController } from "../../src/modules/tasks/task.controller.js";
 import { TaskService } from "../../src/modules/tasks/task.service.js";
 import { InMemoryTaskRepository } from "../support/in-memory-repositories.js";
 
-function mockResponse(workspaceRole: string) {
+function mockResponse(workspaceRole: string, workspacePermissions?: string[]) {
   const state: { statusCode?: number; body?: unknown } = {};
   const response = {
-    locals: { workspaceId: "ws-1", workspaceRole },
+    locals: { workspaceId: "ws-1", workspaceRole, workspacePermissions },
     status: vi.fn((statusCode: number) => {
       state.statusCode = statusCode;
       return response;
@@ -96,5 +96,87 @@ describe("TaskController authorization", () => {
     expect(state.statusCode).toBe(200);
     expect((state.body as { deadline: string }).deadline).toBe("2026-07-25");
     expect((state.body as { status: string }).status).toBe("PENDING");
+  });
+
+  it("lets an owner approve a review task assigned to themselves", async () => {
+    const service = new TaskService(new InMemoryTaskRepository());
+    const task = await service.create({ workspaceId: "ws-1", title: "Owner task", assigneeId: "owner-1" });
+    const inProgress = await service.update({
+      workspaceId: "ws-1",
+      taskId: task.id,
+      patch: { status: "IN_PROGRESS", expectedVersion: task.version },
+    });
+    const inReview = await service.update({
+      workspaceId: "ws-1",
+      taskId: task.id,
+      patch: { status: "REVIEW", expectedVersion: inProgress.version },
+    });
+    const controller = new TaskController(service);
+    const { response, state } = mockResponse("OWNER");
+    const next = vi.fn();
+
+    await controller.update(mockRequest({
+      params: { id: task.id },
+      body: { status: "COMPLETED", expectedVersion: inReview.version },
+      user: { userId: "owner-1" },
+    }) as never, response as never, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(state.statusCode).toBe(200);
+    expect((state.body as { status: string }).status).toBe("COMPLETED");
+    expect((state.body as { progress: number }).progress).toBe(100);
+  });
+
+  it("does not let an employee approve their own review task", async () => {
+    const service = new TaskService(new InMemoryTaskRepository());
+    const task = await service.create({ workspaceId: "ws-1", title: "Employee task", assigneeId: "employee-1" });
+    const inProgress = await service.update({
+      workspaceId: "ws-1",
+      taskId: task.id,
+      patch: { status: "IN_PROGRESS", expectedVersion: task.version },
+    });
+    const inReview = await service.update({
+      workspaceId: "ws-1",
+      taskId: task.id,
+      patch: { status: "REVIEW", expectedVersion: inProgress.version },
+    });
+    const controller = new TaskController(service);
+    const { response } = mockResponse("EMPLOYEE");
+    const next = vi.fn();
+
+    await controller.update(mockRequest({
+      params: { id: task.id },
+      body: { status: "COMPLETED", expectedVersion: inReview.version },
+    }) as never, response as never, next);
+
+    expect(next).toHaveBeenCalledWith(expect.any(ForbiddenError));
+  });
+
+  it("lets a custom reviewer approve a task in review", async () => {
+    const service = new TaskService(new InMemoryTaskRepository());
+    const task = await service.create({ workspaceId: "ws-1", title: "Review me", assigneeId: "employee-1" });
+    const inProgress = await service.update({
+      workspaceId: "ws-1",
+      taskId: task.id,
+      patch: { status: "IN_PROGRESS", expectedVersion: task.version },
+    });
+    const inReview = await service.update({
+      workspaceId: "ws-1",
+      taskId: task.id,
+      patch: { status: "REVIEW", expectedVersion: inProgress.version },
+    });
+    const controller = new TaskController(service);
+    const { response, state } = mockResponse("MEMBER", ["tasks.view", "tasks.approve"]);
+    const next = vi.fn();
+
+    await controller.update(mockRequest({
+      params: { id: task.id },
+      body: { status: "COMPLETED", expectedVersion: inReview.version },
+      user: { userId: "reviewer-1" },
+    }) as never, response as never, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(state.statusCode).toBe(200);
+    expect((state.body as { status: string }).status).toBe("COMPLETED");
   });
 });

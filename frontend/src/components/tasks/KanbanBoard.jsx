@@ -88,7 +88,7 @@ export default function KanbanBoard() {
   const canCreateTask = can('tasks.create') || workspaceRole === 'OWNER' || workspaceRole === 'MANAGER' || workspaceRole === 'VICE_ADMIN';
   const canAssign = can('tasks.assign') || workspaceRole === 'OWNER' || workspaceRole === 'MANAGER' || workspaceRole === 'VICE_ADMIN';
   const canDeleteTask = can('tasks.delete') || workspaceRole === 'OWNER' || workspaceRole === 'MANAGER' || workspaceRole === 'VICE_ADMIN';
-  const isReviewer = workspaceRole === 'OWNER' || workspaceRole === 'VICE_ADMIN';
+  const isReviewer = can('tasks.approve');
 
   const handleCreateTask = (e) => {
     e.preventDefault();

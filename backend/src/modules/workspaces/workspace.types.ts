@@ -1,8 +1,18 @@
 export type WorkspaceRole = "OWNER" | "VICE_ADMIN" | "MANAGER" | "EMPLOYEE";
 
+export interface WorkspaceCustomRole {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  permissions: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WorkspaceMember {
   userId: string;
-  role: WorkspaceRole;
+  role: string;
   joinedAt: string;
   nickname: string | null;
   name?: string | null;
@@ -58,7 +68,7 @@ export interface Workspace {
   notifications: string[];
   invitations: string[];
   voiceRecords: string[];
-  customRoles: unknown[];
+  customRoles: WorkspaceCustomRole[];
   features: unknown[];
   version: number;
   createdAt: string;
@@ -87,5 +97,6 @@ export interface UpdateWorkspaceInput {
   members?: WorkspaceMember[];
   messages?: Record<string, unknown>;
   voiceRecords?: string[];
+  customRoles?: WorkspaceCustomRole[];
   expectedVersion: number;
 }
