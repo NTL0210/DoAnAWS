@@ -1,7 +1,7 @@
 import type { RequestHandler } from "express";
 import { Router } from "express";
 import { requireWorkspaceRole } from "../modules/auth/auth.middleware.js";
-import type { WorkspaceRole } from "../modules/auth/auth.types.js";
+import type { WorkspaceRequirement } from "../modules/auth/auth.middleware.js";
 import { MeetingController } from "../modules/meetings/meeting.controller.js";
 import { buildMeetingRouter } from "../modules/meetings/meeting.router.js";
 import { MeetingService } from "../modules/meetings/meeting.service.js";
@@ -23,14 +23,14 @@ import { WorkspaceService } from "../modules/workspaces/workspace.service.js";
 import type { Repositories } from "./repositories.js";
 
 /** Middleware factory pre-bound to the workspace repository. */
-export type GuardFn = (...roles: WorkspaceRole[]) => RequestHandler;
+export type GuardFn = (...requirements: WorkspaceRequirement[]) => RequestHandler;
 
 export function buildApiRouter(repositories: Repositories): Router {
   const api = Router();
 
   // Partial-apply the workspace repo so callers only supply the required roles.
-  const guard: GuardFn = (...roles) =>
-    requireWorkspaceRole(repositories.workspaces, ...roles);
+  const guard: GuardFn = (...requirements) =>
+    requireWorkspaceRole(repositories.workspaces, ...requirements);
 
   const userService = new UserService(repositories.users);
   const workspaceService = new WorkspaceService(repositories.workspaceCrud, userService);

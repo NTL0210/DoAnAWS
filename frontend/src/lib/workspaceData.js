@@ -1,3 +1,5 @@
+import { DEFAULT_ROLES as CURRENT_DEFAULT_ROLES } from '@/data/defaults/roles';
+
 /**
  * Workspace data model for workspace-based SaaS system.
  *
@@ -261,7 +263,7 @@ export function hasWorkspacePermission(workspace, userId, permission) {
   const member = workspace.members?.find((m) => m.userId === userId);
   if (!member) return false;
 
-  const roleDef = DEFAULT_ROLES[member.role] || workspace.customRoles?.find((r) => r.id === member.role);
+  const roleDef = CURRENT_DEFAULT_ROLES[member.role] || workspace.customRoles?.find((r) => r.id === member.role);
   if (!roleDef) return false;
 
   if (member.role === 'OWNER') return true;
@@ -292,12 +294,12 @@ export function getUserWorkspacePermissions(workspace, userId) {
   if (!member) return [];
 
   if (member.role === 'OWNER') {
-    return Object.values(DEFAULT_ROLES).reduce((acc, role) => {
+    return Object.values(CURRENT_DEFAULT_ROLES).reduce((acc, role) => {
       return [...acc, ...role.permissions];
     }, []);
   }
 
-  const roleDef = DEFAULT_ROLES[member.role] || workspace.customRoles?.find((r) => r.id === member.role);
+  const roleDef = CURRENT_DEFAULT_ROLES[member.role] || workspace.customRoles?.find((r) => r.id === member.role);
   return roleDef ? roleDef.permissions : [];
 }
 
@@ -336,7 +338,7 @@ export function getWorkspaceMembers(workspace) {
  * @returns {string[]}
  */
 export function getDefaultPermissionsForRole(role) {
-  const roleDef = DEFAULT_ROLES[role];
+  const roleDef = CURRENT_DEFAULT_ROLES[role];
   return roleDef ? roleDef.permissions : [];
 }
 

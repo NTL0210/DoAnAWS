@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
-import { getWorkspaceRole } from '@/lib/workspaceData';
+import { getWorkspaceRole, hasWorkspacePermission } from '@/lib/workspaceData';
 import { normalizeVoiceChannel } from '@/lib/voicePermissions';
-import { canManageAIWorkflow } from '@/services/workspaceService';
 import { isCloudMode } from '@/services/apiClient';
 
 /**
@@ -87,8 +86,9 @@ export default function useWorkspaceState({
   }, [activeWorkspace, currentUser]);
 
   const canManageAIReview = useMemo(() => {
-    return canManageAIWorkflow(workspaceRole);
-  }, [workspaceRole]);
+    return hasWorkspacePermission(activeWorkspace, currentUser?.id, 'tasks.approve')
+      || hasWorkspacePermission(activeWorkspace, currentUser?.id, 'meetings.manage');
+  }, [activeWorkspace, currentUser?.id]);
 
   const textChannels = useMemo(() => {
     if (!activeWorkspace) return [];
@@ -120,9 +120,9 @@ export default function useWorkspaceState({
 
   const canAccessTeam = useCallback((team) => {
     if (!team || !currentUser) return false;
-    if (['OWNER', 'VICE_ADMIN', 'MANAGER'].includes(workspaceRole)) return true;
+    if (hasWorkspacePermission(activeWorkspace, currentUser.id, 'teams.manage')) return true;
     return (team.memberIds || []).includes(currentUser.id);
-  }, [currentUser, workspaceRole]);
+  }, [activeWorkspace, currentUser]);
 
   // ─── Workspace Actions ─────────────────────────────────
   const createWorkspace = useCallback(async (workspaceData) => {

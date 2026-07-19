@@ -1,8 +1,12 @@
 import type { NextFunction, Request, Response } from "express";
 import { verifyToken } from "./auth.jwt.js";
+import { getBuiltInRolePermissions } from "./auth.permissions.js";
+import type { WorkspacePermission } from "./auth.permissions.js";
 import { hasSufficientRole, WORKSPACE_ROLES } from "./auth.types.js";
 import type { WorkspaceRole } from "./auth.types.js";
 import type { WorkspaceRepository } from "./workspace.repository.js";
+
+export type WorkspaceRequirement = WorkspaceRole | `permission:${WorkspacePermission}`;
 
 // ─── Authenticate Middleware ───────────────────────────────
 
@@ -60,7 +64,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
  */
 export function requireWorkspaceRole(
   workspaceRepo: WorkspaceRepository,
-  ...requiredRoles: WorkspaceRole[]
+  ...requirements: WorkspaceRequirement[]
 ) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -99,9 +103,11 @@ export function requireWorkspaceRole(
         return;
       }
 
-      const userRole = await workspaceRepo.getMemberRole(workspaceId, req.user.userId);
+      const authorization = workspaceRepo.getMemberAuthorization
+        ? await workspaceRepo.getMemberAuthorization(workspaceId, req.user.userId)
+        : await legacyAuthorization(workspaceRepo, workspaceId, req.user.userId);
 
-      if (!userRole) {
+      if (!authorization) {
         res.status(403).json({
           error: {
             code: "FORBIDDEN",
@@ -112,39 +118,52 @@ export function requireWorkspaceRole(
         return;
       }
 
-      if (!WORKSPACE_ROLES.includes(userRole)) {
-        res.status(403).json({
-          error: {
-            code: "FORBIDDEN",
-            message: "Invalid workspace role",
-            requestId: res.locals.requestId,
-          },
-        });
-        return;
-      }
-
-      // Check hierarchy: user's role must be >= at least one required role
-      const hasAccess = requiredRoles.some((required) =>
-        hasSufficientRole(userRole, required),
+      const requiredPermissions = requirements
+        .filter((requirement): requirement is `permission:${WorkspacePermission}` => requirement.startsWith("permission:"))
+        .map((requirement) => requirement.slice("permission:".length) as WorkspacePermission);
+      const requiredRoles = requirements.filter((requirement): requirement is WorkspaceRole =>
+        !requirement.startsWith("permission:"),
+      );
+      const hasAccess = authorization.effectiveRole === "OWNER" || (
+        requiredPermissions.length > 0
+          ? requiredPermissions.some((permission) => authorization.permissions.includes(permission))
+          : requiredRoles.some((required) => hasSufficientRole(authorization.effectiveRole, required))
       );
 
       if (!hasAccess) {
         res.status(403).json({
           error: {
             code: "FORBIDDEN",
-            message: `Insufficient permissions. Required: ${requiredRoles.join(" or ")}`,
+            message: `Insufficient permissions. Required: ${requirements.join(" or ")}`,
             requestId: res.locals.requestId,
           },
         });
         return;
       }
 
-      res.locals.workspaceRole = userRole;
+      res.locals.workspaceRole = authorization.effectiveRole;
+      res.locals.workspaceRoleId = authorization.roleId;
+      res.locals.workspacePermissions = authorization.permissions;
       res.locals.workspaceId = workspaceId;
       next();
     } catch (error) {
       next(error);
     }
+  };
+}
+
+async function legacyAuthorization(
+  workspaceRepo: WorkspaceRepository,
+  workspaceId: string,
+  userId: string,
+) {
+  const roleId = await workspaceRepo.getMemberRole(workspaceId, userId);
+  if (!roleId || !WORKSPACE_ROLES.includes(roleId as WorkspaceRole)) return null;
+  const effectiveRole = roleId as WorkspaceRole;
+  return {
+    roleId,
+    effectiveRole,
+    permissions: getBuiltInRolePermissions(effectiveRole),
   };
 }
 

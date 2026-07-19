@@ -148,6 +148,7 @@ export function WorkspaceProvider({ children }) {
     workspaceTeams: workspaceHook.workspaceTeams,
     workspaceMembers: workspaceHook.workspaceMembers,
     setWorkspaces: workspaceHook.setWorkspaces,
+    showToast: toastHook.showToast,
   });
 
   // â”€â”€â”€ Sync active workspace for notifications (break circular dep) â”€â”€â”€â”€
@@ -207,6 +208,7 @@ export function WorkspaceProvider({ children }) {
     activeWorkspaceId: workspaceHook.activeWorkspaceId,
     workspaceMembers: workspaceHook.workspaceMembers,
     canManageAIReview: workspaceHook.canManageAIReview,
+    canManageVoice: rolesPermissionsHook.can('voice.manage') || rolesPermissionsHook.can('channels.manage'),
     canAccessVoice: rolesPermissionsHook.canAccessVoice,
     canRecordVoice: rolesPermissionsHook.canRecordVoice,
     setWorkspaces: workspaceHook.setWorkspaces,
@@ -379,6 +381,13 @@ export function WorkspaceProvider({ children }) {
 
   // â”€â”€â”€ Context Value â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Matches the EXACT shape from the original monolithic provider.
+  const activeWorkspaceRoleLabels = useMemo(() => ({
+    ...workspaceRoleLabels,
+    ...Object.fromEntries(
+      (workspaceHook.activeWorkspace?.customRoles || []).map((role) => [role.id, role.name])
+    ),
+  }), [workspaceHook.activeWorkspace?.customRoles]);
+
   const value = useMemo(
     () => ({
       // Auth (account-only, no global role)
@@ -402,7 +411,7 @@ export function WorkspaceProvider({ children }) {
 
       // Workspace-scoped role (ONLY source of truth)
       workspaceRole: workspaceHook.workspaceRole,
-      workspaceRoleLabels,
+      workspaceRoleLabels: activeWorkspaceRoleLabels,
       workspaceRoleColors,
 
       // Views
@@ -514,6 +523,8 @@ export function WorkspaceProvider({ children }) {
 
       // Roles
       createCustomRole: rolesPermissionsHook.createCustomRole,
+      updateCustomRole: rolesPermissionsHook.updateCustomRole,
+      deleteCustomRole: rolesPermissionsHook.deleteCustomRole,
 
       // Permissions (workspace-scoped)
       can: rolesPermissionsHook.can,
@@ -564,6 +575,7 @@ export function WorkspaceProvider({ children }) {
       refreshUserWorkspaces,
       workspaceHook.activeTeamId, workspaceHook.activeTeam,
       workspaceHook.workspaceRole,
+      activeWorkspaceRoleLabels,
       workspaceHook.activeView, workspaceHook.selectView,
       workspaceHook.activeChannelId, workspaceHook.activeChannel,
       workspaceHook.selectChannel, workspaceHook.selectTeamChat,
@@ -602,7 +614,8 @@ export function WorkspaceProvider({ children }) {
       invitationsHook.declineInvitation,
       showInvitations,
       // Roles/Permissions
-      rolesPermissionsHook.createCustomRole, rolesPermissionsHook.can,
+      rolesPermissionsHook.createCustomRole, rolesPermissionsHook.updateCustomRole,
+      rolesPermissionsHook.deleteCustomRole, rolesPermissionsHook.can,
       rolesPermissionsHook.canInWorkspace, rolesPermissionsHook.getAllPermissions,
       // Onboarding
       onboardingHook.onboarding, onboardingHook.initOnboarding,

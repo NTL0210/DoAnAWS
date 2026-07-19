@@ -7,11 +7,11 @@ export function buildVoiceRecordingRouter(
   guard: GuardFn,
 ): Router {
   const router = Router();
-  router.get("/", guard("MEMBER", "ADMIN", "OWNER"), controller.list);
-  router.post("/", guard("MEMBER", "ADMIN", "OWNER"), controller.create);
-  router.post("/:id/upload-url", controller.createUploadUrl);
-  router.patch("/:id", controller.update);
-  router.post("/:id/send-to-ai", controller.sendToAi);
-  router.delete("/:id", controller.delete);
+  router.get("/", guard("permission:meetings.join", "permission:voice.record"), controller.list);
+  router.post("/", guard("permission:voice.record"), controller.create);
+  router.post("/:id/upload-url", guard("permission:voice.record"), controller.createUploadUrl);
+  router.patch("/:id", guard("permission:voice.record", "permission:voice.manage"), controller.update);
+  router.post("/:id/send-to-ai", guard("permission:voice.record"), controller.sendToAi);
+  router.delete("/:id", guard("permission:voice.manage"), controller.delete);
   return router;
 }

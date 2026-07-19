@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { WORKSPACE_PERMISSIONS } from "../auth/auth.permissions.js";
 
 export const workspaceRoleSchema = z.enum([
   "OWNER",
@@ -6,6 +7,19 @@ export const workspaceRoleSchema = z.enum([
   "MANAGER",
   "EMPLOYEE",
 ]);
+
+export const customRoleIdSchema = z.string().regex(/^cr-[a-zA-Z0-9-]{6,80}$/);
+export const workspaceMemberRoleSchema = z.union([workspaceRoleSchema, customRoleIdSchema]);
+
+export const workspaceCustomRoleSchema = z.object({
+  id: customRoleIdSchema,
+  name: z.string().trim().min(2).max(50),
+  description: z.string().trim().max(240).default(""),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  permissions: z.array(z.enum(WORKSPACE_PERMISSIONS)).max(WORKSPACE_PERMISSIONS.length),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
 
 export const createWorkspaceSchema = z.object({
   name: z.string().min(1).max(200),
@@ -18,7 +32,7 @@ export const createWorkspaceSchema = z.object({
 
 export const workspaceMemberSchema = z.object({
   userId: z.string(),
-  role: workspaceRoleSchema,
+  role: workspaceMemberRoleSchema,
   joinedAt: z.string(),
   nickname: z.string().nullable(),
   name: z.string().nullable().optional(),
@@ -65,6 +79,7 @@ export const updateWorkspaceSchema = z.object({
   members: z.array(workspaceMemberSchema).optional(),
   messages: z.record(z.unknown()).optional(),
   voiceRecords: z.array(z.string()).optional(),
+  customRoles: z.array(workspaceCustomRoleSchema).max(50).optional(),
   expectedVersion: z.coerce.number().int().positive(),
 });
 
@@ -85,7 +100,7 @@ export const idParamsSchema = z.object({
 
 export const addMemberSchema = z.object({
   userId: z.string().min(1),
-  role: workspaceRoleSchema.optional().default("EMPLOYEE"),
+  role: workspaceMemberRoleSchema.optional().default("EMPLOYEE"),
 });
 
 export const removeMemberParamsSchema = z.object({

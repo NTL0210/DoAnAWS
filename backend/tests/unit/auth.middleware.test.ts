@@ -287,6 +287,48 @@ describe("requireWorkspaceRole middleware", () => {
     expect(res.locals.workspaceId).toBe("ws-3");
   });
 
+  it("allows a custom role when it has the required permission", async () => {
+    const repo = {
+      getMemberRole: vi.fn(),
+      getMemberAuthorization: vi.fn().mockResolvedValue({
+        roleId: "cr-reviewer",
+        effectiveRole: "MEMBER",
+        permissions: ["workspace.view", "tasks.view", "tasks.approve"],
+      }),
+    } as any as WorkspaceRepository;
+    const middleware = requireWorkspaceRole(repo, "permission:tasks.approve");
+    const req = mockReq({ user: makeAuthUser(), headers: { "x-workspace-id": "ws-1" } });
+    const { res } = mockRes();
+    const next = mockNext();
+
+    await middleware(req, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.locals.workspaceRoleId).toBe("cr-reviewer");
+    expect(res.locals.workspacePermissions).toContain("tasks.approve");
+  });
+
+  it("denies a custom role when the required permission is missing", async () => {
+    const repo = {
+      getMemberRole: vi.fn(),
+      getMemberAuthorization: vi.fn().mockResolvedValue({
+        roleId: "cr-reviewer",
+        effectiveRole: "MEMBER",
+        permissions: ["workspace.view", "tasks.view"],
+      }),
+    } as any as WorkspaceRepository;
+    const middleware = requireWorkspaceRole(repo, "permission:tasks.approve");
+    const req = mockReq({ user: makeAuthUser(), headers: { "x-workspace-id": "ws-1" } });
+    const { res, state } = mockRes();
+    const next = mockNext();
+
+    await middleware(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect((state.body as any)?.error?.code).toBe("FORBIDDEN");
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it("forwards caught errors to next()", async () => {
     const repo = {
       getMemberRole: vi.fn().mockRejectedValue(new Error("DB down")),

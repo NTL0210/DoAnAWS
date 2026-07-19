@@ -8,11 +8,11 @@ export function buildTaskRouter(
 ): Router {
   const router = Router();
 
-  router.get("/", guard("MEMBER", "ADMIN", "OWNER"), controller.list);
-  router.post("/", guard("ADMIN", "OWNER", "MANAGER"), controller.create);
-  router.get("/:id", guard("MEMBER", "ADMIN", "OWNER"), controller.get);
-  router.patch("/:id", guard("MEMBER"), controller.update);
-  router.delete("/:id", guard("ADMIN", "OWNER", "MANAGER"), controller.delete);
+  router.get("/", guard("permission:tasks.view", "permission:tasks.manage_all"), controller.list);
+  router.post("/", guard("permission:tasks.create"), controller.create);
+  router.get("/:id", guard("permission:tasks.view", "permission:tasks.manage_all"), controller.get);
+  router.patch("/:id", guard("permission:tasks.update_status", "permission:tasks.manage_all", "permission:tasks.approve"), controller.update);
+  router.delete("/:id", guard("permission:tasks.delete"), controller.delete);
 
   return router;
 }

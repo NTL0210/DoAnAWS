@@ -1,6 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
 import { ForbiddenError } from "../../shared/errors/app-error.js";
 import type { WorkspaceRole } from "../auth/auth.types.js";
+import { getBuiltInRolePermissions } from "../auth/auth.permissions.js";
+import type { WorkspacePermission } from "../auth/auth.permissions.js";
 import {
   createTaskSchema,
   idParamsSchema,
@@ -18,7 +20,8 @@ export class TaskController {
       const input = listTasksSchema.parse(req.query);
       const workspaceId = res.locals.workspaceId ?? input.workspaceId ?? "";
       const role = roleFromLocals(res.locals.workspaceRole);
-      const assigneeId = isEmployeeRole(role) ? req.user?.userId : input.assigneeId;
+      const permissions = permissionsFromLocals(role, res.locals.workspacePermissions);
+      const assigneeId = permissions.includes("tasks.manage_all") ? input.assigneeId : req.user?.userId;
       const result = await this.service.list({ ...input, workspaceId, assigneeId });
       res.status(200).json({
         items: result.items.map(toTaskResponse),
@@ -38,7 +41,8 @@ export class TaskController {
         taskId: params.id,
       });
       const role = roleFromLocals(res.locals.workspaceRole);
-      if (isEmployeeRole(role) && task.assigneeId !== req.user?.userId) {
+      const permissions = permissionsFromLocals(role, res.locals.workspacePermissions);
+      if (!permissions.includes("tasks.manage_all") && task.assigneeId !== req.user?.userId) {
         throw new ForbiddenError("You can only view tasks assigned to you");
       }
       res.status(200).json(toTaskResponse(task));
@@ -51,6 +55,11 @@ export class TaskController {
     try {
       const input = createTaskSchema.parse(req.body);
       const workspaceId = res.locals.workspaceId ?? input.workspaceId ?? "";
+      const role = roleFromLocals(res.locals.workspaceRole);
+      const permissions = permissionsFromLocals(role, res.locals.workspacePermissions);
+      if (input.assigneeId && input.assigneeId !== req.user?.userId && !permissions.includes("tasks.assign")) {
+        throw new ForbiddenError("Task assignment permission is required to assign another member");
+      }
       const task = await this.service.create({
         ...input,
         workspaceId,
@@ -73,6 +82,10 @@ export class TaskController {
         patch,
         actorId: req.user?.userId,
         role: roleFromLocals(res.locals.workspaceRole),
+        permissions: permissionsFromLocals(
+          roleFromLocals(res.locals.workspaceRole),
+          res.locals.workspacePermissions,
+        ),
       });
       const task = await this.service.update({
         workspaceId,
@@ -104,24 +117,36 @@ function roleFromLocals(value: unknown): WorkspaceRole | null {
   return typeof value === "string" ? value as WorkspaceRole : null;
 }
 
-function isEmployeeRole(role: WorkspaceRole | null): boolean {
-  return role === "MEMBER" || role === "EMPLOYEE";
-}
-
 function authorizeTaskUpdate(params: {
   current: Awaited<ReturnType<TaskService["get"]>>;
   patch: ReturnType<typeof updateTaskSchema.parse>;
   actorId: string | undefined;
   role: WorkspaceRole | null;
+  permissions: WorkspacePermission[];
 }): void {
-  const { current, patch, actorId, role } = params;
+  const { current, patch, actorId, role, permissions } = params;
   if (!role) {
     throw new ForbiddenError("Workspace role is required to update a task");
   }
   const isAssignee = Boolean(actorId && current.assigneeId === actorId);
+  const changedFields = Object.keys(patch).filter((field) => field !== "expectedVersion");
+  const isReviewer = permissions.includes("tasks.approve");
+  const canManageDetails = permissions.includes("tasks.manage_all");
+  const isApproval = current.status === "REVIEW" && patch.status === "COMPLETED";
+
+  if (isReviewer && isApproval) {
+    if (changedFields.some((field) => !["status", "progress"].includes(field))) {
+      throw new ForbiddenError("Task approval can only update status or progress");
+    }
+    return;
+  }
+
+  if (patch.status === undefined && canManageDetails) return;
 
   if (isAssignee) {
-    const changedFields = Object.keys(patch).filter((field) => field !== "expectedVersion");
+    if (!permissions.includes("tasks.update_status")) {
+      throw new ForbiddenError("Task status update permission is required");
+    }
     if (changedFields.some((field) => !["status", "progress"].includes(field))) {
       throw new ForbiddenError("Assigned users can only update task status or progress");
     }
@@ -135,15 +160,21 @@ function authorizeTaskUpdate(params: {
     return;
   }
 
-  if (isEmployeeRole(role)) {
+  if (!canManageDetails) {
     throw new ForbiddenError("Only the assigned user can update this task");
   }
 
   if (patch.status !== undefined) {
-    const isReviewer = role === "OWNER" || role === "VICE_ADMIN" || role === "ADMIN";
-    const isApproval = current.status === "REVIEW" && patch.status === "COMPLETED";
     if (!isReviewer || !isApproval) {
       throw new ForbiddenError("Managers can edit task details, while owner or vice admin can approve tasks in review");
     }
   }
+}
+
+function permissionsFromLocals(
+  role: WorkspaceRole | null,
+  permissions: WorkspacePermission[] | undefined,
+): WorkspacePermission[] {
+  if (permissions) return permissions;
+  return role ? getBuiltInRolePermissions(role) : [];
 }

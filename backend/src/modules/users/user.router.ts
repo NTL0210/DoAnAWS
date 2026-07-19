@@ -11,12 +11,12 @@ export function buildUserRouter(
   // /me does not require workspace membership — returns the authenticated user
   router.get("/me", controller.getMe);
 
-  router.get("/", guard("MEMBER", "ADMIN", "OWNER"), controller.list);
-  router.post("/", guard("ADMIN", "OWNER"), controller.create);
-  router.get("/by-email", guard("MEMBER", "ADMIN", "OWNER"), controller.getByEmail);
-  router.get("/:id", guard("MEMBER", "ADMIN", "OWNER"), controller.get);
+  router.get("/", guard("permission:members.view"), controller.list);
+  router.post("/", guard("permission:members.invite"), controller.create);
+  router.get("/by-email", guard("permission:members.view", "permission:members.invite"), controller.getByEmail);
+  router.get("/:id", guard("permission:members.view"), controller.get);
   router.patch("/:id", controller.update);
-  router.delete("/:id", guard("OWNER"), controller.delete);
+  router.delete("/:id", guard("permission:workspace.delete"), controller.delete);
 
   return router;
 }

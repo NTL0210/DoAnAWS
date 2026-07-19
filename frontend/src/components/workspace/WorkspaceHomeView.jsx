@@ -20,6 +20,7 @@ export default function WorkspaceHomeView() {
     currentUser,
     workspaceRole,
     workspaceRoleLabels,
+    can,
     workspaceMembers,
     workspaceTeams,
     workspaceTasks,
@@ -85,10 +86,10 @@ export default function WorkspaceHomeView() {
     };
   }, [workspaceMembers, workspaceTaskList]);
 
-  const canUploadMeeting = workspaceRole === 'OWNER' || workspaceRole === 'MANAGER' || workspaceRole === 'VICE_ADMIN';
-  const canCreateTask = workspaceRole === 'OWNER' || workspaceRole === 'MANAGER' || workspaceRole === 'VICE_ADMIN';
-  const canInvite = workspaceRole === 'OWNER' || workspaceRole === 'VICE_ADMIN';
-  const canCreateTeam = workspaceRole === 'OWNER' || workspaceRole === 'VICE_ADMIN';
+  const canUploadMeeting = can('meetings.create') || can('meetings.record');
+  const canCreateTask = can('tasks.create');
+  const canInvite = can('members.invite');
+  const canCreateTeam = can('teams.create');
   const isEmptyWorkspace = (activeWorkspace?.channels || []).length === 0
     && workspaceTeams.length === 0
     && workspaceTaskList.length === 0

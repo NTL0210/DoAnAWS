@@ -8,6 +8,8 @@ import {
   getUserWorkspacePermissions,
 } from '@/lib/workspaceData';
 import { canAccessVoiceChannel, canRecordVoiceChannel } from '@/lib/voicePermissions';
+import { workspacesApi } from '@/services/cloudClient';
+import { getGlobalSocket } from '@/context/VoiceConnectionContext';
 
 /**
  * useRolesAndPermissions — manages workspace roles and permission checks.
@@ -38,24 +40,83 @@ export default function useRolesAndPermissions({
   workspaceTeams,
   workspaceMembers,
   setWorkspaces,
+  showToast,
 }) {
-  const createCustomRole = useCallback((workspaceId, roleData) => {
+  const persistCustomRoles = useCallback(async (workspace, customRoles, reason) => {
+    try {
+      const saved = await workspacesApi.update(workspace.id, {
+        customRoles,
+        expectedVersion: workspace.version || 1,
+      });
+      setWorkspaces((prev) => prev.map((item) => (item.id === saved.id ? saved : item)));
+      getGlobalSocket()?.emit('workspace:event', {
+        workspaceId: workspace.id,
+        type: 'WORKSPACE_STRUCTURE_CHANGED',
+        payload: { reason },
+      });
+      return saved;
+    } catch (error) {
+      showToast?.('error', error?.message || 'Failed to save workspace roles.');
+      return null;
+    }
+  }, [setWorkspaces, showToast]);
+
+  const createCustomRole = useCallback(async (workspaceId, roleData) => {
+    const workspace = workspaces.find((item) => item.id === workspaceId);
+    if (!workspace) return null;
     const roleId = 'cr-' + generateId();
+    const now = new Date().toISOString();
     const newRole = {
       id: roleId,
-      name: roleData.name,
-      permissions: roleData.permissions || [],
-      createdAt: new Date().toISOString(),
+      name: roleData.name.trim(),
+      description: roleData.description?.trim() || '',
+      color: roleData.color || '#5865F2',
+      permissions: Array.from(new Set(roleData.permissions || [])),
+      createdAt: now,
+      updatedAt: now,
     };
-    setWorkspaces((prev) =>
-      prev.map((ws) => {
-        if (ws.id !== workspaceId) return ws;
-        const existing = ws.customRoles || [];
-        return { ...ws, customRoles: [...existing, newRole] };
-      })
+    const saved = await persistCustomRoles(
+      workspace,
+      [...(workspace.customRoles || []), newRole],
+      'CUSTOM_ROLE_CREATED',
     );
+    if (!saved) return null;
+    showToast?.('success', `Role "${newRole.name}" created.`);
     return newRole;
-  }, [setWorkspaces]);
+  }, [persistCustomRoles, showToast, workspaces]);
+
+  const updateCustomRole = useCallback(async (workspaceId, roleId, roleData) => {
+    const workspace = workspaces.find((item) => item.id === workspaceId);
+    if (!workspace) return null;
+    const customRoles = (workspace.customRoles || []).map((role) => (
+      role.id === roleId
+        ? {
+            ...role,
+            ...roleData,
+            name: roleData.name?.trim() || role.name,
+            description: roleData.description?.trim() ?? role.description ?? '',
+            permissions: Array.from(new Set(roleData.permissions || role.permissions || [])),
+            updatedAt: new Date().toISOString(),
+          }
+        : role
+    ));
+    const saved = await persistCustomRoles(workspace, customRoles, 'CUSTOM_ROLE_UPDATED');
+    if (saved) showToast?.('success', 'Role updated.');
+    return saved?.customRoles?.find((role) => role.id === roleId) || null;
+  }, [persistCustomRoles, showToast, workspaces]);
+
+  const deleteCustomRole = useCallback(async (workspaceId, roleId) => {
+    const workspace = workspaces.find((item) => item.id === workspaceId);
+    if (!workspace) return false;
+    if ((workspace.members || []).some((member) => member.role === roleId)) {
+      showToast?.('error', 'Move all members to another role before deleting this role.');
+      return false;
+    }
+    const customRoles = (workspace.customRoles || []).filter((role) => role.id !== roleId);
+    const saved = await persistCustomRoles(workspace, customRoles, 'CUSTOM_ROLE_DELETED');
+    if (saved) showToast?.('success', 'Role deleted.');
+    return Boolean(saved);
+  }, [persistCustomRoles, showToast, workspaces]);
 
   const can = useCallback((permission) => {
     if (!activeWorkspace || !currentUser) return false;
@@ -92,6 +153,8 @@ export default function useRolesAndPermissions({
 
   return {
     createCustomRole,
+    updateCustomRole,
+    deleteCustomRole,
     can,
     canInWorkspace,
     canAccessVoice,

@@ -1,72 +1,98 @@
-/**
- * Default roles, permissions, and labels
- * Extracted from src/lib/workspaceData.js
- */
+export const PERMISSION_LABELS = {
+  'workspace.view': 'View workspace',
+  'workspace.manage': 'Manage workspace settings',
+  'workspace.delete': 'Delete workspace',
+  'channels.create': 'Create channels',
+  'channels.delete': 'Delete channels',
+  'channels.manage': 'Manage channels',
+  'members.view': 'View members',
+  'members.invite': 'Invite members',
+  'members.remove': 'Remove members',
+  'roles.manage': 'Manage roles',
+  'roles.view': 'View roles',
+  'teams.create': 'Create teams',
+  'teams.manage': 'Manage teams and membership',
+  'teams.delete': 'Delete teams',
+  'teams.view': 'View teams',
+  'tasks.create': 'Create tasks',
+  'tasks.assign': 'Assign tasks',
+  'tasks.delete': 'Delete tasks',
+  'tasks.manage_all': 'Manage all tasks',
+  'tasks.view': 'View tasks',
+  'tasks.update_status': 'Start and submit assigned tasks',
+  'tasks.comment': 'Comment on tasks',
+  'tasks.approve': 'Approve reviewed tasks',
+  'meetings.create': 'Create meetings',
+  'meetings.record': 'Record meetings',
+  'meetings.manage': 'Manage meetings and AI review',
+  'meetings.join': 'Join meetings and voice',
+  'voice.record': 'Record voice channels',
+  'voice.manage': 'Manage voice channels and recordings',
+  'chat.send': 'Send messages',
+  'chat.upload': 'Upload files and images',
+  'analytics.view': 'View analytics',
+  'reports.view': 'View reports',
+  'profile.view': 'View profiles',
+};
 
-/** @type {Object<string, {name: string, description: string, permissions: string[], color: string, isSystem: boolean}>} */
+export const WORKSPACE_PERMISSION_GROUPS = [
+  { id: 'workspace', label: 'Workspace', permissions: ['workspace.view', 'workspace.manage', 'workspace.delete'] },
+  { id: 'members', label: 'Members & roles', permissions: ['members.view', 'members.invite', 'members.remove', 'roles.view', 'roles.manage'] },
+  { id: 'teams', label: 'Teams & channels', permissions: ['teams.view', 'teams.create', 'teams.manage', 'teams.delete', 'channels.create', 'channels.manage', 'channels.delete'] },
+  { id: 'tasks', label: 'Tasks', permissions: ['tasks.view', 'tasks.create', 'tasks.assign', 'tasks.manage_all', 'tasks.update_status', 'tasks.approve', 'tasks.delete', 'tasks.comment'] },
+  { id: 'meetings', label: 'Meetings & voice', permissions: ['meetings.join', 'meetings.create', 'meetings.record', 'meetings.manage', 'voice.record', 'voice.manage'] },
+  { id: 'communication', label: 'Communication & insights', permissions: ['chat.send', 'chat.upload', 'analytics.view', 'reports.view', 'profile.view'] },
+];
+
+export const ALL_WORKSPACE_PERMISSIONS = Object.keys(PERMISSION_LABELS);
+
+const EMPLOYEE_PERMISSIONS = [
+  'workspace.view',
+  'members.view',
+  'teams.view',
+  'tasks.view',
+  'tasks.update_status',
+  'tasks.comment',
+  'meetings.join',
+  'chat.send',
+  'chat.upload',
+  'profile.view',
+];
+
 export const DEFAULT_ROLES = {
   OWNER: {
     name: 'Owner',
-    description: 'Full control over the workspace',
+    description: 'Full workspace control',
+    permissions: ALL_WORKSPACE_PERMISSIONS,
+    color: '#ED4245',
+    isSystem: true,
+  },
+  VICE_ADMIN: {
+    name: 'Vice Admin',
+    description: 'Workspace administration without deletion',
+    permissions: ALL_WORKSPACE_PERMISSIONS.filter((permission) => permission !== 'workspace.delete'),
+    color: '#FF8C00',
+    isSystem: true,
+  },
+  MANAGER: {
+    name: 'Manager',
+    description: 'Team, task, meeting, and reporting operations',
     permissions: [
-      'workspace.manage',
-      'workspace.delete',
+      ...EMPLOYEE_PERMISSIONS,
       'channels.create',
-      'channels.delete',
       'channels.manage',
       'members.invite',
-      'members.remove',
-      'roles.manage',
       'teams.create',
       'teams.manage',
-      'teams.delete',
       'tasks.create',
       'tasks.assign',
       'tasks.delete',
       'tasks.manage_all',
       'meetings.create',
       'meetings.record',
-      'voice.record',
       'meetings.manage',
-      'analytics.view',
-      'reports.view',
-    ],
-    color: '#FF5555',
-    isSystem: true,
-  },
-  VICE_ADMIN: {
-    name: 'Vice Admin',
-    description: 'Assistant workspace administrator',
-    permissions: [
-      'channels.create',
-      'channels.manage',
-      'members.invite',
-      'members.remove',
-      'roles.view',
-      'teams.create',
-      'teams.manage',
-      'tasks.create',
-      'tasks.assign',
-      'tasks.manage_all',
-      'meetings.create',
-      'meetings.record',
       'voice.record',
-      'analytics.view',
-      'reports.view',
-    ],
-    color: '#FF8C00',
-    isSystem: true,
-  },
-  MANAGER: {
-    name: 'Manager',
-    description: 'Manages tasks, meetings, and team progress',
-    permissions: [
-      'teams.view',
-      'tasks.create',
-      'tasks.assign',
-      'meetings.create',
-      'meetings.record',
-      'voice.record',
+      'voice.manage',
       'analytics.view',
       'reports.view',
     ],
@@ -75,61 +101,13 @@ export const DEFAULT_ROLES = {
   },
   EMPLOYEE: {
     name: 'Employee',
-    description: 'Team member who receives tasks and joins meetings',
-    permissions: [
-      'chat.send',
-      'chat.upload',
-      'meetings.join',
-      'tasks.view',
-      'tasks.update_status',
-      'tasks.comment',
-      'profile.view',
-    ],
+    description: 'Assigned work, meetings, and team communication',
+    permissions: EMPLOYEE_PERMISSIONS,
     color: '#3BA55D',
     isSystem: true,
   },
 };
 
-/** @type {Object<string, string>} */
-export const PERMISSION_LABELS = {
-  'workspace.manage': 'Manage Workspace Settings',
-  'workspace.delete': 'Delete Workspace',
-  'channels.create': 'Create Channels',
-  'channels.delete': 'Delete Channels',
-  'channels.manage': 'Manage Channel Settings',
-  'members.invite': 'Invite Members',
-  'members.remove': 'Remove Members',
-  'roles.manage': 'Manage Roles & Permissions',
-  'roles.view': 'View Roles',
-  'teams.create': 'Create Teams',
-  'teams.manage': 'Manage Teams',
-  'teams.delete': 'Delete Teams',
-  'teams.view': 'View Teams',
-  'tasks.create': 'Create Tasks',
-  'tasks.assign': 'Assign Tasks',
-  'tasks.delete': 'Delete Tasks',
-  'tasks.manage_all': 'Manage All Tasks',
-  'tasks.view': 'View Tasks',
-  'tasks.update_status': 'Update Task Status',
-  'tasks.comment': 'Comment on Tasks',
-  'meetings.create': 'Create Meetings',
-  'meetings.record': 'Record Meetings',
-  'voice.record': 'Record Voice Channels',
-  'meetings.manage': 'Manage Meetings',
-  'meetings.join': 'Join Voice Channels',
-  'chat.send': 'Send Messages',
-  'chat.upload': 'Upload Files & Images',
-  'analytics.view': 'View Analytics',
-  'reports.view': 'View Reports',
-  'profile.view': 'View Profile',
-};
-
-/**
- * Get default permissions for a built-in role
- * @param {string} role
- * @returns {string[]}
- */
 export function getDefaultPermissionsForRole(role) {
-  const roleDef = DEFAULT_ROLES[role];
-  return roleDef ? [...roleDef.permissions] : [];
+  return DEFAULT_ROLES[role] ? [...DEFAULT_ROLES[role].permissions] : [];
 }

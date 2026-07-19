@@ -598,7 +598,7 @@ export default function WorkspaceChannelView() {
                 {voiceChannels.map((channel) => {
                   const hasAccess = canAccessVoice(channel);
                   // Ẩn voice channel nếu user ko có quyền (trừ OWNER/VICE_ADMIN)
-                  const isAdmin = workspaceRole === 'OWNER' || workspaceRole === 'VICE_ADMIN';
+                  const isAdmin = can('voice.manage') || can('channels.manage');
                   if (!hasAccess && !isAdmin) return null;
                   return (
                     <SidebarItem

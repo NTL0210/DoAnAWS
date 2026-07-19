@@ -42,6 +42,67 @@ describe("WorkspaceService", () => {
     expect(saved.teams[0]?.memberIds).toEqual(["owner-1", "employee-1"]);
     expect(update).toHaveBeenCalledWith(expect.objectContaining({ teams: saved.teams }), 1);
   });
+
+  it("persists a custom role and member assignment together", async () => {
+    const workspace = createWorkspace();
+    const update = vi.fn(async () => undefined);
+    const repository: WorkspaceRepository = {
+      findById: vi.fn(async () => workspace),
+      findByUserId: vi.fn(async () => [workspace]),
+      create: vi.fn(async () => undefined),
+      update,
+      delete_: vi.fn(async () => undefined),
+    };
+    const service = new WorkspaceService(repository);
+    const customRole = {
+      id: "cr-task-reviewer",
+      name: "Task Reviewer",
+      description: "Reviews completed work",
+      color: "#5865F2",
+      permissions: ["workspace.view", "tasks.view", "tasks.approve"],
+      createdAt: "2026-07-19T00:00:00.000Z",
+      updatedAt: "2026-07-19T00:00:00.000Z",
+    };
+
+    const saved = await service.update(workspace.id, {
+      expectedVersion: 1,
+      customRoles: [customRole],
+      members: workspace.members.map((member) => (
+        member.userId === "employee-1" ? { ...member, role: customRole.id } : member
+      )),
+    });
+
+    expect(saved.customRoles).toEqual([customRole]);
+    expect(saved.members.find((member) => member.userId === "employee-1")?.role).toBe(customRole.id);
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ customRoles: [customRole] }), 1);
+  });
+
+  it("rejects deleting a custom role while a member still uses it", async () => {
+    const workspace = createWorkspace();
+    workspace.customRoles = [{
+      id: "cr-task-reviewer",
+      name: "Task Reviewer",
+      description: "",
+      color: "#5865F2",
+      permissions: ["tasks.approve"],
+      createdAt: "2026-07-19T00:00:00.000Z",
+      updatedAt: "2026-07-19T00:00:00.000Z",
+    }];
+    workspace.members[1] = { ...workspace.members[1]!, role: "cr-task-reviewer" };
+    const repository: WorkspaceRepository = {
+      findById: vi.fn(async () => workspace),
+      findByUserId: vi.fn(async () => [workspace]),
+      create: vi.fn(async () => undefined),
+      update: vi.fn(async () => undefined),
+      delete_: vi.fn(async () => undefined),
+    };
+    const service = new WorkspaceService(repository);
+
+    await expect(service.update(workspace.id, {
+      expectedVersion: 1,
+      customRoles: [],
+    })).rejects.toMatchObject({ statusCode: 400 });
+  });
 });
 
 function createWorkspace(): Workspace {
