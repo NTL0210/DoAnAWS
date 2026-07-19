@@ -165,6 +165,7 @@ export function WorkspaceProvider({ children }) {
   const [showInviteMember, setShowInviteMember] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const lastWorkspaceLoadUserRef = useRef(null);
+  const workspaceRefreshInFlightRef = useRef(null);
   const notificationCount = useMemo(
     () => activityHook.aiNotifications.filter((item) => item.isRead === false || item.unread).length,
     [activityHook.aiNotifications]
@@ -173,10 +174,35 @@ export function WorkspaceProvider({ children }) {
   // â”€â”€â”€ Local refs to commonly-used hook values â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const { showToast } = toastHook;
 
+  const refreshUserWorkspaces = useCallback(async ({ clearOnError = false } = {}) => {
+    const userId = authHook.currentUser?.id;
+    if (!userId || !isCloudMode()) return [];
+    if (workspaceRefreshInFlightRef.current) return workspaceRefreshInFlightRef.current;
+
+    const refreshRequest = (async () => {
+      try {
+        const { workspacesApi } = await import('@/services/cloudClient');
+        const wsList = await workspacesApi.list({ userId });
+        const nextWorkspaces = Array.isArray(wsList) ? wsList : [];
+        workspaceHook.setWorkspaces(nextWorkspaces);
+        return nextWorkspaces;
+      } catch {
+        if (clearOnError) workspaceHook.setWorkspaces([]);
+        return [];
+      } finally {
+        workspaceRefreshInFlightRef.current = null;
+      }
+    })();
+
+    workspaceRefreshInFlightRef.current = refreshRequest;
+    return refreshRequest;
+  }, [authHook.currentUser?.id, workspaceHook.setWorkspaces]);
+
   // â”€â”€â”€ Voice State (extracted to hook) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const voiceHook = useVoiceState({
     currentUser: authHook.currentUser,
     voiceChannels: workspaceHook.voiceChannels,
+    activeWorkspace: workspaceHook.activeWorkspace,
     workspaceRole: workspaceHook.workspaceRole,
     activeWorkspaceId: workspaceHook.activeWorkspaceId,
     workspaceMembers: workspaceHook.workspaceMembers,
@@ -267,27 +293,39 @@ export function WorkspaceProvider({ children }) {
     }
     if (lastWorkspaceLoadUserRef.current === userId) return;
 
-    let cancelled = false;
     lastWorkspaceLoadUserRef.current = userId;
 
     const loadUserWorkspaces = async () => {
-      try {
-        const { workspacesApi } = await import('@/services/cloudClient');
-        const wsList = await workspacesApi.list({ userId });
-        if (!cancelled) {
-          workspaceHook.setWorkspaces(Array.isArray(wsList) ? wsList : []);
-        }
-      } catch {
-        if (!cancelled) {
-          workspaceHook.setWorkspaces([]);
-        }
-      }
+      await refreshUserWorkspaces({ clearOnError: true });
     };
 
     loadUserWorkspaces();
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceStorageHydrated, authHook.currentUser?.id]);
+  }, [workspaceStorageHydrated, authHook.currentUser?.id, refreshUserWorkspaces]);
+
+  useEffect(() => {
+    if (!workspaceStorageHydrated || !authHook.currentUser?.id || typeof window === 'undefined') return undefined;
+
+    const refreshSilently = () => {
+      if (document.visibilityState === 'visible') refreshUserWorkspaces();
+    };
+    const handleRealtime = (event) => {
+      const type = event.detail?.type;
+      if (type === 'WORKSPACE_STRUCTURE_CHANGED' || type === 'WORKSPACE_DELETED') {
+        refreshUserWorkspaces();
+      }
+    };
+
+    const intervalId = window.setInterval(refreshSilently, 5000);
+    window.addEventListener('focus', refreshSilently);
+    window.addEventListener('workspace:realtime', handleRealtime);
+    document.addEventListener('visibilitychange', refreshSilently);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refreshSilently);
+      window.removeEventListener('workspace:realtime', handleRealtime);
+      document.removeEventListener('visibilitychange', refreshSilently);
+    };
+  }, [workspaceStorageHydrated, authHook.currentUser?.id, refreshUserWorkspaces]);
 
   // â”€â”€â”€ Storage persistence effects â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // â”€â”€â”€ Cloud API sync (debounced) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -312,6 +350,30 @@ export function WorkspaceProvider({ children }) {
     }
   }, [authHook.currentUser, workspaceHook.workspaces, workspaceHook.activeWorkspaceId]);
 
+  useEffect(() => {
+    if (!workspaceHook.activeWorkspaceId) return;
+    const stillAvailable = workspaceHook.workspaces.some((workspace) => workspace.id === workspaceHook.activeWorkspaceId);
+    if (stillAvailable) return;
+    workspaceHook.setActiveWorkspaceId(null);
+    workspaceHook.setActiveChannelId(null);
+    workspaceHook.setActiveTeamId(null);
+    workspaceHook.setActiveView('home');
+  }, [workspaceHook.activeWorkspaceId, workspaceHook.workspaces]);
+
+  useEffect(() => {
+    if (!workspaceHook.activeTeamId) return;
+    const activeTeam = workspaceHook.activeWorkspace?.teams?.find((team) => team.id === workspaceHook.activeTeamId);
+    if (activeTeam && workspaceHook.canAccessTeam(activeTeam)) return;
+    const general = workspaceHook.activeWorkspace?.channels?.find((channel) => channel.isDefault && channel.type === 'text');
+    workspaceHook.setActiveTeamId(null);
+    workspaceHook.setActiveChannelId(general?.id || null);
+    workspaceHook.setActiveView('home');
+  }, [
+    workspaceHook.activeTeamId,
+    workspaceHook.activeWorkspace,
+    workspaceHook.canAccessTeam,
+  ]);
+
   // â”€â”€â”€ Persist workspace selection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // â”€â”€â”€ Voice functions moved to useVoiceState hook â”€â”€â”€â”€â”€â”€
 
@@ -334,6 +396,7 @@ export function WorkspaceProvider({ children }) {
       activeWorkspace: workspaceHook.activeWorkspace,
       selectWorkspace: workspaceHook.selectWorkspace,
       createWorkspace: workspaceHook.createWorkspace,
+      refreshUserWorkspaces,
       activeTeamId: workspaceHook.activeTeamId,
       activeTeam: workspaceHook.activeTeam,
 
@@ -498,6 +561,7 @@ export function WorkspaceProvider({ children }) {
       // Workspace
       workspaceHook.workspaces, workspaceHook.activeWorkspaceId, workspaceHook.activeWorkspace,
       workspaceHook.selectWorkspace, workspaceHook.createWorkspace,
+      refreshUserWorkspaces,
       workspaceHook.activeTeamId, workspaceHook.activeTeam,
       workspaceHook.workspaceRole,
       workspaceHook.activeView, workspaceHook.selectView,

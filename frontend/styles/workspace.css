@@ -423,6 +423,15 @@
   scrollbar-width: none;
 }
 
+.workspace-column-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.workspace-column-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 .workspace-cut-corner {
   clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
 }

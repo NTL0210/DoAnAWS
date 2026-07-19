@@ -212,6 +212,11 @@ export default function useChannelsAndMessages({
         expectedVersion: activeWorkspace.version || 1,
       });
       setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      getGlobalSocket()?.emit('workspace:event', {
+        workspaceId: activeWorkspace.id,
+        type: 'WORKSPACE_STRUCTURE_CHANGED',
+        payload: { reason: 'CHANNEL_CREATED' },
+      });
       setMessages((prev) => ({ ...prev, [channelId]: [] }));
       addActivity('channel_created', 'Channel #' + newChannel.name + ' created');
       return newChannel;
@@ -229,6 +234,11 @@ export default function useChannelsAndMessages({
         expectedVersion: activeWorkspace.version || 1,
       });
       setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      getGlobalSocket()?.emit('workspace:event', {
+        workspaceId: activeWorkspace.id,
+        type: 'WORKSPACE_STRUCTURE_CHANGED',
+        payload: { reason: 'CHANNEL_DELETED' },
+      });
     } catch {
       // Keep existing state if DynamoDB rejects the update.
     }

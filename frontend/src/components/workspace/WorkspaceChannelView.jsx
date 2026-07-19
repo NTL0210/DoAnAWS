@@ -525,6 +525,7 @@ export default function WorkspaceChannelView() {
                         active: activeView === 'team-chat' && activeTeamId === team.id,
                         action: () => openTeamChat(team.id),
                         badge: team.memberIds?.length,
+                        iconColor: team.color,
                       }}
                     />
                   ))
@@ -721,7 +722,10 @@ function SidebarItem({ item, compact = false }) {
       } ${item.active ? 'is-active' : ''} ${item.locked ? 'is-locked' : ''}`}
     >
       {Icon && (
-        <Icon className="workspace-menu-icon mt-0.5 h-4 w-4 flex-shrink-0" />
+        <Icon
+          className="workspace-menu-icon mt-0.5 h-4 w-4 flex-shrink-0"
+          style={item.iconColor ? { color: item.iconColor } : undefined}
+        />
       )}
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-1.5">
@@ -833,11 +837,19 @@ function TextChannelContent({
 
   return (
     <div className="flex h-full flex-col bg-white dark:bg-slate-900">
-      <header className="flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 px-5 py-3.5">
+      <header
+        className="flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 px-5 py-3.5"
+        style={isTeam ? { borderLeftColor: channel.color || '#5865F2', borderLeftWidth: 3 } : undefined}
+      >
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-sm font-black text-slate-900 dark:text-slate-100">
             {isTeam ? (
-              <FiBriefcase className="h-4 w-4 text-blue-600" />
+              <span
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white"
+                style={{ backgroundColor: channel.color || '#5865F2' }}
+              >
+                <FiBriefcase className="h-4 w-4" />
+              </span>
             ) : (
               <FiHash className="h-4 w-4 text-blue-600" />
             )}

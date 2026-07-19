@@ -4,6 +4,8 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   normalizeVoiceChannel,
 } from '@/lib/voicePermissions';
+import { workspacesApi } from '@/services/cloudClient';
+import { getGlobalSocket } from '@/context/VoiceConnectionContext';
 import {
   buildAudioConstraints,
   buildMediaRecorderOptions,
@@ -35,6 +37,7 @@ function getUserDisplayName(user) {
  * @param {Object} params
  * @param {Object|null} params.currentUser
  * @param {Array} params.voiceChannels
+ * @param {Object|null} params.activeWorkspace
  * @param {string|null} params.workspaceRole
  * @param {string|null} params.activeWorkspaceId
  * @param {Array} params.workspaceMembers
@@ -77,6 +80,7 @@ function getUserDisplayName(user) {
 export default function useVoiceState({
   currentUser,
   voiceChannels,
+  activeWorkspace,
   workspaceRole,
   activeWorkspaceId,
   workspaceMembers,
@@ -564,91 +568,73 @@ export default function useVoiceState({
     };
   }, [activeVoiceRecordings]);
 
-  const updateVoiceChannelPermissions = useCallback((channelId, updates) => {
+  const updateVoiceChannelPermissions = useCallback(async (channelId, updates) => {
     if (!['OWNER', 'VICE_ADMIN'].includes(workspaceRole)) {
       showToast('error', 'Only workspace owners can change voice channel permissions.');
-      return;
+      return null;
     }
+    if (!activeWorkspace) return null;
 
-    setWorkspaces((prev) =>
-      prev.map((ws) => {
-        if (ws.id !== activeWorkspaceId) return ws;
-        return {
-          ...ws,
-          channels: ws.channels.map((ch) => {
-            if (ch.id !== channelId || ch.type !== 'voice') return ch;
-            const normalized = normalizeVoiceChannel({ ...ch, ...updates });
-            return { ...ch, ...normalized };
-          }),
-        };
-      })
-    );
-  }, [workspaceRole, activeWorkspaceId, setWorkspaces, showToast]);
+    const channels = (activeWorkspace.channels || []).map((channel) => {
+      if (channel.id !== channelId || channel.type !== 'voice') return channel;
+      const normalized = normalizeVoiceChannel({ ...channel, ...updates });
+      return { ...channel, ...normalized, updatedAt: new Date().toISOString() };
+    });
+
+    try {
+      const saved = await workspacesApi.update(activeWorkspace.id, {
+        channels,
+        expectedVersion: activeWorkspace.version || 1,
+      });
+      setWorkspaces((prev) => prev.map((workspace) => (
+        workspace.id === saved.id ? saved : workspace
+      )));
+      getGlobalSocket()?.emit('workspace:event', {
+        workspaceId: activeWorkspace.id,
+        type: 'WORKSPACE_STRUCTURE_CHANGED',
+        payload: { reason: 'VOICE_CHANNEL_UPDATED' },
+      });
+      return saved;
+    } catch (error) {
+      showToast('error', error?.message || 'Failed to update voice channel permissions.');
+      return null;
+    }
+  }, [workspaceRole, activeWorkspace, setWorkspaces, showToast]);
 
   const addTeamToVoiceChannel = useCallback((channelId, teamId) => {
-    setWorkspaces((prev) =>
-      prev.map((ws) => {
-        if (ws.id !== activeWorkspaceId) return ws;
-        return {
-          ...ws,
-          channels: ws.channels.map((ch) => {
-            if (ch.id !== channelId || ch.type !== 'voice') return ch;
-            const teams = ch.allowedTeamIds || [];
-            return teams.includes(teamId) ? ch : { ...ch, allowedTeamIds: [...teams, teamId] };
-          }),
-        };
-      })
-    );
-  }, [activeWorkspaceId, setWorkspaces]);
+    const channel = voiceChannels.find((item) => item.id === channelId);
+    if (!channel) return null;
+    const teams = channel.allowedTeamIds || [];
+    if (teams.includes(teamId)) return null;
+    return updateVoiceChannelPermissions(channelId, { allowedTeamIds: [...teams, teamId] });
+  }, [voiceChannels, updateVoiceChannelPermissions]);
 
   const removeTeamFromVoiceChannel = useCallback((channelId, teamId) => {
-    setWorkspaces((prev) =>
-      prev.map((ws) => {
-        if (ws.id !== activeWorkspaceId) return ws;
-        return {
-          ...ws,
-          channels: ws.channels.map((ch) => {
-            if (ch.id !== channelId || ch.type !== 'voice') return ch;
-            return { ...ch, allowedTeamIds: (ch.allowedTeamIds || []).filter((t) => t !== teamId) };
-          }),
-        };
-      })
-    );
-  }, [activeWorkspaceId, setWorkspaces]);
+    const channel = voiceChannels.find((item) => item.id === channelId);
+    if (!channel) return null;
+    return updateVoiceChannelPermissions(channelId, {
+      allowedTeamIds: (channel.allowedTeamIds || []).filter((id) => id !== teamId),
+    });
+  }, [voiceChannels, updateVoiceChannelPermissions]);
 
   const addUserToVoiceChannel = useCallback((channelId, userId) => {
-    setWorkspaces((prev) =>
-      prev.map((ws) => {
-        if (ws.id !== activeWorkspaceId) return ws;
-        return {
-          ...ws,
-          channels: ws.channels.map((ch) => {
-            if (ch.id !== channelId || ch.type !== 'voice') return ch;
-            const users = ch.allowedUserIds || [];
-            return users.includes(userId) ? ch : { ...ch, allowedUserIds: [...users, userId] };
-          }),
-        };
-      })
-    );
-  }, [activeWorkspaceId, setWorkspaces]);
+    const channel = voiceChannels.find((item) => item.id === channelId);
+    if (!channel) return null;
+    const users = channel.allowedUserIds || [];
+    if (users.includes(userId)) return null;
+    return updateVoiceChannelPermissions(channelId, { allowedUserIds: [...users, userId] });
+  }, [voiceChannels, updateVoiceChannelPermissions]);
 
   const removeUserFromVoiceChannel = useCallback((channelId, userId) => {
-    setWorkspaces((prev) =>
-      prev.map((ws) => {
-        if (ws.id !== activeWorkspaceId) return ws;
-        return {
-          ...ws,
-          channels: ws.channels.map((ch) => {
-            if (ch.id !== channelId || ch.type !== 'voice') return ch;
-            return { ...ch, allowedUserIds: (ch.allowedUserIds || []).filter((u) => u !== userId) };
-          }),
-        };
-      })
-    );
-  }, [activeWorkspaceId, setWorkspaces]);
+    const channel = voiceChannels.find((item) => item.id === channelId);
+    if (!channel) return null;
+    return updateVoiceChannelPermissions(channelId, {
+      allowedUserIds: (channel.allowedUserIds || []).filter((id) => id !== userId),
+    });
+  }, [voiceChannels, updateVoiceChannelPermissions]);
 
   const toggleVoiceChannelLock = useCallback((channelId, isLocked) => {
-    updateVoiceChannelPermissions(channelId, { lockState: isLocked ? 'LOCKED' : 'UNLOCKED' });
+    updateVoiceChannelPermissions(channelId, { isLocked });
   }, [updateVoiceChannelPermissions]);
 
   const toggleVoiceRecordingPermission = useCallback((channelId, allowRecording) => {

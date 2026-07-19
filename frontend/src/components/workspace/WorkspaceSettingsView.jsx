@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { motion } from 'framer-motion';
 import { FiArchive, FiRotateCcw, FiSave, FiTrash2, FiEdit2, FiSettings, FiUsers, FiCalendar } from 'react-icons/fi';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import WorkspaceBillingPanel from '@/components/workspace/WorkspaceBillingPanel';
 import { workspacesApi } from '@/services/cloudClient';
+import { getGlobalSocket } from '@/context/VoiceConnectionContext';
 import {
   getPlanById,
   getPlanRank,
@@ -37,6 +38,7 @@ export default function WorkspaceSettingsView() {
   const [pendingPermanentDelete, setPendingPermanentDelete] = useState(null);
   const [deleteWorkspaceStep, setDeleteWorkspaceStep] = useState(0);
   const [deletingWorkspace, setDeletingWorkspace] = useState(false);
+  const deleteWorkspaceRequestRef = useRef(false);
 
   useEffect(() => {
     setName(activeWorkspace?.name || '');
@@ -58,6 +60,11 @@ export default function WorkspaceSettingsView() {
         expectedVersion: activeWorkspace.version || 1,
       });
       setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      getGlobalSocket()?.emit('workspace:event', {
+        workspaceId: activeWorkspace.id,
+        type: 'WORKSPACE_STRUCTURE_CHANGED',
+        payload: { reason: 'WORKSPACE_UPDATED' },
+      });
       setEditingName(false);
       showToast('success', 'Workspace name updated!');
     } catch (err) {
@@ -103,22 +110,37 @@ export default function WorkspaceSettingsView() {
   };
 
   const handleDeleteWorkspace = async () => {
-    if (!activeWorkspace || deletingWorkspace) return;
+    if (!activeWorkspace || deleteWorkspaceRequestRef.current) return;
+    const deletedWorkspaceId = activeWorkspace.id;
+    deleteWorkspaceRequestRef.current = true;
     setDeletingWorkspace(true);
     try {
-      await workspacesApi.delete(activeWorkspace.id);
-      const nextWorkspaces = workspaces.filter((ws) => ws.id !== activeWorkspace.id);
-      setWorkspaces(nextWorkspaces);
-      setDeleteWorkspaceStep(0);
-      if (nextWorkspaces[0]) {
-        selectWorkspace(nextWorkspaces[0].id);
-      }
-      showToast('success', 'Workspace deleted.');
+      await workspacesApi.delete(deletedWorkspaceId);
+      finishWorkspaceDeletion(deletedWorkspaceId);
     } catch (err) {
-      showToast('error', err?.message || 'Failed to delete workspace.');
+      if (err?.statusCode === 404) {
+        finishWorkspaceDeletion(deletedWorkspaceId);
+      } else {
+        showToast('error', err?.message || 'Failed to delete workspace.');
+      }
     } finally {
+      deleteWorkspaceRequestRef.current = false;
       setDeletingWorkspace(false);
     }
+  };
+
+  const finishWorkspaceDeletion = (workspaceId) => {
+    const nextWorkspaces = workspaces.filter((ws) => ws.id !== workspaceId);
+    setWorkspaces(nextWorkspaces);
+    setDeleteWorkspaceStep(0);
+    getGlobalSocket()?.emit('workspace:event', {
+      workspaceId,
+      type: 'WORKSPACE_DELETED',
+    });
+    if (nextWorkspaces[0]) {
+      selectWorkspace(nextWorkspaces[0].id);
+    }
+    showToast('success', 'Workspace deleted.');
   };
 
   if (!isMember) {
@@ -371,6 +393,7 @@ export default function WorkspaceSettingsView() {
           message={`This is the second confirmation. Deleting "${activeWorkspace?.name || 'this workspace'}" cannot be undone.`}
           confirmLabel={deletingWorkspace ? 'Deleting...' : 'Delete permanently'}
           cancelLabel="Keep workspace"
+          disabled={deletingWorkspace}
           onCancel={() => setDeleteWorkspaceStep(0)}
           onConfirm={handleDeleteWorkspace}
         />

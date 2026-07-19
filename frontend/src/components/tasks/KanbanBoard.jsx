@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/router';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { FiAlertTriangle, FiCheckSquare, FiInfo, FiPlus, FiUser, FiCalendar, FiTrash2 } from 'react-icons/fi';
 import {
@@ -14,6 +15,7 @@ import { formatSourceEvidence } from '@/utils/sourceEvidenceUtils';
  * Uses workspaceTasks from WorkspaceContext (shared with AI meetings)
  */
 export default function KanbanBoard() {
+  const router = useRouter();
   const {
     activeWorkspace,
     currentUser,
@@ -51,6 +53,22 @@ export default function KanbanBoard() {
       return !task.deletedAt && workspaceId === activeWorkspace?.id;
     });
   }, [workspaceTasks, activeWorkspace?.id]);
+  const focusedTaskId = Array.isArray(router.query.taskId) ? router.query.taskId[0] : router.query.taskId;
+
+  useEffect(() => {
+    if (!focusedTaskId) return undefined;
+    const focusedTask = tasks.find((task) => task.id === focusedTaskId);
+    if (!focusedTask) return undefined;
+    const taskIndex = tasks.filter((task) => task.status === focusedTask.status).findIndex((task) => task.id === focusedTaskId);
+    setVisibleByColumn((prev) => ({
+      ...prev,
+      [focusedTask.status]: Math.max(prev[focusedTask.status] || 50, taskIndex + 1),
+    }));
+    const timer = window.setTimeout(() => {
+      document.getElementById(`task-${focusedTaskId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [focusedTaskId, tasks]);
 
   const columns = useMemo(() => {
     const baseColumns = [
@@ -310,7 +328,7 @@ export default function KanbanBoard() {
               </div>
 
               {/* Cards */}
-              <div className="flex-1 space-y-3 overflow-y-auto pb-4">
+              <div className="workspace-column-scroll flex-1 space-y-3 overflow-y-auto pb-4">
                 {col.tasks.slice(0, visibleByColumn[col.id] || 50).map((task) => {
                   const evidence = formatSourceEvidence({
                     ...task,
@@ -322,7 +340,8 @@ export default function KanbanBoard() {
                   return (
                     <article
                       key={task.id}
-                      className={`workspace-tactical-panel workspace-cut-corner p-4 transition hover:-translate-y-0.5 hover:border-orange-500/30 ${getPriorityBg(task.priority)}`}
+                      id={`task-${task.id}`}
+                      className={`workspace-tactical-panel workspace-cut-corner p-4 transition hover:-translate-y-0.5 hover:border-orange-500/30 ${getPriorityBg(task.priority)} ${focusedTaskId === task.id ? 'ring-2 ring-orange-500 ring-offset-2 ring-offset-slate-950' : ''}`}
                     >
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className={`text-[10px] font-bold uppercase tracking-wider ${getPriorityColor(task.priority)}`}>

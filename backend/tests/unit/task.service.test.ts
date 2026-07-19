@@ -3,6 +3,19 @@ import { TaskService } from "../../src/modules/tasks/task.service.js";
 import { InMemoryTaskRepository } from "../support/in-memory-repositories.js";
 
 describe("TaskService", () => {
+  it("preserves URGENT priority when a task is created", async () => {
+    const repo = new InMemoryTaskRepository([]);
+    const service = new TaskService(repo);
+
+    const task = await service.create({
+      workspaceId: "ws-1",
+      title: "Restore production",
+      priority: "URGENT",
+    });
+
+    expect(task.priority).toBe("URGENT");
+  });
+
   it("marks progress complete when status becomes COMPLETED", async () => {
     const repo = new InMemoryTaskRepository([]);
     const service = new TaskService(repo);
