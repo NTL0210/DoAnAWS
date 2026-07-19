@@ -11,7 +11,7 @@ export function buildTaskRouter(
   router.get("/", guard("MEMBER", "ADMIN", "OWNER"), controller.list);
   router.post("/", guard("ADMIN", "OWNER", "MANAGER"), controller.create);
   router.get("/:id", guard("MEMBER", "ADMIN", "OWNER"), controller.get);
-  router.patch("/:id", guard("ADMIN", "OWNER", "MANAGER"), controller.update);
+  router.patch("/:id", guard("MEMBER"), controller.update);
   router.delete("/:id", guard("ADMIN", "OWNER", "MANAGER"), controller.delete);
 
   return router;

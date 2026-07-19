@@ -108,8 +108,7 @@ export class WorkspaceService {
   }
 
   async delete_(id: string): Promise<void> {
-    const ws = await this.repository.findById(id);
-    if (!ws) throw new NotFoundError("Workspace not found");
+    // DELETE is idempotent: a retry after a successful request must still succeed.
     await this.repository.delete_(id);
   }
 

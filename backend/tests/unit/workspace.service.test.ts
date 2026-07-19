@@ -4,6 +4,21 @@ import type { WorkspaceRepository } from "../../src/modules/workspaces/workspace
 import type { Workspace } from "../../src/modules/workspaces/workspace.types.js";
 
 describe("WorkspaceService", () => {
+  it("treats deleting an already-missing workspace as a successful retry", async () => {
+    const delete_ = vi.fn(async () => undefined);
+    const repository: WorkspaceRepository = {
+      findById: vi.fn(async () => null),
+      findByUserId: vi.fn(async () => []),
+      create: vi.fn(async () => undefined),
+      update: vi.fn(async () => undefined),
+      delete_,
+    };
+    const service = new WorkspaceService(repository);
+
+    await expect(service.delete_("missing-workspace")).resolves.toBeUndefined();
+    expect(delete_).toHaveBeenCalledWith("missing-workspace");
+  });
+
   it("removes duplicate and unknown team members when a workspace is updated", async () => {
     const workspace = createWorkspace();
     const update = vi.fn(async () => undefined);

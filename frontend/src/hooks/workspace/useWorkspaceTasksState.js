@@ -7,6 +7,7 @@ import { getTasksByMeeting as filterTasksByMeeting } from '@/services/taskServic
 import { isCloudMode } from '@/services/apiClient';
 import { resolveSuggestedTaskAssignees } from '@/utils/assigneeUtils';
 import { getDeadlineCountdown, getDeadlineDateLabel, getDeadlineRemainingDays } from '@/utils/deadlineUtils';
+import { getGlobalSocket } from '@/context/VoiceConnectionContext';
 
 const EMPTY_TRASH = { tasks: [], meetings: [], teams: [] };
 function normalizeTaskForUi(task) {
@@ -110,35 +111,13 @@ export default function useWorkspaceTasksState({
   const suggestionSaveTimersRef = useRef(new Map());
   const suggestionDraftsRef = useRef(new Map());
   const emittedTaskNotificationsRef = useRef(new Set());
+  const taskRefreshSequenceRef = useRef(0);
 
   useEffect(() => () => {
     suggestionSaveTimersRef.current.forEach((timer) => clearTimeout(timer));
   }, []);
 
-  const refreshWorkspaceExecutionData = useCallback(async ({ silent = false } = {}) => {
-    if (!isCloudMode() || !activeWorkspaceId || !currentUser?.id) {
-      setWorkspaceTasks([]);
-      setWorkspaceMeetings([]);
-      return;
-    }
-
-    try {
-      const { meetingsApi, tasksApi } = await import('@/services/cloudClient');
-      const [meetingsResult, tasksResult] = await Promise.all([
-        meetingsApi.list({ workspaceId: activeWorkspaceId, limit: 100 }),
-        tasksApi.list({ workspaceId: activeWorkspaceId, limit: 100 }),
-      ]);
-
-      const meetings = Array.isArray(meetingsResult)
-        ? meetingsResult
-        : meetingsResult?.items || meetingsResult?.meetings || [];
-      const tasks = Array.isArray(tasksResult)
-        ? tasksResult
-        : tasksResult?.items || tasksResult?.tasks || [];
-
-      setWorkspaceMeetings(
-        meetings.map((meeting) => normalizeMeetingForUi(meeting, activeWorkspaceId, currentUser.id, workspaceMembers))
-      );
+  const applyWorkspaceTasks = useCallback((tasks) => {
       const normalizedTasks = tasks.map(normalizeTaskForUi);
       setWorkspaceTasks(normalizedTasks);
 
@@ -180,6 +159,54 @@ export default function useWorkspaceTasksState({
           { taskId: task.id, teamId: task.teamId, workspaceId: activeWorkspaceId },
         );
       });
+  }, [activeWorkspace, activeWorkspaceId, addNotification, canManageAIReview, currentUser?.id]);
+
+  const fetchWorkspaceTasks = useCallback(async () => {
+    const requestSequence = ++taskRefreshSequenceRef.current;
+    const { tasksApi } = await import('@/services/cloudClient');
+    const tasksResult = await tasksApi.list({ workspaceId: activeWorkspaceId, limit: 100 });
+    if (requestSequence !== taskRefreshSequenceRef.current) return;
+    const tasks = Array.isArray(tasksResult)
+      ? tasksResult
+      : tasksResult?.items || tasksResult?.tasks || [];
+    applyWorkspaceTasks(tasks);
+  }, [activeWorkspaceId, applyWorkspaceTasks]);
+
+  const refreshWorkspaceTasks = useCallback(async ({ silent = true } = {}) => {
+    if (!isCloudMode() || !activeWorkspaceId || !currentUser?.id) {
+      setWorkspaceTasks([]);
+      return;
+    }
+
+    try {
+      await fetchWorkspaceTasks();
+    } catch (err) {
+      if (!silent) {
+        showToast('error', err?.message || 'Failed to load workspace tasks.');
+        setWorkspaceTasks([]);
+      }
+    }
+  }, [activeWorkspaceId, currentUser?.id, fetchWorkspaceTasks, showToast]);
+
+  const refreshWorkspaceExecutionData = useCallback(async ({ silent = false } = {}) => {
+    if (!isCloudMode() || !activeWorkspaceId || !currentUser?.id) {
+      setWorkspaceTasks([]);
+      setWorkspaceMeetings([]);
+      return;
+    }
+
+    try {
+      const { meetingsApi } = await import('@/services/cloudClient');
+      const [meetingsResult] = await Promise.all([
+        meetingsApi.list({ workspaceId: activeWorkspaceId, limit: 100 }),
+        fetchWorkspaceTasks(),
+      ]);
+      const meetings = Array.isArray(meetingsResult)
+        ? meetingsResult
+        : meetingsResult?.items || meetingsResult?.meetings || [];
+      setWorkspaceMeetings(
+        meetings.map((meeting) => normalizeMeetingForUi(meeting, activeWorkspaceId, currentUser.id, workspaceMembers))
+      );
     } catch (err) {
       if (!silent) {
         showToast('error', err?.message || 'Failed to load workspace data.');
@@ -187,7 +214,7 @@ export default function useWorkspaceTasksState({
         setWorkspaceTasks([]);
       }
     }
-  }, [activeWorkspace, activeWorkspaceId, addNotification, canManageAIReview, currentUser?.id, showToast, workspaceMembers]);
+  }, [activeWorkspaceId, currentUser?.id, fetchWorkspaceTasks, showToast, workspaceMembers]);
 
   useEffect(() => {
     let cancelled = false;
@@ -204,18 +231,36 @@ export default function useWorkspaceTasksState({
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     const refreshSilently = () => refreshWorkspaceExecutionData({ silent: true });
+    const refreshTasksSilently = () => refreshWorkspaceTasks({ silent: true });
     const refreshWhenVisible = () => {
       if (document.visibilityState === 'visible') refreshSilently();
     };
+    const refreshRealtimeData = (event) => {
+      if (event.detail?.workspaceId !== activeWorkspaceId) return;
+      if (event.detail?.type === 'WORKSPACE_EXECUTION_CHANGED') refreshSilently();
+    };
     window.addEventListener('focus', refreshSilently);
     document.addEventListener('visibilitychange', refreshWhenVisible);
-    window.addEventListener('workspace:tasks-refresh', refreshSilently);
+    window.addEventListener('workspace:tasks-refresh', refreshTasksSilently);
+    window.addEventListener('workspace:realtime', refreshRealtimeData);
     return () => {
       window.removeEventListener('focus', refreshSilently);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
-      window.removeEventListener('workspace:tasks-refresh', refreshSilently);
+      window.removeEventListener('workspace:tasks-refresh', refreshTasksSilently);
+      window.removeEventListener('workspace:realtime', refreshRealtimeData);
     };
-  }, [refreshWorkspaceExecutionData]);
+  }, [activeWorkspaceId, refreshWorkspaceExecutionData, refreshWorkspaceTasks]);
+
+  useEffect(() => {
+    if (!activeWorkspaceId || !currentUser?.id || typeof window === 'undefined') return undefined;
+    const refreshVisibleData = () => {
+      if (document.visibilityState === 'visible') {
+        refreshWorkspaceExecutionData({ silent: true });
+      }
+    };
+    const intervalId = window.setInterval(refreshVisibleData, 5000);
+    return () => window.clearInterval(intervalId);
+  }, [activeWorkspaceId, currentUser?.id, refreshWorkspaceExecutionData]);
 
   // â”€â”€â”€ Task Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const addWorkspaceTasks = useCallback(async (newTasks) => {
@@ -229,16 +274,19 @@ export default function useWorkspaceTasksState({
         const created = await tasksApi.create({
           workspaceId: task.workspaceId || activeWorkspaceId,
           meetingId: task.meetingId || task.sourceMeetingId || undefined,
+          teamId: task.teamId || undefined,
           title: task.title,
           description: task.description || '',
           assigneeId: task.assigneeId || undefined,
-          priority: ['LOW', 'MEDIUM', 'HIGH'].includes(task.priority) ? task.priority : 'MEDIUM',
+          priority: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'].includes(task.priority) ? task.priority : 'MEDIUM',
+          startDate: task.startDate || undefined,
           deadline: task.deadline || undefined,
           createdBy: currentUser?.id,
         });
         createdTasks.push(normalizeTaskForUi(created));
       }
       setWorkspaceTasks((prev) => [...createdTasks, ...prev]);
+      publishExecutionChange(activeWorkspaceId, 'tasks');
       return createdTasks;
     } catch (err) {
       showToast('error', err?.message || 'Failed to create task.');
@@ -269,6 +317,7 @@ export default function useWorkspaceTasksState({
       setWorkspaceTasks((prev) =>
         prev.map((task) => (task.id === taskId ? normalizeTaskForUi(saved) : task))
       );
+      publishExecutionChange(current.workspaceId || activeWorkspaceId, 'tasks');
     } catch (err) {
       setWorkspaceTasks((prev) =>
         prev.map((task) =>
@@ -290,6 +339,7 @@ export default function useWorkspaceTasksState({
       if (!isCloudMode()) return;
       const { tasksApi } = await import('@/services/cloudClient');
       await tasksApi.delete(taskId, { workspaceId: task.workspaceId || activeWorkspaceId });
+      publishExecutionChange(task.workspaceId || activeWorkspaceId, 'tasks');
     } catch (err) {
       setWorkspaceTasks(previousTasks);
       showToast('error', err?.message || 'Failed to delete task.');
@@ -317,6 +367,7 @@ export default function useWorkspaceTasksState({
       const saved = await serviceCreateMeeting(meetingPayload);
       const newMeeting = normalizeMeetingForUi(saved, activeWorkspaceId, currentUser.id, workspaceMembers);
       setWorkspaceMeetings((prev) => [newMeeting, ...prev]);
+      publishExecutionChange(activeWorkspaceId, 'meetings');
       addActivity('meeting_created', 'Meeting "' + newMeeting.title + '" uploaded');
       showToast('success', 'Meeting created successfully.');
       completeOnboardingStep('meetingUploaded');
@@ -337,6 +388,7 @@ export default function useWorkspaceTasksState({
       setWorkspaceMeetings((prev) =>
         prev.map((m) => (m.id === meetingId ? { ...m, ...result } : m))
       );
+      publishExecutionChange(meeting?.workspaceId || activeWorkspaceId, 'meetings');
       return result;
     } catch (err) {
       showToast('error', err.message || 'Upload failed');
@@ -356,6 +408,7 @@ export default function useWorkspaceTasksState({
 
     try {
       await serviceDeleteMeeting(meetingId, { workspaceId: meeting.workspaceId || activeWorkspaceId });
+      publishExecutionChange(meeting.workspaceId || activeWorkspaceId, 'meetings');
     } catch (err) {
       setWorkspaceMeetings((prev) => [meeting, ...prev]);
       setTrashItems((prev) => ({
@@ -420,6 +473,7 @@ export default function useWorkspaceTasksState({
       );
 
       addActivity('ai_processing_complete', 'AI processing complete for "' + (meeting.title || 'Meeting') + '"');
+      publishExecutionChange(meeting.workspaceId || activeWorkspaceId, 'meetings');
       showToast('success', 'AI processing complete for "' + (meeting.title || 'Meeting') + '". Review the extracted tasks.');
     } catch (err) {
       setWorkspaceMeetings((prev) =>
@@ -459,6 +513,7 @@ export default function useWorkspaceTasksState({
           suggestedTasks: draft.suggestedTasks,
           ...draft.extraUpdates,
         });
+        publishExecutionChange(draft.workspaceId || activeWorkspaceId, 'meetings');
       } catch (err) {
         showToast('error', err?.message || 'Failed to save the edited AI suggestion.');
       }
@@ -547,6 +602,7 @@ export default function useWorkspaceTasksState({
 
       if (newTasks && newTasks.length > 0) {
         setWorkspaceTasks((prev) => [...newTasks, ...prev]);
+        publishExecutionChange(activeWorkspaceId, 'tasks');
         addActivity('tasks_created', newTasks.length + ' tasks created from meeting "' + (meeting.title || 'Meeting') + '"');
 
         const createdSuggestionIds = new Set(suggestions.map((suggestion) => suggestion.id));
@@ -637,5 +693,15 @@ export default function useWorkspaceTasksState({
 
 function getTaskTeamName(task, workspace) {
   const team = (workspace?.teams || []).find((item) => item.id === task.teamId);
-  return team?.name || workspace?.name || 'Workspace';
+  const workspaceName = workspace?.name || 'Workspace';
+  return team?.name ? `${workspaceName} · ${team.name}` : workspaceName;
+}
+
+function publishExecutionChange(workspaceId, resource) {
+  if (!workspaceId) return;
+  getGlobalSocket()?.emit('workspace:event', {
+    workspaceId,
+    type: 'WORKSPACE_EXECUTION_CHANGED',
+    payload: { resource },
+  });
 }

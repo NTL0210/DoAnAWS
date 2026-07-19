@@ -204,6 +204,37 @@ export class DynamoWorkspaceRepository implements WorkspaceRepository {
   }
 
   async update(ws: Workspace, expectedVersion: number): Promise<void> {
+    const existingMemberKeys: Array<{ PK: string; SK: string; userId: string }> = [];
+    let exclusiveStartKey: Record<string, unknown> | undefined;
+    do {
+      const result = await ddb.send(
+        new QueryCommand({
+          TableName: env.DYNAMODB_TABLE_MAIN,
+          KeyConditionExpression: "PK = :pk",
+          ExpressionAttributeValues: { ":pk": memberPk(ws.id) },
+          ...(exclusiveStartKey && { ExclusiveStartKey: exclusiveStartKey }),
+        }),
+      );
+      existingMemberKeys.push(...(result.Items ?? []).map((item) => ({
+        PK: text(item.PK),
+        SK: text(item.SK),
+        userId: text(item.userId),
+      })).filter((key) => key.PK && key.SK && key.userId));
+      exclusiveStartKey = result.LastEvaluatedKey;
+    } while (exclusiveStartKey);
+
+    const currentMemberIds = new Set(ws.members.map((member) => member.userId));
+    const removedMemberKeys = existingMemberKeys.filter((key) => !currentMemberIds.has(key.userId));
+    const memberPuts = ws.members.slice(0, 90).map((member) => ({
+      Put: {
+        TableName: env.DYNAMODB_TABLE_MAIN,
+        Item: toMemberItem(ws.id, member),
+      },
+    }));
+    const atomicRemovalCount = Math.max(0, 99 - memberPuts.length);
+    const atomicMemberDeletes = removedMemberKeys.slice(0, atomicRemovalCount);
+    const deferredMemberDeletes = removedMemberKeys.slice(atomicRemovalCount);
+
     try {
       await ddb.send(
         new TransactWriteCommand({
@@ -217,15 +248,22 @@ export class DynamoWorkspaceRepository implements WorkspaceRepository {
                 ExpressionAttributeValues: { ":expectedVersion": expectedVersion },
               },
             },
-            ...ws.members.slice(0, 90).map((member) => ({
-              Put: {
+            ...memberPuts,
+            ...atomicMemberDeletes.map(({ PK, SK }) => ({
+              Delete: {
                 TableName: env.DYNAMODB_TABLE_MAIN,
-                Item: toMemberItem(ws.id, member),
+                Key: { PK, SK },
               },
             })),
           ],
         }),
       );
+      await Promise.all(deferredMemberDeletes.map(({ PK, SK }) =>
+        ddb.send(new DeleteCommand({
+          TableName: env.DYNAMODB_TABLE_MAIN,
+          Key: { PK, SK },
+        })),
+      ));
     } catch (error) {
       if (isConditionalFailure(error) || isTransactionCanceled(error)) {
         throw new ConflictError("Workspace version conflict");
@@ -235,6 +273,28 @@ export class DynamoWorkspaceRepository implements WorkspaceRepository {
   }
 
   async delete_(id: string): Promise<void> {
+    let exclusiveStartKey: Record<string, unknown> | undefined;
+    do {
+      const members = await ddb.send(
+        new QueryCommand({
+          TableName: env.DYNAMODB_TABLE_MAIN,
+          KeyConditionExpression: "PK = :pk",
+          ExpressionAttributeValues: { ":pk": memberPk(id) },
+          ...(exclusiveStartKey && { ExclusiveStartKey: exclusiveStartKey }),
+        }),
+      );
+      const memberKeys = (members.Items ?? [])
+        .map((member) => ({ PK: text(member.PK), SK: text(member.SK) }))
+        .filter((key) => key.PK && key.SK);
+      await Promise.all(memberKeys.map((key) =>
+        ddb.send(new DeleteCommand({
+          TableName: env.DYNAMODB_TABLE_MAIN,
+          Key: key,
+        })),
+      ));
+      exclusiveStartKey = members.LastEvaluatedKey;
+    } while (exclusiveStartKey);
+
     await ddb.send(
       new DeleteCommand({
         TableName: env.DYNAMODB_TABLE_MAIN,

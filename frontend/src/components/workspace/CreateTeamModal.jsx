@@ -48,7 +48,7 @@ export default function CreateTeamModal({ onClose }) {
       form.managerId,
     ].filter(Boolean)));
 
-    const created = createTeam(activeWorkspace?.id, {
+    const created = await createTeam(activeWorkspace?.id, {
       name: form.name.trim(),
       description: form.description.trim(),
       color: form.color,

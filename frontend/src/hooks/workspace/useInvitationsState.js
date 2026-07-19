@@ -86,11 +86,18 @@ export default function useInvitationsState({
     }
 
     pollInvitations();
-    intervalId = setInterval(pollInvitations, 30000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') pollInvitations();
+    };
+    intervalId = setInterval(refreshWhenVisible, 5000);
+    window.addEventListener('focus', pollInvitations);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
 
     return () => {
       mounted = false;
       clearInterval(intervalId);
+      window.removeEventListener('focus', pollInvitations);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
   }, [currentUser]);
 

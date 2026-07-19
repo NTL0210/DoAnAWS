@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import { generateId } from '@/lib/workspaceData';
 import { getWorkspacePlan, getWorkspaceUsageSnapshot, validateWorkspaceCapacity } from '@/services/billingService';
 import { workspacesApi } from '@/services/cloudClient';
+import { getGlobalSocket } from '@/context/VoiceConnectionContext';
 
 /**
  * useMembersAndTeams — manages member and team CRUD actions.
@@ -51,6 +52,7 @@ export default function useMembersAndTeams({
         expectedVersion: workspace.version || 1,
       });
       setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      publishWorkspaceChange(workspaceId, 'MEMBER_ROLE_UPDATED');
       addActivity('member_role_updated', 'Member role updated');
     } catch {
       showToast('error', 'Failed to update member role.');
@@ -75,6 +77,7 @@ export default function useMembersAndTeams({
         expectedVersion: workspace.version || 1,
       });
       setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      publishWorkspaceChange(workspaceId, 'MEMBER_REMOVED');
       addActivity('member_removed', 'Member removed from workspace');
     } catch {
       showToast('error', 'Failed to remove member.');
@@ -111,6 +114,7 @@ export default function useMembersAndTeams({
       id: teamId,
       name: teamData.name || 'New Team',
       description: teamData.description || '',
+      color: teamData.color || '#5865F2',
       managerId: teamData.managerId || currentUser.id,
       memberIds: normalizeTeamMemberIds([
         currentUser.id,
@@ -127,6 +131,7 @@ export default function useMembersAndTeams({
         expectedVersion: workspace.version || 1,
       });
       setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      publishWorkspaceChange(workspaceId, 'TEAM_CREATED');
       addActivity('team_created', 'Team "' + newTeam.name + '" created');
       completeOnboardingStep('teamCreated');
       showToast('success', 'Team "' + newTeam.name + '" created!');
@@ -153,6 +158,7 @@ export default function useMembersAndTeams({
         expectedVersion: workspace.version || 1,
       });
       setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      publishWorkspaceChange(workspaceId, 'TEAM_UPDATED');
       addActivity('team_updated', 'Team updated');
     } catch {
       showToast('error', 'Failed to update team.');
@@ -169,6 +175,7 @@ export default function useMembersAndTeams({
         expectedVersion: workspace.version || 1,
       });
       setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      publishWorkspaceChange(workspaceId, 'TEAM_DELETED');
       addActivity('team_deleted', 'Team deleted');
     } catch {
       showToast('error', 'Failed to delete team.');
@@ -191,6 +198,7 @@ export default function useMembersAndTeams({
         expectedVersion: workspace.version || 1,
       });
       setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      publishWorkspaceChange(workspaceId, 'TEAM_MEMBER_ADDED');
       addActivity('team_member_added', 'Member added to team');
     } catch {
       showToast('error', 'Failed to add member to team.');
@@ -217,6 +225,7 @@ export default function useMembersAndTeams({
         expectedVersion: workspace.version || 1,
       });
       setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      publishWorkspaceChange(workspaceId, 'TEAM_MEMBER_REMOVED');
       addActivity('team_member_removed', 'Member removed from team');
     } catch {
       showToast('error', 'Failed to remove member from team.');
@@ -240,6 +249,7 @@ export default function useMembersAndTeams({
         expectedVersion: workspace.version || 1,
       });
       setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
+      publishWorkspaceChange(workspaceId, 'TEAM_MANAGER_ASSIGNED');
       addActivity('team_manager_assigned', 'Team manager assigned');
     } catch {
       showToast('error', 'Failed to assign team manager.');
@@ -262,4 +272,12 @@ function normalizeTeamMemberIds(memberIds, workspaceMembers) {
   const validMemberIds = new Set((workspaceMembers || []).map((member) => member.userId));
   return Array.from(new Set((memberIds || []).filter(Boolean)))
     .filter((userId) => validMemberIds.size === 0 || validMemberIds.has(userId));
+}
+
+function publishWorkspaceChange(workspaceId, reason) {
+  getGlobalSocket()?.emit('workspace:event', {
+    workspaceId,
+    type: 'WORKSPACE_STRUCTURE_CHANGED',
+    payload: { reason },
+  });
 }

@@ -101,6 +101,8 @@ export default function AppShell({ user, children, eyebrow, title, description, 
     activeWorkspace,
     activeWorkspaceId,
     selectWorkspace,
+    selectView,
+    refreshUserWorkspaces,
     showCreateWorkspace,
     setShowCreateWorkspace,
     workspaceRole,
@@ -202,6 +204,30 @@ export default function AppShell({ user, children, eyebrow, title, description, 
   const handleDeclineInvitation = useCallback(async (invitationId) => {
     await declineInvitation(invitationId);
   }, [declineInvitation]);
+
+  const handleNotificationClick = useCallback(async (notification) => {
+    markNotificationRead(notification.id);
+    setNotifOpen(false);
+
+    const targetWorkspaceId = notification.workspaceId || notification.metadata?.workspaceId;
+    const taskId = notification.taskId || notification.metadata?.taskId;
+    let availableWorkspaces = workspaces;
+    if (targetWorkspaceId && !availableWorkspaces.some((workspace) => workspace.id === targetWorkspaceId)) {
+      availableWorkspaces = await refreshUserWorkspaces?.() || availableWorkspaces;
+    }
+    if (targetWorkspaceId && availableWorkspaces.some((workspace) => workspace.id === targetWorkspaceId)) {
+      selectWorkspace(targetWorkspaceId);
+    }
+
+    if (String(notification.type || '').includes('TASK') || taskId) {
+      selectView('tasks');
+      const query = { view: 'tasks' };
+      if (taskId) query.taskId = taskId;
+      await router.push({ pathname: '/workspace', query });
+      return;
+    }
+    if (targetWorkspaceId) await router.push('/workspace');
+  }, [markNotificationRead, refreshUserWorkspaces, router, selectView, selectWorkspace, workspaces]);
 
   const handleWorkspaceSelect = useCallback((workspaceId) => {
     if (workspaceId === activeWorkspaceId) {
@@ -591,7 +617,7 @@ export default function AppShell({ user, children, eyebrow, title, description, 
                               <button
                                 key={n.id}
                                 type="button"
-                                onClick={() => markNotificationRead(n.id)}
+                                onClick={() => handleNotificationClick(n)}
                                 className={`flex w-full gap-3 px-4 py-3 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800 ${
                                   (n.unread || n.isRead === false) ? 'bg-orange-50/50 dark:bg-orange-950/20' : ''
                                 }`}
