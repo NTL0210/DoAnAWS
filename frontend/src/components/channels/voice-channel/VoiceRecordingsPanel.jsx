@@ -211,6 +211,11 @@ export default function VoiceRecordingsPanel({
                   Browser recording uses WebM/Opus. Convert to MP3 later by backend if needed.
                 </p>
               )}
+              {record.uploadStatus === 'FAILED' && (
+                <p className="mt-2 text-xs font-semibold text-amber-600">
+                  Cloud upload failed. This audio is available only in this browser; Analyze will retry the upload.
+                </p>
+              )}
 
               {/* Conversion job progress */}
               {job && (

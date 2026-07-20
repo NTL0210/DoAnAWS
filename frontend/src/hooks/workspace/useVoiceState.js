@@ -18,6 +18,7 @@ import {
   deleteVoiceRecord as serviceDeleteVoiceRecord,
   getVoiceRecordsByChannel as serviceGetVoiceRecordsByChannel,
   sendVoiceRecordToAI as serviceSendVoiceRecordToAI,
+  uploadRecordToCloud as serviceUploadRecordToCloud,
 } from '@/services/voiceRecordingService';
 import { resolveSuggestedTaskAssignees } from '@/utils/assigneeUtils';
 
@@ -310,7 +311,11 @@ export default function useVoiceState({
 
       if (record) {
         setVoiceRecords((prev) => [...prev, { ...record, diagnostics }]);
-        addActivity('voice_recording_finished', `Voice recording saved (${Math.round(duration)}s)`);
+        if (record.uploadStatus === 'FAILED') {
+          showToast('error', 'Cloud upload failed. The recording is kept in this browser so you can retry or download it.');
+        } else {
+          addActivity('voice_recording_finished', `Voice recording saved (${Math.round(duration)}s)`);
+        }
       } else {
         URL.revokeObjectURL(objectUrl);
       }
@@ -645,18 +650,18 @@ export default function useVoiceState({
 
   const deleteVoiceRecord = useCallback(async (recordId) => {
     const previousRecords = voiceRecordsRef.current;
-    setVoiceRecords((prev) => prev.filter((r) => r.id !== recordId));
     const record = voiceRecordsRef.current.find((r) => r.id === recordId);
-    if (record?.url && record.url.startsWith('blob:')) {
-      URL.revokeObjectURL(record.url);
-    }
+    setVoiceRecords((prev) => prev.filter((r) => r.id !== recordId));
     try {
-      await serviceDeleteVoiceRecord(recordId);
+      await serviceDeleteVoiceRecord(recordId, record?.workspaceId || activeWorkspaceId);
+      if (record?.url && record.url.startsWith('blob:')) {
+        URL.revokeObjectURL(record.url);
+      }
     } catch (err) {
       setVoiceRecords(previousRecords);
       showToast('error', err?.message || 'Failed to delete voice recording.');
     }
-  }, [showToast]);
+  }, [activeWorkspaceId, showToast]);
 
   const sendVoiceRecordToAI = useCallback(async (recordId) => {
     const record = voiceRecordsRef.current.find((r) => r.id === recordId);
@@ -687,7 +692,22 @@ export default function useVoiceState({
       setVoiceRecords((prev) =>
         prev.map((item) => (item.id === recordId ? { ...item, aiStatus: 'PROCESSING' } : item))
       );
-      const result = await serviceSendVoiceRecordToAI(recordId);
+      const workspaceId = record.workspaceId || activeWorkspaceId;
+      if (!record.storageKey) {
+        if (!record.localBlob) {
+          throw new Error('The audio file was not uploaded and is no longer available. Please record it again.');
+        }
+        const uploadResult = await serviceUploadRecordToCloud(recordId, workspaceId, record.localBlob);
+        if (!uploadResult?.ok) {
+          throw new Error(uploadResult?.error || 'Cloud upload failed.');
+        }
+        setVoiceRecords((prev) => prev.map((item) => (
+          item.id === recordId
+            ? { ...item, ...uploadResult.record, uploadStatus: 'READY', uploadError: null }
+            : item
+        )));
+      }
+      const result = await serviceSendVoiceRecordToAI(recordId, workspaceId);
       if (!result?.ok || !result.meeting) {
         throw new Error(result?.error || 'AI processing request failed.');
       }
@@ -729,7 +749,7 @@ export default function useVoiceState({
     } finally {
       aiRequestsInFlightRef.current.delete(recordId);
     }
-  }, [voiceChannels, canManageAIReview, canAccessVoice, workspaceMembers, currentUser?.id, setWorkspaceMeetings, addActivity, showToast]);
+  }, [activeWorkspaceId, voiceChannels, canManageAIReview, canAccessVoice, workspaceMembers, currentUser?.id, setWorkspaceMeetings, addActivity, showToast]);
 
   // ─── Voice cleanup on unmount ─────────────────────────
   useEffect(() => {

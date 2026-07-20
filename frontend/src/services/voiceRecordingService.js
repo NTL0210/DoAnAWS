@@ -46,7 +46,28 @@ export async function createVoiceRecord(recordData) {
     durationSeconds: recordData.duration || 0,
   });
 
-  const uploaded = await apiAdapter.uploadVoiceRecord(created.id, blob);
+  let uploaded;
+  try {
+    uploaded = await apiAdapter.uploadVoiceRecord(
+      created.id,
+      created.workspaceId || recordData.workspaceId,
+      blob
+    );
+  } catch (error) {
+    return {
+      ...created,
+      objectUrl,
+      url: objectUrl,
+      localBlob: blob,
+      uploadStatus: 'FAILED',
+      uploadError: error?.message || 'Cloud upload failed.',
+      sizeBytes: blob.size || created.sizeBytes || 0,
+      size: blob.size || created.sizeBytes || 0,
+      duration: recordData.duration || created.durationSeconds || 0,
+      format: recordData.mimeType || blob.type || 'audio/webm',
+      aiStatus: created.aiStatus || 'NOT_SENT',
+    };
+  }
   return {
     ...created,
     ...uploaded,
@@ -57,22 +78,24 @@ export async function createVoiceRecord(recordData) {
     duration: recordData.duration || uploaded.durationSeconds || created.durationSeconds || 0,
     format: recordData.mimeType || blob.type || 'audio/webm',
     aiStatus: uploaded.aiStatus || created.aiStatus || 'NOT_SENT',
+    uploadStatus: 'READY',
   };
 }
 
 export const getVoiceRecordsByChannel = (workspaceId, channelId) =>
   apiAdapter.getVoiceRecordsByChannel(workspaceId, channelId);
 
-export const deleteVoiceRecord = (recordId) => apiAdapter.deleteVoiceRecord(recordId);
+export const deleteVoiceRecord = (recordId, workspaceId) =>
+  apiAdapter.deleteVoiceRecord(recordId, workspaceId);
 
-export async function uploadRecordToCloud(recordId, blob) {
+export async function uploadRecordToCloud(recordId, workspaceId, blob) {
   if (!blob) return { ok: false, error: 'Recording blob is missing.' };
-  const record = await apiAdapter.uploadVoiceRecord(recordId, blob);
+  const record = await apiAdapter.uploadVoiceRecord(recordId, workspaceId, blob);
   return record?.id ? { ok: true, record, remoteId: record.id } : { ok: false, error: 'Upload failed.' };
 }
 
-export async function sendRecordToAiProcessing(recordId) {
-  const result = await apiAdapter.sendVoiceRecordToAI(recordId);
+export async function sendRecordToAiProcessing(recordId, workspaceId) {
+  const result = await apiAdapter.sendVoiceRecordToAI(recordId, workspaceId);
   if (result?.meeting) return { ok: true, meeting: result.meeting, recording: result.recording };
   return { ok: false, error: 'AI processing request failed.' };
 }
