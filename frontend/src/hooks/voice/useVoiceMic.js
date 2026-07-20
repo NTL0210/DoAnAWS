@@ -81,6 +81,7 @@ export default function useVoiceMic({
   setLocalMicMuted,
   updateVoiceParticipantState,
   showToast,
+  initialStream = null,
 }) {
   // ─── Mic stream refs ───────────────────────────────────
   const micStreamRef = useRef(null);
@@ -105,6 +106,21 @@ export default function useVoiceMic({
   const [processedMicStream, setProcessedMicStream] = useState(null);
   const [audioProcessingStats, setAudioProcessingStats] = useState({});
   const [micTrackWarning, setMicTrackWarning] = useState('');
+  const joinedRef = useRef(joined);
+  useEffect(() => { joinedRef.current = joined; }, [joined]);
+
+  useEffect(() => {
+    const track = initialStream?.getAudioTracks?.()?.[0];
+    if (!track || track.readyState !== 'live' || rawMicStreamRef.current) return;
+    rawMicStreamRef.current = initialStream;
+    micStreamRef.current = initialStream;
+    liveMicStreamRef.current = initialStream;
+    sendStreamRef.current = initialStream;
+    vadStreamRef.current = initialStream;
+    setMicStream(initialStream);
+    setVadStream(initialStream);
+    setLocalStream(initialStream);
+  }, [initialStream, setLocalStream]);
 
   // ─── Mute / Push-to-Talk state ─────────────────────────
   const [muted, setMuted] = useState(false);
@@ -430,7 +446,9 @@ export default function useVoiceMic({
 
   // ─── Cleanup on unmount ────────────────────────────────
   useEffect(() => {
-    return () => { cleanupLocalMicStream(); };
+    return () => {
+      if (!joinedRef.current) cleanupLocalMicStream();
+    };
   }, [cleanupLocalMicStream]);
 
   return {

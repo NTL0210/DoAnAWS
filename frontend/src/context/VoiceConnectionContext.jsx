@@ -13,7 +13,29 @@ function displayNameFromEmail(email) {
 // Other hooks (e.g., useInvitationsState) can use this to emit events
 // without needing a direct dependency on the context.
 let _globalSocket = null;
+let _readyWorkspaceId = null;
+const pendingWorkspaceEvents = [];
 export function getGlobalSocket() { return _globalSocket; }
+export function emitWorkspaceRealtimeEvent(event) {
+  if (!event?.workspaceId || !event?.type) return false;
+  if (_globalSocket?.connected && _readyWorkspaceId === event.workspaceId) {
+    _globalSocket.emit('workspace:event', event);
+    return true;
+  }
+  pendingWorkspaceEvents.push(event);
+  if (pendingWorkspaceEvents.length > 100) pendingWorkspaceEvents.shift();
+  return false;
+}
+
+function flushPendingWorkspaceEvents(socket, workspaceId) {
+  if (!socket?.connected || !workspaceId) return;
+  const remaining = [];
+  pendingWorkspaceEvents.splice(0).forEach((event) => {
+    if (event.workspaceId === workspaceId) socket.emit('workspace:event', event);
+    else remaining.push(event);
+  });
+  pendingWorkspaceEvents.push(...remaining);
+}
 
 /**
  * VoiceConnectionContext — real-time voice state (WebRTC + Socket.IO).
@@ -28,10 +50,11 @@ const VoiceConnectionContext = createContext(null);
 
 export function VoiceConnectionProvider({ children, currentUser, workspaceId, workspaceRole }) {
   // ─── Socket.IO connection ──────────────────────────────────
-  const socket = useSocket({ autoConnect: true });
+  const socket = useSocket({ autoConnect: Boolean(currentUser?.id) });
 
   // ─── Channel state ─────────────────────────────────────────
   const [activeVoiceChannelId, setActiveVoiceChannelId] = useState(null);
+  const [activeVoiceWorkspaceId, setActiveVoiceWorkspaceId] = useState(null);
   const activeVoiceChannelIdRef = useRef(null);
   const [presenceByChannel, setPresenceByChannel] = useState({});
   const [onlineUsers, setOnlineUsers] = useState([]);
@@ -95,7 +118,7 @@ export function VoiceConnectionProvider({ children, currentUser, workspaceId, wo
   // ─── WebRTC mesh ──────────────────────────────────────────
   const webrtc = useWebRTC({
     localStream,
-    workspaceId,
+    workspaceId: activeVoiceWorkspaceId || workspaceId,
     channelId: activeVoiceChannelId,
     socket: socket.socket,
     userId: currentUser?.id,
@@ -119,7 +142,9 @@ export function VoiceConnectionProvider({ children, currentUser, workspaceId, wo
     };
     const handleWorkspacePresence = ({ workspaceId: eventWorkspaceId, onlineUsers: nextOnlineUsers }) => {
       if (eventWorkspaceId !== workspaceId) return;
+      _readyWorkspaceId = workspaceId;
       setOnlineUsers(nextOnlineUsers || []);
+      flushPendingWorkspaceEvents(socket.socket, workspaceId);
     };
     const handleWorkspaceEvent = (event) => {
       if (event?.workspaceId !== workspaceId) return;
@@ -137,6 +162,7 @@ export function VoiceConnectionProvider({ children, currentUser, workspaceId, wo
         userId: workspacePresenceUser?.id,
         user: workspacePresenceUser,
       });
+      socket.socket?.emit('workspace:presence:get', { workspaceId });
     }, 15000);
     return () => {
       socket.socket?.off('voice:presence:snapshot', handleSnapshot);
@@ -145,6 +171,7 @@ export function VoiceConnectionProvider({ children, currentUser, workspaceId, wo
       socket.socket?.off('workspace:presence:update', handleWorkspacePresence);
       socket.socket?.off('workspace:event', handleWorkspaceEvent);
       clearInterval(heartbeat);
+      if (_readyWorkspaceId === workspaceId) _readyWorkspaceId = null;
     };
   }, [socket.connected, socket.socket, workspaceId, workspacePresenceUser]);
 
@@ -183,16 +210,25 @@ export function VoiceConnectionProvider({ children, currentUser, workspaceId, wo
   // ─── Join voice channel (WebRTC + signaling) ─────────────
   const voiceJoinChannel = useCallback(async (channelId, options = {}) => {
     if (!channelId || !currentUser?.id) return;
+    const targetWorkspaceId = options.workspaceId || workspaceId;
+    const switchingSession = activeVoiceChannelIdRef.current && (
+      activeVoiceChannelIdRef.current !== channelId || activeVoiceWorkspaceId !== targetWorkspaceId
+    );
+    if (switchingSession) webrtc.leaveChannel();
+    setActiveVoiceWorkspaceId(targetWorkspaceId || null);
     setActiveVoiceChannelId(channelId);
     activeVoiceChannelIdRef.current = channelId;
-    // useWebRTC's joinChannel will fire via its effect when channelId changes
-    webrtc.joinChannel(channelId, options);
-  }, [currentUser, webrtc]);
+    // useWebRTC joins after channel/workspace state has committed.
+  }, [activeVoiceWorkspaceId, currentUser?.id, webrtc, workspaceId]);
 
   // ─── Leave voice channel ──────────────────────────────────
   const voiceLeaveChannel = useCallback(async () => {
     webrtc.leaveChannel();
+    localStreamRef.current?.getTracks?.().forEach((track) => {
+      if (track.readyState !== 'ended') track.stop();
+    });
     setActiveVoiceChannelId(null);
+    setActiveVoiceWorkspaceId(null);
     activeVoiceChannelIdRef.current = null;
     setLocalStream(null);
     localStreamRef.current = null;
@@ -200,6 +236,29 @@ export function VoiceConnectionProvider({ children, currentUser, workspaceId, wo
     setLocalSpeakingState({ isSpeaking: false, audioLevel: 0 });
     setLocalMicMuted(false);
   }, [webrtc, setLocalStream]);
+
+  useEffect(() => {
+    if (currentUser?.id || !activeVoiceChannelIdRef.current) return;
+    voiceLeaveChannel();
+  }, [currentUser?.id, voiceLeaveChannel]);
+
+  useEffect(() => {
+    const sock = socket.socket;
+    if (!sock) return undefined;
+    const handleSessionReplaced = () => {
+      localStreamRef.current?.getTracks?.().forEach((track) => {
+        if (track.readyState !== 'ended') track.stop();
+      });
+      setActiveVoiceChannelId(null);
+      setActiveVoiceWorkspaceId(null);
+      activeVoiceChannelIdRef.current = null;
+      setLocalStream(null);
+      setLocalSpeakingState({ isSpeaking: false, audioLevel: 0 });
+      window.dispatchEvent(new CustomEvent('voice:session-replaced'));
+    };
+    sock.on('voice:session-replaced', handleSessionReplaced);
+    return () => sock.off('voice:session-replaced', handleSessionReplaced);
+  }, [setLocalStream, socket.socket]);
 
   // ─── Remote participants (derived) ─────────────────────────
   // Merge peerStates + remoteStreams into a single map for easy consumption
@@ -296,6 +355,7 @@ export function VoiceConnectionProvider({ children, currentUser, workspaceId, wo
     signalingStatus,
     voicePeerStatus,
     micStatus,
+    activeVoiceWorkspaceId,
 
     // Join/leave
     voiceJoinChannel,
@@ -327,6 +387,7 @@ export function VoiceConnectionProvider({ children, currentUser, workspaceId, wo
     signalingStatus,
     voicePeerStatus,
     micStatus,
+    activeVoiceWorkspaceId,
     socketLatencyMs,
     socket.url,
     socket.lastSocketEvent,

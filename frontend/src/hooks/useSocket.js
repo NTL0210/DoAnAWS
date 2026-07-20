@@ -169,7 +169,13 @@ export default function useSocket(options = {}) {
       sock.emit('voice-ping', { timestamp: Date.now() });
       pongTimeoutRef.current = setTimeout(() => {
         missedPongRef.current += 1;
-        if (missedPongRef.current >= 3) setHeartbeatLost(true);
+        if (missedPongRef.current >= 3) {
+          setHeartbeatLost(true);
+          if (sock.connected) {
+            sock.disconnect();
+            window.setTimeout(() => sock.connect(), 250);
+          }
+        }
       }, 6000);
     };
     sendPing();
@@ -180,6 +186,23 @@ export default function useSocket(options = {}) {
       clearPongTimeout();
     };
   }, [clearPingInterval, clearPongTimeout, connected]);
+
+  useEffect(() => {
+    const reconnectIfNeeded = () => {
+      const sock = socketRef.current;
+      if (!sock || sock.connected) return;
+      sock.connect();
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') reconnectIfNeeded();
+    };
+    window.addEventListener('online', reconnectIfNeeded);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('online', reconnectIfNeeded);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, []);
 
   const emit = useCallback((event, data) => {
     setLastSocketEvent(`emit:${event}`);

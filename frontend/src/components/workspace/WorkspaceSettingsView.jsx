@@ -5,7 +5,7 @@ import { FiArchive, FiRotateCcw, FiSave, FiTrash2, FiEdit2, FiSettings, FiUsers,
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import WorkspaceBillingPanel from '@/components/workspace/WorkspaceBillingPanel';
 import { workspacesApi } from '@/services/cloudClient';
-import { getGlobalSocket } from '@/context/VoiceConnectionContext';
+import { emitWorkspaceRealtimeEvent } from '@/context/VoiceConnectionContext';
 import {
   getPlanById,
   getPlanRank,
@@ -60,7 +60,7 @@ export default function WorkspaceSettingsView() {
         expectedVersion: activeWorkspace.version || 1,
       });
       setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
-      getGlobalSocket()?.emit('workspace:event', {
+      emitWorkspaceRealtimeEvent({
         workspaceId: activeWorkspace.id,
         type: 'WORKSPACE_STRUCTURE_CHANGED',
         payload: { reason: 'WORKSPACE_UPDATED' },
@@ -133,7 +133,7 @@ export default function WorkspaceSettingsView() {
     const nextWorkspaces = workspaces.filter((ws) => ws.id !== workspaceId);
     setWorkspaces(nextWorkspaces);
     setDeleteWorkspaceStep(0);
-    getGlobalSocket()?.emit('workspace:event', {
+    emitWorkspaceRealtimeEvent({
       workspaceId,
       type: 'WORKSPACE_DELETED',
     });

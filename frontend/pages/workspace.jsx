@@ -1,7 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { useWorkspace } from '@/context/WorkspaceContext';
-import { VoiceConnectionProvider, useVoiceConnection } from '@/context/VoiceConnectionContext';
 import AppShell from '@/components/layout/AppShell';
 import CreateWorkspaceModal from '@/components/workspace/CreateWorkspaceModal';
 import WorkspaceChannelView from '@/components/workspace/WorkspaceChannelView';
@@ -10,7 +9,7 @@ import { SkeletonCard, SkeletonRow } from '@/components/ui/Skeleton';
 
 export default function WorkspacePage() {
   const router = useRouter();
-  const { currentUser, loading, activeWorkspace, workspaceRole } = useWorkspace();
+  const { currentUser, loading, activeWorkspace } = useWorkspace();
 
   useEffect(() => {
     if (!loading && !currentUser) router.replace('/login');
@@ -57,25 +56,9 @@ export default function WorkspacePage() {
   }
 
   return (
-    <VoiceConnectionProvider currentUser={currentUser} workspaceId={activeWorkspace?.id} workspaceRole={workspaceRole}>
-      <VoicePresenceBridge />
-      <AppShell user={user} title="" description="">
-        {activeWorkspace ? <WorkspaceChannelView /> : <CreateWorkspaceModal />}
-        <ToastContainer />
-      </AppShell>
-    </VoiceConnectionProvider>
+    <AppShell user={user} title="" description="">
+      {activeWorkspace ? <WorkspaceChannelView /> : <CreateWorkspaceModal />}
+      <ToastContainer />
+    </AppShell>
   );
-}
-
-function VoicePresenceBridge() {
-  const { presenceByChannel } = useVoiceConnection();
-  const { setVoiceChannelParticipants } = useWorkspace();
-
-  useEffect(() => {
-    Object.entries(presenceByChannel || {}).forEach(([channelId, participants]) => {
-      setVoiceChannelParticipants(channelId, participants);
-    });
-  }, [presenceByChannel, setVoiceChannelParticipants]);
-
-  return null;
 }

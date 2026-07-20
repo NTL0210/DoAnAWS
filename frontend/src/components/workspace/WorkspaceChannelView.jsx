@@ -159,6 +159,11 @@ export default function WorkspaceChannelView() {
     () => (workspaceTeams || []).filter((team) => canAccessTeam(team)),
     [workspaceTeams, canAccessTeam]
   );
+  const memberPanelMembers = useMemo(() => {
+    if (activeView !== 'team-chat' || !activeTeam) return workspaceMembers;
+    const teamMemberIds = new Set(activeTeam.memberIds || []);
+    return workspaceMembers.filter((member) => teamMemberIds.has(member.userId));
+  }, [activeTeam, activeView, workspaceMembers]);
 
   const canCreateChannels = can('channels.create') || workspaceRole === 'OWNER';
   const canCreateTeams = can('teams.create') || workspaceRole === 'OWNER' || workspaceRole === 'VICE_ADMIN';
@@ -659,11 +664,12 @@ export default function WorkspaceChannelView() {
         {/* ─── Member Panel (only for channels) ─── */}
           {(currentChannel || (activeView === 'team-chat' && activeTeam && canAccessTeam(activeTeam))) && (
           <MemberPanel
-            members={workspaceMembers}
+            members={memberPanelMembers}
             currentUser={currentUser}
             roleLabels={workspaceRoleLabels}
             onlineUsers={socketOnlineUsers}
             currentStatus={currentStatus}
+            restrictToMembers={activeView === 'team-chat'}
           />
         )}
       </main>
@@ -1107,7 +1113,7 @@ function VoiceChannelContent({ channel, workspaceMembers, workspaceRole, can }) 
   );
 }
 
-function MemberPanel({ members, currentUser, roleLabels, onlineUsers = [], currentStatus }) {
+function MemberPanel({ members, currentUser, roleLabels, onlineUsers = [], currentStatus, restrictToMembers = false }) {
   const onlineById = useMemo(() => {
     const map = new Map();
     (onlineUsers || []).forEach((u) => map.set(u.userId, u));
@@ -1136,14 +1142,16 @@ function MemberPanel({ members, currentUser, roleLabels, onlineUsers = [], curre
   const allMembers = useMemo(() => {
     const byId = new Map();
     members.forEach((member) => byId.set(member.userId, member));
-    if (currentUser?.id && !byId.has(currentUser.id)) {
+    if (!restrictToMembers && currentUser?.id && !byId.has(currentUser.id)) {
       byId.set(currentUser.id, { userId: currentUser.id, name: currentUser.name, avatar: currentUser.avatar, role: 'OWNER' });
     }
-    onlineById.forEach((presence, userId) => {
-      if (!byId.has(userId)) byId.set(userId, { userId, name: presence.name, avatar: presence.avatar, role: presence.role });
-    });
+    if (!restrictToMembers) {
+      onlineById.forEach((presence, userId) => {
+        if (!byId.has(userId)) byId.set(userId, { userId, name: presence.name, avatar: presence.avatar, role: presence.role });
+      });
+    }
     return Array.from(byId.values());
-  }, [currentUser, members, onlineById]);
+  }, [currentUser, members, onlineById, restrictToMembers]);
 
   const memberProfiles = useMemo(() => allMembers
     .map((member) => {

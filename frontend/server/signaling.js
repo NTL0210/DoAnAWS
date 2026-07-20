@@ -250,8 +250,8 @@ function workspaceRoom(workspaceId) {
   return `workspace:${workspaceId}`;
 }
 
-function voiceRoom(channelId) {
-  return `voice:${channelId}`;
+function voiceRoom(workspaceId, channelId) {
+  return `voice:${workspaceId}:${channelId}`;
 }
 
 function workspacePresenceKey(workspaceId) {
@@ -466,17 +466,17 @@ async function removeSocketFromVoice(socket, reason = 'left') {
       await deleteJsonHash(voicePresenceKey(workspaceId, channelId), userId);
     }
   }
-  socket.leave(voiceRoom(channelId));
+  socket.leave(voiceRoom(workspaceId, channelId));
   socketVoiceState.delete(socket.id);
 
-  socket.to(voiceRoom(channelId)).emit('voice:peer-left', {
+  socket.to(voiceRoom(workspaceId, channelId)).emit('voice:peer-left', {
     workspaceId,
     channelId,
     userId,
     socketId: socket.id,
     reason,
   });
-  socket.to(voiceRoom(channelId)).emit('user-left', { socketId: socket.id, userId });
+  socket.to(voiceRoom(workspaceId, channelId)).emit('user-left', { socketId: socket.id, userId });
   await broadcastPresence(workspaceId, channelId);
 }
 
@@ -496,6 +496,17 @@ async function upsertParticipant(socket, payload) {
   if (!workspaceId || !channelId || !userId) return null;
   if (!matchesAuthenticatedUser(socket, userId)) return null;
   await removeSocketFromVoice(socket, 'switch');
+  for (const [otherSocketId, otherState] of socketVoiceState.entries()) {
+    if (otherSocketId === socket.id || otherState.userId !== userId) continue;
+    const otherSocket = io.sockets.sockets.get(otherSocketId);
+    if (!otherSocket) continue;
+    otherSocket.emit('voice:session-replaced', {
+      workspaceId,
+      channelId,
+      reason: 'joined-another-voice-channel',
+    });
+    await removeSocketFromVoice(otherSocket, 'session-replaced');
+  }
 
   const now = new Date().toISOString();
   const participant = {
@@ -523,7 +534,7 @@ async function upsertParticipant(socket, payload) {
   }
 
   socket.join(workspaceRoom(workspaceId));
-  socket.join(voiceRoom(channelId));
+  socket.join(voiceRoom(workspaceId, channelId));
   socketVoiceState.set(socket.id, { workspaceId, channelId, userId });
 
   socket.emit('voice:joined', { workspaceId, channelId, peers: existingPeers });
@@ -537,8 +548,8 @@ async function upsertParticipant(socket, payload) {
     })),
   });
 
-  socket.to(voiceRoom(channelId)).emit('voice:peer-joined', { workspaceId, channelId, peer: participant });
-  socket.to(voiceRoom(channelId)).emit('user-joined', {
+  socket.to(voiceRoom(workspaceId, channelId)).emit('voice:peer-joined', { workspaceId, channelId, peer: participant });
+  socket.to(voiceRoom(workspaceId, channelId)).emit('user-joined', {
     socketId: socket.id,
     userId,
     userInfo: { name: participant.name, avatar: participant.avatar, role: participant.role },
@@ -786,7 +797,7 @@ io.on('connection', (socket) => {
       }
       await broadcastPresence(workspaceId, channelId);
     }
-    socket.to(voiceRoom(channelId)).emit('mute-state', { socketId: socket.id, userId, isMuted });
+    socket.to(voiceRoom(workspaceId, channelId)).emit('mute-state', { socketId: socket.id, userId, isMuted });
   });
 
   socket.on('speaking-state', async ({ channelId, userId, isSpeaking, audioLevel } = {}) => {
@@ -802,7 +813,7 @@ io.on('connection', (socket) => {
         await writeJsonHash(voicePresenceKey(workspaceId, channelId), userId, participant);
       }
     }
-    socket.to(voiceRoom(channelId)).emit('speaking-state', {
+    socket.to(voiceRoom(workspaceId, channelId)).emit('speaking-state', {
       socketId: socket.id,
       userId,
       isSpeaking,

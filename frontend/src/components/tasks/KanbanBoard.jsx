@@ -30,6 +30,7 @@ export default function KanbanBoard() {
   } = useWorkspace();
 
   const [showCreateTask, setShowCreateTask] = useState(false);
+  const [expandedTaskIds, setExpandedTaskIds] = useState(() => new Set());
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
@@ -336,6 +337,7 @@ export default function KanbanBoard() {
                   });
                   const deadlineWarning = getDeadlineWarning(task.deadline);
                   const deadlineCountdown = getDeadlineCountdown(task.deadline);
+                  const descriptionExpanded = expandedTaskIds.has(task.id);
 
                   return (
                     <article
@@ -371,9 +373,25 @@ export default function KanbanBoard() {
                       {task.title}
                     </h3>
                     {task.description && (
-                      <p className="text-xs text-slate-500 line-clamp-2 mb-3 leading-relaxed dark:text-slate-400">
-                        {task.description}
-                      </p>
+                      <div className="mb-3">
+                        <p className={`${descriptionExpanded ? 'whitespace-pre-wrap break-words' : 'line-clamp-2'} text-xs leading-relaxed text-slate-500 dark:text-slate-400`}>
+                          {task.description}
+                        </p>
+                        {task.description.length > 90 ? (
+                          <button
+                            type="button"
+                            onClick={() => setExpandedTaskIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(task.id)) next.delete(task.id);
+                              else next.add(task.id);
+                              return next;
+                            })}
+                            className="mt-1 text-[11px] font-bold text-orange-600 hover:text-orange-700 dark:text-orange-400"
+                          >
+                            {descriptionExpanded ? 'Show less' : 'View full description'}
+                          </button>
+                        ) : null}
+                      </div>
                     )}
                     {task.sourceMeetingId && (
                       <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] font-bold text-blue-700 dark:border-blue-900/30 dark:bg-blue-900/20 dark:text-blue-300">

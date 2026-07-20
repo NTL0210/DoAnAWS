@@ -7,7 +7,7 @@ import { getTasksByMeeting as filterTasksByMeeting } from '@/services/taskServic
 import { isCloudMode } from '@/services/apiClient';
 import { resolveSuggestedTaskAssignees } from '@/utils/assigneeUtils';
 import { getDeadlineCountdown, getDeadlineDateLabel, getDeadlineRemainingDays } from '@/utils/deadlineUtils';
-import { getGlobalSocket } from '@/context/VoiceConnectionContext';
+import { emitWorkspaceRealtimeEvent } from '@/context/VoiceConnectionContext';
 
 const EMPTY_TRASH = { tasks: [], meetings: [], teams: [] };
 function normalizeTaskForUi(task) {
@@ -699,7 +699,7 @@ function getTaskTeamName(task, workspace) {
 
 function publishExecutionChange(workspaceId, resource) {
   if (!workspaceId) return;
-  getGlobalSocket()?.emit('workspace:event', {
+  emitWorkspaceRealtimeEvent({
     workspaceId,
     type: 'WORKSPACE_EXECUTION_CHANGED',
     payload: { resource },
