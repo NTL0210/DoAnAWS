@@ -419,6 +419,7 @@ export function WorkspaceProvider({ children }) {
       selectView: workspaceHook.selectView,
       activeChannelId: workspaceHook.activeChannelId,
       activeVoiceChannelId: voiceHook.activeVoiceChannelId,
+      activeVoiceWorkspaceId: voiceHook.activeVoiceWorkspaceId,
       activeChannel: workspaceHook.activeChannel,
       selectChannel: workspaceHook.selectChannel,
       selectTeamChat: workspaceHook.selectTeamChat,

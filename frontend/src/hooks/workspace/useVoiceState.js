@@ -5,7 +5,7 @@ import {
   normalizeVoiceChannel,
 } from '@/lib/voicePermissions';
 import { workspacesApi } from '@/services/cloudClient';
-import { getGlobalSocket } from '@/context/VoiceConnectionContext';
+import { emitWorkspaceRealtimeEvent } from '@/context/VoiceConnectionContext';
 import {
   buildAudioConstraints,
   buildMediaRecorderOptions,
@@ -98,6 +98,7 @@ export default function useVoiceState({
   // ─── Voice State ──────────────────────────────────────
   const [voiceParticipants, setVoiceParticipants] = useState({});
   const [activeVoiceChannelId, setActiveVoiceChannelId] = useState(null);
+  const [activeVoiceWorkspaceId, setActiveVoiceWorkspaceId] = useState(null);
   const [activeVoiceRecordings, setActiveVoiceRecordings] = useState({});
   const [voiceRecords, setVoiceRecords] = useState([]);
   const voiceRecordsRef = useRef([]);
@@ -165,6 +166,7 @@ export default function useVoiceState({
 
     const recordingConsent = channel.allowRecording !== false;
     setActiveVoiceChannelId(channelId);
+    setActiveVoiceWorkspaceId(activeWorkspaceId);
     setVoiceParticipants((prev) => ({
       ...prev,
       [channelId]: {
@@ -184,7 +186,7 @@ export default function useVoiceState({
         },
       },
     }));
-  }, [voiceChannels, workspaceRole, currentUser, canAccessVoice, showToast]);
+  }, [activeWorkspaceId, voiceChannels, workspaceRole, currentUser, canAccessVoice, showToast]);
 
   const updateVoiceParticipantState = useCallback((channelId, userId, updates) => {
     setVoiceParticipants((prev) => {
@@ -285,9 +287,9 @@ export default function useVoiceState({
     }
 
     // Stop stream tracks
-    const stream = mediaStreamRefs.current[channelId];
-    if (stream) {
-      try { stream.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
+    const recordingStream = mediaStreamRefs.current[channelId];
+    if (recordingStream) {
+      try { recordingStream.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
     }
 
     let record = null;
@@ -361,6 +363,7 @@ export default function useVoiceState({
 
     if (activeVoiceChannelId === channelId) {
       setActiveVoiceChannelId(null);
+      setActiveVoiceWorkspaceId(null);
     }
 
     addActivity('voice_left', 'Left voice channel');
@@ -390,7 +393,10 @@ export default function useVoiceState({
 
   const switchVoiceChannel = useCallback(async (targetChannelId, options = {}) => {
     // Check recording conflict
-    if (activeVoiceChannelId && activeVoiceChannelId !== targetChannelId) {
+    const switchingVoiceSession = activeVoiceChannelId && (
+      activeVoiceChannelId !== targetChannelId || activeVoiceWorkspaceId !== activeWorkspaceId
+    );
+    if (switchingVoiceSession) {
       const isRecording = !!activeVoiceRecordings[activeVoiceChannelId];
       if (isRecording && !options.force && !options.confirmedStopRecording) {
         showToast('warning', 'You are currently recording. Stop recording before switching channels.');
@@ -425,6 +431,7 @@ export default function useVoiceState({
 
     const recordingConsent = channel.allowRecording !== false;
     setActiveVoiceChannelId(targetChannelId);
+    setActiveVoiceWorkspaceId(activeWorkspaceId);
     setVoiceParticipants((prev) => ({
       ...prev,
       [targetChannelId]: {
@@ -446,7 +453,7 @@ export default function useVoiceState({
     }));
 
     return { ok: true };
-  }, [activeVoiceChannelId, activeVoiceRecordings, voiceParticipants, voiceChannels, workspaceRole, currentUser, canAccessVoice, leaveVoiceChannel, finishVoiceRecording, showToast]);
+  }, [activeVoiceChannelId, activeVoiceWorkspaceId, activeWorkspaceId, activeVoiceRecordings, voiceParticipants, voiceChannels, workspaceRole, currentUser, canAccessVoice, leaveVoiceChannel, finishVoiceRecording, showToast]);
 
   const startVoiceRecording = useCallback(async (channelId, providedStream, options = {}) => {
     const channel = voiceChannels.find((c) => c.id === channelId);
@@ -534,9 +541,7 @@ export default function useVoiceState({
         try { processedResult.cleanup?.(); } catch { /* ignore */ }
       };
 
-      if (!mediaStreamRefs.current[channelId]) {
-        mediaStreamRefs.current[channelId] = stream;
-      }
+      mediaStreamRefs.current[channelId] = processedStream;
 
       // Mark participant as recording
       updateVoiceParticipantState(channelId, currentUser?.id, { isRecording: true, recordingSince: startedAt });
@@ -575,6 +580,16 @@ export default function useVoiceState({
     };
   }, [activeVoiceRecordings]);
 
+  useEffect(() => {
+    const handleSessionReplaced = () => {
+      setActiveVoiceChannelId(null);
+      setActiveVoiceWorkspaceId(null);
+      setVoiceParticipants({});
+    };
+    window.addEventListener('voice:session-replaced', handleSessionReplaced);
+    return () => window.removeEventListener('voice:session-replaced', handleSessionReplaced);
+  }, []);
+
   const updateVoiceChannelPermissions = useCallback(async (channelId, updates) => {
     if (!canManageVoice) {
       showToast('error', 'Only workspace owners can change voice channel permissions.');
@@ -596,7 +611,7 @@ export default function useVoiceState({
       setWorkspaces((prev) => prev.map((workspace) => (
         workspace.id === saved.id ? saved : workspace
       )));
-      getGlobalSocket()?.emit('workspace:event', {
+      emitWorkspaceRealtimeEvent({
         workspaceId: activeWorkspace.id,
         type: 'WORKSPACE_STRUCTURE_CHANGED',
         payload: { reason: 'VOICE_CHANNEL_UPDATED' },
@@ -779,6 +794,7 @@ export default function useVoiceState({
     // State
     voiceParticipants,
     activeVoiceChannelId,
+    activeVoiceWorkspaceId,
     activeVoiceRecordings,
     voiceRecords,
     // Actions

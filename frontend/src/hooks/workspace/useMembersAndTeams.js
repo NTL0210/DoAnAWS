@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { generateId } from '@/lib/workspaceData';
 import { getWorkspacePlan, getWorkspaceUsageSnapshot, validateWorkspaceCapacity } from '@/services/billingService';
 import { workspacesApi } from '@/services/cloudClient';
-import { getGlobalSocket } from '@/context/VoiceConnectionContext';
+import { emitWorkspaceRealtimeEvent } from '@/context/VoiceConnectionContext';
 
 /**
  * useMembersAndTeams — manages member and team CRUD actions.
@@ -275,7 +275,7 @@ function normalizeTeamMemberIds(memberIds, workspaceMembers) {
 }
 
 function publishWorkspaceChange(workspaceId, reason) {
-  getGlobalSocket()?.emit('workspace:event', {
+  emitWorkspaceRealtimeEvent({
     workspaceId,
     type: 'WORKSPACE_STRUCTURE_CHANGED',
     payload: { reason },

@@ -62,6 +62,7 @@ const VOICE_DEBUG = process.env.NEXT_PUBLIC_ENABLE_VOICE_DEBUG === 'true';
 export default function VoiceChannelView({ channel: propChannel }) {
   const {
     activeChannel,
+    activeWorkspace,
     workspaceMembers,
     workspaceTeams,
     currentUser,
@@ -158,6 +159,7 @@ export default function VoiceChannelView({ channel: propChannel }) {
     setLocalMicMuted,
     updateVoiceParticipantState,
     showToast: null,
+    initialStream: webrtcStream,
   });
 
   const {
@@ -289,10 +291,10 @@ export default function VoiceChannelView({ channel: propChannel }) {
           console.error('[Voice] Failed to init mic:', err);
         }
       }
-      voiceJoinChannel(channel.id);
+      voiceJoinChannel(channel.id, { workspaceId: channel.workspaceId || activeWorkspace?.id });
     }
     joiningRef.current = false;
-  }, [channel?.id, ensureLocalMicStream, voiceSettings, voiceJoinChannel, switchVoiceChannel, muted, logMicDebug, isStaleMicInitError, applyMuteRef]);
+  }, [activeWorkspace?.id, channel?.id, channel?.workspaceId, ensureLocalMicStream, voiceSettings, voiceJoinChannel, switchVoiceChannel, muted, logMicDebug, isStaleMicInitError, applyMuteRef]);
 
   // ─── Safety net: ensure mic stream when user is already joined ──
   const voiceJoinChannelRef = useRef(voiceJoinChannel);
@@ -328,10 +330,10 @@ export default function VoiceChannelView({ channel: propChannel }) {
           console.error('[Voice] handleJoinAnyway mic failed:', err);
         }
       }
-      voiceJoinChannel(channel.id);
+      voiceJoinChannel(channel.id, { workspaceId: channel.workspaceId || activeWorkspace?.id });
     }
     setConsentOpen(false);
-  }, [channel?.id, ensureLocalMicStream, voiceSettings, voiceJoinChannel, switchVoiceChannel, muted, isStaleMicInitError, applyMuteRef]);
+  }, [activeWorkspace?.id, channel?.id, channel?.workspaceId, ensureLocalMicStream, voiceSettings, voiceJoinChannel, switchVoiceChannel, muted, isStaleMicInitError, applyMuteRef]);
 
   // ─── Leave Voice ────────────────────────────────────────
   const handleLeave = useCallback(async () => {

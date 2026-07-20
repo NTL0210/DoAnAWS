@@ -9,7 +9,7 @@ import {
 } from '@/lib/workspaceData';
 import { canAccessVoiceChannel, canRecordVoiceChannel } from '@/lib/voicePermissions';
 import { workspacesApi } from '@/services/cloudClient';
-import { getGlobalSocket } from '@/context/VoiceConnectionContext';
+import { emitWorkspaceRealtimeEvent } from '@/context/VoiceConnectionContext';
 
 /**
  * useRolesAndPermissions — manages workspace roles and permission checks.
@@ -49,7 +49,7 @@ export default function useRolesAndPermissions({
         expectedVersion: workspace.version || 1,
       });
       setWorkspaces((prev) => prev.map((item) => (item.id === saved.id ? saved : item)));
-      getGlobalSocket()?.emit('workspace:event', {
+      emitWorkspaceRealtimeEvent({
         workspaceId: workspace.id,
         type: 'WORKSPACE_STRUCTURE_CHANGED',
         payload: { reason },

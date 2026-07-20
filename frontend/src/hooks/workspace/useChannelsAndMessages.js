@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { generateId } from '@/lib/workspaceData';
 import { normalizeVoiceChannel } from '@/lib/voicePermissions';
-import { getGlobalSocket } from '@/context/VoiceConnectionContext';
+import { emitWorkspaceRealtimeEvent } from '@/context/VoiceConnectionContext';
 import { workspacesApi, workspaceAttachmentsApi } from '@/services/cloudClient';
 
 function messageKeyForChannel(channelId) {
@@ -212,7 +212,7 @@ export default function useChannelsAndMessages({
         expectedVersion: activeWorkspace.version || 1,
       });
       setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
-      getGlobalSocket()?.emit('workspace:event', {
+      emitWorkspaceRealtimeEvent({
         workspaceId: activeWorkspace.id,
         type: 'WORKSPACE_STRUCTURE_CHANGED',
         payload: { reason: 'CHANNEL_CREATED' },
@@ -234,7 +234,7 @@ export default function useChannelsAndMessages({
         expectedVersion: activeWorkspace.version || 1,
       });
       setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
-      getGlobalSocket()?.emit('workspace:event', {
+      emitWorkspaceRealtimeEvent({
         workspaceId: activeWorkspace.id,
         type: 'WORKSPACE_STRUCTURE_CHANGED',
         payload: { reason: 'CHANNEL_DELETED' },
@@ -288,7 +288,7 @@ export default function useChannelsAndMessages({
       try {
         const saved = await persistAppendedMessage(messageKey, newMsg);
         setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
-        getGlobalSocket()?.emit('workspace:event', {
+        emitWorkspaceRealtimeEvent({
           workspaceId: activeWorkspaceId,
           type: 'CHAT_MESSAGE',
           payload: { message: newMsg, workspace: saved },
@@ -324,7 +324,7 @@ export default function useChannelsAndMessages({
       try {
         const saved = await persistAppendedMessage(key, newMsg);
         setWorkspaces((prev) => prev.map((ws) => (ws.id === saved.id ? saved : ws)));
-        getGlobalSocket()?.emit('workspace:event', {
+        emitWorkspaceRealtimeEvent({
           workspaceId: activeWorkspaceId,
           type: 'TEAM_MESSAGE',
           payload: { message: newMsg, workspace: saved },
@@ -338,7 +338,7 @@ export default function useChannelsAndMessages({
 
   const sendTyping = useCallback((targetId, channelType = 'channel') => {
     if (!targetId || !currentUser?.id || !activeWorkspaceId) return;
-    getGlobalSocket()?.emit('workspace:event', {
+    emitWorkspaceRealtimeEvent({
       workspaceId: activeWorkspaceId,
       type: 'CHAT_TYPING',
       payload: {

@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "systemctl cat signaling.service",
+    "sudo readlink -f /proc/28432/cwd",
+    "sudo tr '\\0' '\\n' < /proc/28432/environ | grep -E '^(PORT|VOICE_SIGNALING_PORT|NODE_ENV)=' || true"
+  ]
+}
