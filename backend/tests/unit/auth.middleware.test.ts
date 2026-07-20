@@ -287,6 +287,29 @@ describe("requireWorkspaceRole middleware", () => {
     expect(res.locals.workspaceId).toBe("ws-3");
   });
 
+  it("prefers an explicit body workspaceId over a resource route id", async () => {
+    const getMemberRole = vi.fn().mockResolvedValue("MEMBER");
+    const repo = {
+      getMemberRole,
+    } as any as WorkspaceRepository;
+    const middleware = requireWorkspaceRole(repo, "MEMBER");
+
+    const req = mockReq({
+      user: makeAuthUser({ workspaceId: undefined }),
+      headers: {},
+      params: { id: "voice-recording-id" },
+      body: { workspaceId: "ws-voice" },
+    });
+    const { res } = mockRes();
+    const next = mockNext();
+
+    await middleware(req, res, next);
+
+    expect(getMemberRole).toHaveBeenCalledWith("ws-voice", expect.any(String));
+    expect(res.locals.workspaceId).toBe("ws-voice");
+    expect(next).toHaveBeenCalledOnce();
+  });
+
   it("allows a custom role when it has the required permission", async () => {
     const repo = {
       getMemberRole: vi.fn(),
